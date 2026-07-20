@@ -1,0 +1,10 @@
+.git
+.gitignore
+.devcontainer
+.env
+.cache
+dist
+node_modules
+npm-debug.log*
+*.docx
+*.md

@@ -481,19 +481,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "13px", lineHeight: "1.6" }}>
         
-        {/* Row 1: Mốc tham chiếu AnPD & Đo lường năng lực */}
-        <div style={{ background: "rgba(255,255,255,0.02)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)" }}>
-          <div style={{ fontWeight: 700, marginBottom: "6px", color: "var(--accent-2)", fontSize: "14px" }}>
-            📊 Mốc Tham Chiếu Lịch Sử (Benchmark AnPD)
-          </div>
-          <div style={{ color: "var(--text-2)" }}>
-            Sử dụng dữ liệu lịch sử sửa bug ghi nhận từ Báo cáo Word của thành viên cũ (AnPD) làm mốc tham chiếu thực tế để đo lường năng lực thành viên mới và đặt lộ trình tiến bộ (Số liệu chuẩn Báo cáo Word là <strong>{mayBenchmarkVal.toFixed(1)} bug/ngày</strong>):
-            <ul style={{ margin: "6px 0 0 18px", padding: 0, display: "flex", flexDirection: "column", gap: "4px" }}>
-              <li>🚀 <strong>Tháng 5 (Báo cáo Word):</strong> Ghi nhận <strong>80 bug</strong> (~<strong>{mayBenchmarkVal.toFixed(1)} bug/ngày</strong> trên 21 ngày công thực tế làm mốc so sánh chính).</li>
-              <li>🎯 <strong>Lộ trình tiến bộ cho Dev mới:</strong> Target T1 (Đạt 50%: ~{(mayBenchmarkVal * 0.5).toFixed(1)} bug/ngày) | Target T2 (Tốt 70%: ~{(mayBenchmarkVal * 0.7).toFixed(1)} bug/ngày) | Target T3 (Xuất sắc 90%: ~{(mayBenchmarkVal * 0.9).toFixed(1)} bug/ngày)</li>
-            </ul>
-          </div>
-        </div>
+
 
         {/* Row 2: Điểm bất thường (Abnormalities) */}
         <div style={{ background: "rgba(255,255,255,0.02)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border)" }}>
@@ -562,120 +550,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         )}
       </div>
 
-      {/* Chart Card */}
-      <div className="card" style={{ marginBottom: "16px" }}>
-        <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "16px", color: "var(--text)" }}>
-          📊 Biểu đồ Năng suất Sửa lỗi (Bug/Ngày) so với Benchmark AnPD
-        </div>
-        
-        <div style={{ position: "relative", padding: "10px 0 20px 0" }}>
-          {/* Developer Bars */}
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            {sortedDevs.map(d => {
-              const maxVal = Math.max(...sortedDevs.map(dev => dev.bugsPerDay), mayBenchmarkVal, 1.0) * 1.15;
-              const barWidth = (d.bugsPerDay / maxVal) * 100;
-              const benchmarkPosition = (mayBenchmarkVal / maxVal) * 100;
-              
-              // Color based on benchmark achievements
-              const barColor = d.pct >= 90 
-                ? "linear-gradient(90deg, #10b981 0%, #059669 100%)" // Green (Excellent)
-                : d.pct >= 70 
-                  ? "linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%)" // Blue (Good)
-                  : d.pct >= 50 
-                    ? "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)" // Yellow (Pass)
-                    : "linear-gradient(90deg, #ef4444 0%, #b91c1c 100%)"; // Red (Abnormal/Low)
-              
-              return (
-                <div key={d.code} style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                  {/* Dev Label */}
-                  <div style={{ width: "80px", fontWeight: "bold", fontSize: "13px", color: "var(--text)", textAlign: "right" }}>
-                    {d.code}
-                  </div>
-                  
-                  {/* Bar track */}
-                  <div style={{ flex: 1, height: "26px", background: "var(--surface-3)", borderRadius: "6px", position: "relative", overflow: "visible" }}>
-                    {/* The bar fill */}
-                    <div 
-                      style={{ 
-                        width: `${barWidth}%`, 
-                        height: "100%", 
-                        background: barColor, 
-                        borderRadius: "6px", 
-                        transition: "width 0.4s ease-out",
-                        display: "flex",
-                        alignItems: "center",
-                        justifyContent: "flex-end",
-                        paddingRight: "8px",
-                        boxShadow: "0 0 10px rgba(0,0,0,0.15)"
-                      }}
-                    >
-                      {d.bugsPerDay > 0 && (
-                        <span style={{ fontSize: "11px", fontWeight: "bold", color: "#fff" }}>
-                          {d.bugsPerDay.toFixed(1)} bug/ngày
-                        </span>
-                      )}
-                    </div>
-                    
-                    {/* Benchmark Dotted Indicator Line */}
-                    <div 
-                      style={{ 
-                        position: "absolute", 
-                        left: `${benchmarkPosition}%`, 
-                        top: "-4px", 
-                        bottom: "-4px", 
-                        width: "2px", 
-                        borderLeft: "2px dashed var(--cyan)", 
-                        zIndex: 10,
-                        pointerEvents: "none"
-                      }}
-                    />
-                  </div>
-                  
-                  {/* Achievement badge */}
-                  <div style={{ width: "160px", fontSize: "12px", display: "flex", alignItems: "center", gap: "4px" }}>
-                    <span style={{ 
-                      color: d.pct >= 90 ? "var(--green)" : d.pct >= 70 ? "var(--blue)" : d.pct >= 50 ? "var(--yellow)" : "var(--red)",
-                      fontWeight: "bold"
-                    }}>
-                      {d.pct.toFixed(0)}% benchmark
-                    </span>
-                    <span style={{ color: "var(--text-3)" }}>
-                      ({d.pct >= 90 ? "🥇 T3" : d.pct >= 70 ? "🥈 T2" : d.pct >= 50 ? "🥉 T1" : "⚠️ Cần hỗ trợ"})
-                    </span>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
 
-          {/* Benchmark line annotation label */}
-          {(() => {
-            const maxVal = Math.max(...sortedDevs.map(dev => dev.bugsPerDay), mayBenchmarkVal, 1.0) * 1.15;
-            const benchmarkPosition = (mayBenchmarkVal / maxVal) * 100;
-            return (
-              <div 
-                style={{ 
-                  position: "absolute", 
-                  left: `calc(${benchmarkPosition}% + 92px)`, // Adjust for dev label width (80px) + gap (12px)
-                  bottom: "-12px", 
-                  transform: "translateX(-50%)", 
-                  fontSize: "11px", 
-                  color: "var(--cyan)", 
-                  fontWeight: "bold",
-                  background: "var(--surface-2)",
-                  padding: "2px 8px",
-                  borderRadius: "4px",
-                  border: "1px solid rgba(6,182,212,0.3)",
-                  zIndex: 20,
-                  whiteSpace: "nowrap"
-                }}
-              >
-                🎯 Benchmark An (Tháng 5: {mayBenchmarkVal.toFixed(1)} bug/ngày)
-              </div>
-            );
-          })()}
-        </div>
-      </div>
 
       <div className="card">
         <div className="table-wrap">
@@ -714,10 +589,21 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         padding: "12px 10px"
                       }}
                     >
-                      <strong>{row.dev.code}</strong>
-                      <div style={{ color: "var(--text-3)", fontSize: "12px", fontWeight: "normal", marginTop: 4 }}>
-                        {row.dev.role === "lead" ? "👑 Lead" : "💻 Dev"}
+                      <strong>{row.dev.displayName}</strong>
+                      <div style={{ color: "var(--text-3)", fontSize: "11px", fontWeight: "normal", marginTop: 2 }}>
+                        {row.dev.role === "lead" ? "👑 Lead" : "💻 Dev"} ({row.dev.code})
                       </div>
+                      {(() => {
+                        const exp = activePeriod && view.conclusions?.[activePeriod.key]?.explanations?.[row.dev.code];
+                        if (exp) {
+                          return (
+                            <div style={{ fontSize: "10px", color: "var(--cyan)", fontWeight: "normal", marginTop: 4, fontStyle: "italic" }}>
+                              💡 {exp}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
                     </td>
                     <td style={{ textAlign: "left", fontSize: "13px", color: "var(--text-2)", fontWeight: "500", paddingLeft: "12px" }}>
                       {row.locationText}

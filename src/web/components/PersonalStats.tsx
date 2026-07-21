@@ -207,7 +207,7 @@ export function PersonalStats({ view, personCode, periodType }: { view: Dashboar
           </button>
           {developers.map(p => (
             <button key={p.code} className={`ctrl ${activeCode === p.code ? "ctrl-primary" : ""}`} onClick={() => setActiveCode(p.code)}>
-              👤 {p.code}
+              👤 {p.displayName}
             </button>
           ))}
         </div>
@@ -221,9 +221,9 @@ export function PersonalStats({ view, personCode, periodType }: { view: Dashboar
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
                   <div>
-                    <strong style={{ fontSize: "16px" }}>{summary.person.code}</strong>
+                    <strong style={{ fontSize: "16px" }}>{summary.person.displayName}</strong>
                     <span style={{ fontSize: "12px", color: "var(--text-3)", marginLeft: "6px" }}>
-                      ({summary.person.displayName})
+                      ({summary.person.code})
                     </span>
                   </div>
                   <span className="tag tag-gray">{summary.person.role === "lead" ? "👑 Lead" : "💻 Dev"}</span>
@@ -328,7 +328,7 @@ export function PersonalStats({ view, personCode, periodType }: { view: Dashboar
                   </div>
                 </div>
                 <div style={{ textAlign: "right", fontSize: "13px" }}>
-                  <div>🎯 <strong>Benchmark AnPD:</strong> <strong style={{ color: achievementRate >= 90 ? "var(--green)" : achievementRate >= 70 ? "var(--cyan)" : achievementRate >= 50 ? "var(--yellow)" : "var(--text-3)" }}>{achievementRate.toFixed(0)}%</strong></div>
+                  <div>🎯 <strong>Mốc Target Tiêu Chuẩn:</strong> <strong style={{ color: achievementRate >= 90 ? "var(--green)" : achievementRate >= 70 ? "var(--cyan)" : achievementRate >= 50 ? "var(--yellow)" : "var(--text-3)" }}>{achievementRate.toFixed(0)}%</strong></div>
                   <div style={{ fontSize: "11px", color: "var(--text-3)" }}>
                     {achievementRate >= 90 ? "🎯 Đạt mục tiêu Tháng 3 (Target 90%)" : achievementRate >= 70 ? "💻 Đạt mục tiêu Tháng 2 (Target 70%)" : achievementRate >= 50 ? "🚀 Đạt mục tiêu Tháng 1 (Target 50%)" : "🌱 Đang thích nghi quy trình"}
                   </div>

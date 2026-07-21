@@ -15,10 +15,14 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
     // PR details
     const prRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pr}`, { headers, signal: AbortSignal.timeout(4000) });
     let prAuthor = "", prCreatedAt = "";
+    let ghLabels: string[] = [];
     if (prRes.ok) {
       const d = await prRes.json() as any;
       prAuthor = d.user?.login ?? "";
       prCreatedAt = d.created_at ?? "";
+      if (Array.isArray(d.labels)) {
+        ghLabels = d.labels.map((l: any) => String(l.name ?? "")).filter(Boolean);
+      }
     } else if (prRes.status === 401 || prRes.status === 403) {
       return { ...bug, ghReviewStatus: "Error" as const, ghReviewCount: 0, ghReviews: [] };
     }
@@ -44,7 +48,7 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
     else if (reviews.some(r => r.state === "APPROVED")) status = "Approved";
     else if (reviews.some(r => r.state === "COMMENTED")) status = "Commented";
 
-    return { ...bug, ghReviewStatus: status, ghReviewCount: reviews.length, ghReviews: reviews, prAuthor, prCreatedAt, prCommentsByAuthor, prCommentsByTruong };
+    return { ...bug, ghReviewStatus: status, ghReviewCount: reviews.length, ghReviews: reviews, prAuthor, prCreatedAt, prCommentsByAuthor, prCommentsByTruong, ghLabels };
   } catch {
     return { ...bug, ghReviewStatus: "Error" as const, ghReviewCount: 0, ghReviews: [] };
   }

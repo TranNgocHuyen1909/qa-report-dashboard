@@ -31,11 +31,18 @@ export async function deleteChecklistItem(id: string): Promise<void> {
   await fetch(`${BASE}/checklist/${id}`, { method: "DELETE" });
 }
 
-export async function saveConclusion(periodKey: string, good: string, bad: string, risks: string, manDaysOverrides?: Record<string, number>): Promise<any> {
+export async function saveConclusion(
+  periodKey: string, 
+  good: string, 
+  bad: string, 
+  risks: string, 
+  manDaysOverrides?: Record<string, number>,
+  explanations?: Record<string, string>
+): Promise<any> {
   const res = await fetch(`${BASE}/conclusions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ periodKey, good, bad, risks, manDaysOverrides }),
+    body: JSON.stringify({ periodKey, good, bad, risks, manDaysOverrides, explanations }),
   });
   if (!res.ok) throw new Error("Failed to save conclusion");
   return res.json();

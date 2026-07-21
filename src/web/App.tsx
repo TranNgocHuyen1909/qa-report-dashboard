@@ -2,20 +2,61 @@ import { useEffect, useState, useCallback } from "react";
 import type { DashboardView, PeriodType } from "../shared/types";
 import { fetchDashboard, refreshData } from "./api";
 import { ManagerReport } from "./components/ManagerReport";
-import { BugsPanel } from "./components/BugsPanel";
 import { PersonalStats } from "./components/PersonalStats";
 import { BugLifecycle } from "./components/BugLifecycle";
-import { BenchmarkView } from "./components/BenchmarkView";
 import { ChecklistView } from "./components/ChecklistView";
+import { PrLessonsView } from "./components/PrLessonsView";
 import { DevComparison } from "./components/DevComparison";
 import { ProcessView } from "./components/ProcessView";
 import { ReviewStats } from "./components/ReviewStats";
+import { RoleView } from "./components/RoleView";
+import { BugWorkflowView } from "./components/BugWorkflowView";
+import { ReviewProtocolView } from "./components/ReviewProtocolView";
 
-type Tab = "report" | "bugs" | "comparison" | "personal" | "lifecycle" | "benchmark" | "checklist" | "process" | "reviews";
+type MainTab = "report" | "roles" | "workflow" | "checklist" | "review" | "comparison" | "lessons";
+type ComparisonSubTab = "matrix" | "reviews" | "personal";
+type ChecklistSubTab = "master" | "process";
 
 export function App() {
   const [view, setView] = useState<DashboardView>();
-  const [tab, setTab] = useState<Tab>("report");
+  const [tab, setTab] = useState<MainTab>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get("tab") as MainTab) || "report";
+  });
+  const [selectedRepoFilter, setSelectedRepoFilter] = useState<string>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("repo") || "all";
+  });
+
+  const handleNavigateTab = useCallback((targetTab: string, repoFilter?: string) => {
+    setTab(targetTab as MainTab);
+    if (repoFilter) {
+      setSelectedRepoFilter(repoFilter);
+    }
+    const url = new URL(window.location.href);
+    url.searchParams.set("tab", targetTab);
+    if (repoFilter) {
+      url.searchParams.set("repo", repoFilter);
+    } else {
+      url.searchParams.delete("repo");
+    }
+    window.history.pushState(null, "", url.toString());
+  }, []);
+
+  useEffect(() => {
+    const handlePopState = () => {
+      const params = new URLSearchParams(window.location.search);
+      const currentTab = (params.get("tab") as MainTab) || "report";
+      const currentRepo = params.get("repo") || "all";
+      setTab(currentTab);
+      setSelectedRepoFilter(currentRepo);
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+  const [comparisonSubTab, setComparisonSubTab] = useState<ComparisonSubTab>("matrix");
+  const [checklistSubTab, setChecklistSubTab] = useState<ChecklistSubTab>("master");
+
   const [periodType, setPeriodType] = useState<PeriodType>("week");
   const [periodKey, setPeriodKey] = useState<string>();
   const [personCode, setPersonCode] = useState<string>();
@@ -32,7 +73,7 @@ export function App() {
     localStorage.setItem("theme", theme);
   }, [theme]);
 
-  // Global custom tooltip event listener to prevent clipping by overflow: auto scroll containers
+  // Global custom tooltip event listener
   useEffect(() => {
     const tooltip = document.createElement("div");
     tooltip.className = "global-custom-tooltip";
@@ -50,26 +91,24 @@ export function App() {
 
       tooltip.innerText = text;
       tooltip.style.display = "block";
-
+      tooltip.style.zIndex = "999999";
+      
       const rect = target.getBoundingClientRect();
-      let x = rect.left + window.scrollX + (rect.width - tooltip.offsetWidth) / 2;
-      let y = rect.top + window.scrollY - tooltip.offsetHeight - 8;
+      const tooltipRect = tooltip.getBoundingClientRect();
+      
+      let top = rect.top + window.scrollY - tooltipRect.height - 8;
+      let left = rect.left + window.scrollX + (rect.width / 2) - (tooltipRect.width / 2);
 
-      // Constrain within viewport boundaries
-      const margin = 12;
-      if (x < margin + window.scrollX) {
-        x = margin + window.scrollX;
-      } else if (x + tooltip.offsetWidth > window.innerWidth + window.scrollX - margin) {
-        x = window.innerWidth + window.scrollX - tooltip.offsetWidth - margin;
+      if (top < window.scrollY) {
+        top = rect.bottom + window.scrollY + 8;
+      }
+      if (left < 0) left = 8;
+      if (left + tooltipRect.width > window.innerWidth) {
+        left = window.innerWidth - tooltipRect.width - 8;
       }
 
-      // If it overflows the top of the viewport, display it below the element instead
-      if (rect.top - tooltip.offsetHeight - 8 < 0) {
-        y = rect.bottom + window.scrollY + 8;
-      }
-
-      tooltip.style.left = `${x}px`;
-      tooltip.style.top = `${y}px`;
+      tooltip.style.top = `${top}px`;
+      tooltip.style.left = `${left}px`;
     };
 
     const handleMouseOut = (e: MouseEvent) => {
@@ -85,66 +124,63 @@ export function App() {
     return () => {
       document.removeEventListener("mouseover", handleMouseOver);
       document.removeEventListener("mouseout", handleMouseOut);
-      tooltip.remove();
+      if (tooltip.parentNode) {
+        tooltip.parentNode.removeChild(tooltip);
+      }
     };
   }, []);
 
-  const toggleTheme = () => setTheme(prev => prev === "dark" ? "light" : "dark");
-
   const load = useCallback(async () => {
-    setLoading(true);
     try {
-      const data = await fetchDashboard(periodType, periodKey, personCode);
+      setLoading(true);
+      const data = await fetchDashboard(periodType, periodKey);
       setView(data);
-      if (!periodKey && data.availablePeriods.length > 0) {
-        // Default to the latest period that actually has bugs, so the dashboard is not empty on load
-        const matchWithBugs = data.availablePeriods.find(p => {
-          return data.bugs.some(b => {
-            const date = b.prCreatedAt ?? b.lastEditedTime ?? b.detectedDate;
-            if (!date) return false;
-            const dStr = date.slice(0, 10);
-            return dStr >= p.startDate && dStr <= p.endDate;
-          });
-        });
-        if (matchWithBugs) {
-          setPeriodKey(matchWithBugs.key);
-        } else {
-          const d = new Date();
-          const today = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-          const match = data.availablePeriods.find(p => today >= p.startDate && today <= p.endDate);
-          setPeriodKey(match ? match.key : data.availablePeriods[0].key);
-        }
-      }
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  }, [periodType, periodKey, personCode]);
+    } catch (e) {
+      console.error("Failed to load dashboard:", e);
+    } finally {
+      setLoading(false);
+    }
+  }, [periodType, periodKey]);
 
-  useEffect(() => { load(); }, [load]);
+  useEffect(() => {
+    load();
+  }, [load]);
 
-  const handleRefresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const data = await refreshData();
-      setView(data);
-      setTimeLeft(300); // Reset timer on manual click
-    } catch (e) { console.error(e); }
-    finally { setRefreshing(false); }
-  }, []);
-
-  // Auto-refresh countdown interval (5 minutes)
+  // Countdown timer for Notion auto-sync
   useEffect(() => {
     const timer = setInterval(() => {
       setTimeLeft(prev => {
         if (prev <= 1) {
-          console.log("[Auto-Refresh] Countdown reached zero, syncing data...");
-          handleRefresh();
+          refreshData()
+            .then(() => fetchDashboard(periodType, periodKey, personCode))
+            .then(data => setView(data))
+            .catch(err => console.error("Auto-sync failed:", err));
           return 300;
         }
         return prev - 1;
       });
     }, 1000);
     return () => clearInterval(timer);
-  }, [handleRefresh]);
+  }, [periodType, periodKey, personCode]);
+
+  const handleRefresh = async () => {
+    setRefreshing(true);
+    try {
+      await refreshData();
+      const data = await fetchDashboard(periodType, periodKey, personCode);
+      setView(data);
+      setTimeLeft(300);
+    } catch (e) {
+      console.error(e);
+      alert("Lỗi khi đồng bộ dữ liệu Notion");
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const toggleTheme = () => {
+    setTheme(prev => (prev === "dark" ? "light" : "dark"));
+  };
 
   if (loading && !view) {
     return <div className="app"><div className="loading"><div className="loading-spinner" /></div></div>;
@@ -153,16 +189,14 @@ export function App() {
     return <div className="app"><div className="loading"><p style={{ color: "var(--text-3)" }}>Không có dữ liệu. Cấu hình Notion token rồi thử lại.</p></div></div>;
   }
 
-  const tabs: { key: Tab; label: string }[] = [
-    { key: "report", label: "📊 Báo cáo" },
-    { key: "bugs", label: "🐛 Bugs" },
-    { key: "comparison", label: "⚖️ So sánh chất lượng" },
-    { key: "reviews", label: "🔍 Hoạt động Review" },
-    { key: "personal", label: "👤 Cá nhân" },
-    { key: "lifecycle", label: "🔄 Bug Lifecycle" },
-    { key: "benchmark", label: "🎯 Benchmark An" },
+  const tabs: { key: MainTab; label: string }[] = [
+    { key: "report", label: "🎯 Target" },
+    { key: "roles", label: "👥 Vai Trò" },
+    { key: "workflow", label: "⚡ Quy Trình" },
     { key: "checklist", label: "📋 Checklist" },
-    { key: "process", label: "📘 Quy trình PM/QC" },
+    { key: "review", label: "🔍 Review" },
+    { key: "comparison", label: "📊 Tiến Độ" },
+    { key: "lessons", label: "💡 Bài Học" },
   ];
 
   return (
@@ -174,9 +208,9 @@ export function App() {
         </div>
         <div className="topbar-controls">
           <select className="ctrl" value={periodType} onChange={e => { setPeriodType(e.target.value as PeriodType); setPeriodKey(undefined); }}>
-            <option value="day">Theo ngày</option>
             <option value="week">Theo tuần</option>
             <option value="month">Theo tháng</option>
+            <option value="day">Theo ngày</option>
           </select>
           <select className="ctrl" value={periodKey ?? ""} onChange={e => setPeriodKey(e.target.value || undefined)}>
             <option value="">Tất cả kỳ</option>
@@ -192,8 +226,8 @@ export function App() {
             })}
           </select>
           <select className="ctrl" value={personCode ?? ""} onChange={e => setPersonCode(e.target.value || undefined)}>
-            <option value="">Tất cả</option>
-            {view.personnel.map(p => <option key={p.code} value={p.code}>{p.code}</option>)}
+            <option value="">Tất cả thành viên</option>
+            {view.personnel.map(p => <option key={p.code} value={p.code}>{p.displayName}</option>)}
           </select>
           <button className="ctrl" onClick={toggleTheme} title="Đổi giao diện Sáng / Tối">
             {theme === "dark" ? "☀️ Sáng" : "🌙 Tối"}
@@ -210,24 +244,60 @@ export function App() {
       </header>
 
       <main className="main-content">
+        {/* Main 4 Navigation Hub Tabs */}
         <div className="tabs" role="tablist">
           {tabs.map(t => (
             <button key={t.key} className={`tab ${tab === t.key ? "active" : ""}`}
-              onClick={() => setTab(t.key)} role="tab" aria-selected={tab === t.key}>
+              onClick={() => handleNavigateTab(t.key)} role="tab" aria-selected={tab === t.key}>
               {t.label}
             </button>
           ))}
         </div>
 
+        {/* TAB 1: BÁO CÁO & TIẾN ĐỘ */}
         {tab === "report" && <ManagerReport view={view} onUpdate={load} />}
-        {tab === "bugs" && <BugsPanel view={view} />}
-        {tab === "comparison" && <DevComparison view={view} periodType={periodType} periodKey={periodKey} onUpdate={load} />}
-        {tab === "reviews" && <ReviewStats view={view} periodType={periodType} periodKey={periodKey} />}
-        {tab === "personal" && <PersonalStats view={view} personCode={personCode} periodType={periodType} />}
-        {tab === "lifecycle" && <BugLifecycle view={view} />}
-        {tab === "benchmark" && <BenchmarkView view={view} />}
-        {tab === "checklist" && <ChecklistView view={view} onUpdate={load} />}
-        {tab === "process" && <ProcessView view={view} />}
+
+        {/* TAB: HOẠT ĐỘNG CODE REVIEW (STANDALONE TAB) */}
+        {tab === "review" && (
+          <ReviewStats view={view} periodType={periodType} periodKey={periodKey} />
+        )}
+
+        {/* TAB 2: CHẤT LƯỢNG & ĐỘI NGŨ (WITH INTEGRATED SUB-TABS) */}
+        {tab === "comparison" && (
+          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
+            <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border-2)", paddingBottom: "8px" }}>
+              <button 
+                className={`ctrl ctrl-sm ${comparisonSubTab === "matrix" ? "ctrl-primary" : ""}`}
+                onClick={() => setComparisonSubTab("matrix")}
+                style={{ fontSize: "12px", padding: "6px 14px", fontWeight: "bold" }}
+              >
+                ⚖️ Bảng So Sánh Năng Suất &amp; Tỷ Lệ Reopen
+              </button>
+              <button 
+                className={`ctrl ctrl-sm ${comparisonSubTab === "personal" ? "ctrl-primary" : ""}`}
+                onClick={() => setComparisonSubTab("personal")}
+                style={{ fontSize: "12px", padding: "6px 14px", fontWeight: "bold" }}
+              >
+                👤 Thống Kê Chi Tiết Cá Nhân
+              </button>
+            </div>
+
+            {comparisonSubTab === "matrix" && <DevComparison view={view} periodType={periodType} periodKey={periodKey} onUpdate={load} />}
+            {comparisonSubTab === "personal" && <PersonalStats view={view} personCode={personCode} periodType={periodType} />}
+          </div>
+        )}
+
+        {/* TAB 3: CHECKLIST TỰ KIỂM TRA (CHECKBOXES) */}
+        {tab === "checklist" && <ChecklistView initialRepoFilter={selectedRepoFilter} />}
+
+        {/* TAB 4: BÀI HỌC KINH NGHIỆM TỪ PR COMMENTS */}
+        {tab === "lessons" && <PrLessonsView view={view} onUpdate={load} />}
+
+        {/* TAB: QUY TRÌNH XỬ LÝ BUG END-TO-END */}
+        {tab === "workflow" && <BugWorkflowView onNavigateTab={handleNavigateTab} />}
+
+        {/* TAB 6: PHÂN RÃ VAI TRÒ & TRÁCH NHIỆM */}
+        {tab === "roles" && <RoleView />}
       </main>
     </div>
   );

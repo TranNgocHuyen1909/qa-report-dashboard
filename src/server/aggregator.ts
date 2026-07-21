@@ -25,11 +25,18 @@ function isTrackable(b: BugRecord): boolean {
 }
 function isNoRepro(b: BugRecord): boolean {
   const note = (b.note ?? "").toLowerCase();
+  const title = (b.title ?? "").toLowerCase();
+  const status = (b.status ?? "").toLowerCase();
   const hasNoReproNote = note.includes("không tái hiện") || note.includes("ko tái hiện");
   if (hasNoReproNote) return true;
   
-  // Rule: For active team members, bugs must have a PR.
-  // Exclude AnPD (benchmark) from this rule since historical data doesn't have PR URLs.
+  // Rule: Exclude duplicate bugs from actual received effort count
+  const hasDuplicateNote = note.includes("trùng") || note.includes("duplicate") || 
+                        title.includes("trùng lặp") || title.includes("duplicate") ||
+                        status.includes("duplicate") || status.includes("trùng");
+  if (hasDuplicateNote) return true;
+  
+  // Rule: For active team members, bugs MUST have a valid Pull Request URL.
   const fixedByIds = b.fixedByIds ?? [];
   const isAn = fixedByIds.some(id => {
     if (BENCHMARK_PERSON.notionIds.includes(id)) return true;
@@ -38,8 +45,8 @@ function isNoRepro(b: BugRecord): boolean {
   });
   if (isAn) return false;
 
-  // If not An, and there is no PR URL, treat as no repro (no effort)
-  return !b.pullRequestUrl;
+  // Must have a valid non-empty Pull Request URL
+  return !b.pullRequestUrl || b.pullRequestUrl.trim().length === 0;
 }
 function isClosed(b: BugRecord): boolean { return (b.status ?? "").toLowerCase() === "closed" && !isNoRepro(b); }
 function isDeployed(b: BugRecord): boolean { return (b.status ?? "").toLowerCase() === "deployed" && !isNoRepro(b); }
@@ -210,9 +217,9 @@ function buildPersonPeriodMetric(person: Person, bugs: BugRecord[], period: Peri
     return true;
   });
 
-  const detected = activeBugs.filter(b => dateInRange(dateKey(b.detectedDate), period.startDate, period.endDate) && bugDetectedBy(b, person));
+  const detected = activeBugs.filter(b => !isNoRepro(b) && dateInRange(dateKey(b.detectedDate), period.startDate, period.endDate) && bugDetectedBy(b, person));
   const fixedInPeriod = activeBugs.filter(b => isFixed(b) && dateInRange(bugFixedDate(b), period.startDate, period.endDate));
-  const newInPeriod = activeBugs.filter(b => dateInRange(dateKey(b.detectedDate), period.startDate, period.endDate));
+  const newInPeriod = activeBugs.filter(b => !isNoRepro(b) && dateInRange(dateKey(b.detectedDate), period.startDate, period.endDate));
   const newFixed = newInPeriod.filter(isFixed);
   const newOpen = newInPeriod.filter(b => !isCompletedOrNoRepro(b));
   const reviewed = trackable.filter(b => {
@@ -257,7 +264,7 @@ function buildPersonPeriodMetric(person: Person, bugs: BugRecord[], period: Peri
 
 function buildTeamPeriodMetric(bugs: BugRecord[], period: PeriodInfo, persons: Person[], conclusions?: Record<string, any>): TeamPeriodMetric {
   const trackable = bugs.filter(isTrackable);
-  const detected = trackable.filter(b => dateInRange(dateKey(b.detectedDate), period.startDate, period.endDate));
+  const detected = trackable.filter(b => !isNoRepro(b) && dateInRange(dateKey(b.detectedDate), period.startDate, period.endDate));
   const fixedInPeriod = trackable.filter(b => isFixed(b) && dateInRange(bugFixedDate(b), period.startDate, period.endDate));
   const newFixed = detected.filter(isFixed);
   const newOpen = detected.filter(b => !isCompletedOrNoRepro(b));

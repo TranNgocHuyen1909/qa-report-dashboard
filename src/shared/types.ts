@@ -1,12 +1,12 @@
 /* ── Personnel ─────────────────────────────────────────── */
 
 export interface Person {
-  code: string;        // HuyenTN, HoNX, HoangGV, HuyDH, AnPD
+  code: string; // HuyenTN, HoNX, HoangGV, HuyDH, AnPD
   displayName: string;
   notionIds: string[];
   aliases: string[];
   githubUsername: string;
-  startDate: string;   // YYYY-MM-DD
+  startDate: string; // YYYY-MM-DD
   role: "lead" | "developer" | "benchmark";
 }
 
@@ -41,13 +41,20 @@ export interface BugRecord {
   lastEditedTime?: string;
   bugId?: string;
   // GitHub enrichment
-  ghReviewStatus?: "Approved" | "Changes Requested" | "Commented" | "No review" | "Error" | "No PR";
+  ghReviewStatus?:
+    | "Approved"
+    | "Changes Requested"
+    | "Commented"
+    | "No review"
+    | "Error"
+    | "No PR";
   ghReviewCount?: number;
   ghReviews?: Array<{ author: string; state: string; submittedAt: string }>;
   prAuthor?: string;
   prCreatedAt?: string;
   prCommentsByAuthor?: number;
   prCommentsByTruong?: number;
+  ghLabels?: string[];
 }
 
 /* ── Period types ──────────────────────────────────────── */
@@ -95,7 +102,15 @@ export interface TeamPeriodMetric {
 
 /* ── Bug lifecycle ────────────────────────────────────── */
 
-export type BugLifecycleStage = "New" | "In Progress" | "Resolved" | "Deployed" | "Reopened" | "Pending" | "Closed" | "Cancel";
+export type BugLifecycleStage =
+  | "New"
+  | "In Progress"
+  | "Resolved"
+  | "Deployed"
+  | "Reopened"
+  | "Pending"
+  | "Closed"
+  | "Cancel";
 
 export interface LifecycleMetric {
   stage: BugLifecycleStage;
@@ -130,15 +145,17 @@ export interface BenchmarkData {
   backlogEnd: number;
   fixRatePercent: number;
   avgBugsPerDay: number;
-  weeklyBreakdown: TeamPeriodMetric["period"] extends infer P ? Array<{
-    period: PeriodInfo;
-    detected: number;
-    newFixed: number;
-    newOpen: number;
-    fixedInPeriod: number;
-    backlogEnd: number;
-    fixRatePercent: number;
-  }> : never;
+  weeklyBreakdown: TeamPeriodMetric["period"] extends infer P
+    ? Array<{
+        period: PeriodInfo;
+        detected: number;
+        newFixed: number;
+        newOpen: number;
+        fixedInPeriod: number;
+        backlogEnd: number;
+        fixRatePercent: number;
+      }>
+    : never;
 }
 
 /* ── Checklist ────────────────────────────────────────── */
@@ -168,6 +185,8 @@ export interface ManagerConclusion {
   good: string;
   bad: string;
   risks: string;
+  manDaysOverrides?: Record<string, number>;
+  explanations?: Record<string, string>;
 }
 
 export interface BugTrackingBreakdownItem {

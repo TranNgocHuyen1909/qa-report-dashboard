@@ -33,6 +33,7 @@ export function ReviewStats({
 }) {
   const [subTab, setSubTab] = useState<"all" | "truong" | "huyen">("all");
   const [selectedDevFilter, setSelectedDevFilter] = useState<string>("all");
+  const [huyenCommentFilter, setHuyenCommentFilter] = useState<"all" | "comments" | "nocomments">("all");
 
   // Find active period details from topbar filters
   const activePeriod = useMemo(() => {
@@ -90,14 +91,115 @@ export function ReviewStats({
   };
 
   const isFixed = (b: BugRecord) => {
+    const st = (b.status ?? "").toLowerCase();
+    const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
     return (
-      ["closed", "deployed", "resolved"].includes(
-        (b.status ?? "").toLowerCase(),
-      ) && !isNoRepro(b)
+      [
+        "closed",
+        "deployed",
+        "resolved",
+        "wait for development",
+        "wait for deployment",
+        "ready for review",
+        "ready for re-review",
+        "change requested",
+        "changes requested",
+      ].includes(st) ||
+      st.includes("wait") ||
+      st.includes("ready") ||
+      st.includes("change") ||
+      ghLbls.length > 0
+    ) && !isNoRepro(b);
+  };
+
+  const renderLabelBadge = (bug: BugRecord) => {
+    // 1. Render GitHub PR Labels if available
+    if (bug.ghLabels && bug.ghLabels.length > 0) {
+      return (
+        <div style={{ display: "flex", flexDirection: "column", gap: "2px", alignItems: "center" }}>
+          {bug.ghLabels.map((lbl, idx) => {
+            const lLower = lbl.toLowerCase();
+            let bg = "rgba(107, 114, 128, 0.15)";
+            let color = "var(--text-2)";
+            if (lLower.includes("wait")) {
+              bg = "rgba(185, 28, 28, 0.25)";
+              color = "#f87171";
+            } else if (lLower.includes("ready")) {
+              bg = "rgba(161, 98, 7, 0.25)";
+              color = "#facc15";
+            } else if (lLower.includes("change")) {
+              bg = "rgba(239, 68, 68, 0.25)";
+              color = "#ef4444";
+            }
+            return (
+              <span key={idx} className="tag" style={{ background: bg, color, fontSize: "10px", fontWeight: "bold" }}>
+                {lbl}
+              </span>
+            );
+          })}
+        </div>
+      );
+    }
+
+    // 2. Fallback to Notion Status
+    const status = (bug.status ?? "").toLowerCase();
+    if (status === "resolved") {
+      return (
+        <span className="tag tag-yellow" style={{ fontSize: "10px", fontWeight: "bold" }}>
+          ⚡ Resolved (chờ Huyền review)
+        </span>
+      );
+    }
+    if (status === "wait for development" || status.includes("wait")) {
+      return (
+        <span className="tag tag-green" style={{ fontSize: "10px", fontWeight: "bold" }}>
+          ⏳ wait for dev (Huyền review xong)
+        </span>
+      );
+    }
+    if (status === "change requested" || status.includes("change")) {
+      return (
+        <span className="tag tag-red" style={{ fontSize: "10px", fontWeight: "bold" }}>
+          🔴 change requested (Anh T review ra lỗi)
+        </span>
+      );
+    }
+    if (status === "ready for review" || status.includes("ready")) {
+      return (
+        <span className="tag tag-blue" style={{ fontSize: "10px", fontWeight: "bold" }}>
+          🔵 ready for review (Dev sửa xong lỗi Anh T)
+        </span>
+      );
+    }
+    if (status === "deployed") {
+      return (
+        <span className="tag" style={{ background: "rgba(168,85,247,0.2)", color: "#a855f7", fontSize: "10px", fontWeight: "bold" }}>
+          🚀 Deployed (Anh T merge PR)
+        </span>
+      );
+    }
+    if (status === "closed") {
+      return (
+        <span className="tag tag-green" style={{ fontSize: "10px", fontWeight: "bold" }}>
+          🟢 Closed (Notion)
+        </span>
+      );
+    }
+    if (status === "reopened" || status.includes("reopen")) {
+      return (
+        <span className="tag tag-red" style={{ fontSize: "10px", fontWeight: "bold" }}>
+          🔴 Reopened (Notion)
+        </span>
+      );
+    }
+    return (
+      <span className="tag tag-gray" style={{ fontSize: "10px", fontWeight: "bold" }}>
+        {bug.status || "Chưa có Status"}
+      </span>
     );
   };
 
-  // Check if bug has HuyenTN in Notion Reviewers field (with Rule 2 replacement)
+  // Check if bug has HuyenTN in Notion Reviewers field or status was changed to wait for development/deployed/closed
   const isReviewedByHuyen = (b: BugRecord) => {
     const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
     const devNotionIds = [
@@ -105,9 +207,14 @@ export function ReviewStats({
       "0fbca242-f4da-46c8-a07c-dd0d03b8a4a7",
       "39dd872b-594c-819f-98ac-0002083b0d13",
     ];
+    const status = (b.status ?? "").toLowerCase();
     return (
       (b.reviewerIds ?? []).includes(huyenNotionId) ||
-      (b.reviewerIds ?? []).some((rid) => devNotionIds.includes(rid))
+      (b.reviewerIds ?? []).some((rid) => devNotionIds.includes(rid)) ||
+      status === "wait for development" ||
+      status.includes("wait") ||
+      status === "deployed" ||
+      status === "closed"
     );
   };
 
@@ -149,6 +256,25 @@ export function ReviewStats({
     });
   }, [view.bugs, activePeriod]);
 
+  const isHuyenBugWithComment = (b: BugRecord) => {
+    const status = (b.ghReviewStatus ?? "").toLowerCase();
+    return (
+      status === "changes requested" ||
+      status === "commented" ||
+      (b.ghReviewCount ?? 0) > 0 ||
+      (b.prCommentsByTruong ?? 0) > 0 ||
+      ((b.note ?? "").trim().length > 0 && !isNoRepro(b))
+    );
+  };
+
+  const huyenReviewedWithComments = useMemo(() => {
+    return huyenReviewedBugs.filter(isHuyenBugWithComment);
+  }, [huyenReviewedBugs]);
+
+  const huyenReviewedNoComments = useMemo(() => {
+    return huyenReviewedBugs.filter((b) => !isHuyenBugWithComment(b));
+  }, [huyenReviewedBugs]);
+
   // Filter bugs waiting for Huyen review
   const pendingHuyenReviewBugs = useMemo(() => {
     if (!activePeriod) return [];
@@ -178,43 +304,61 @@ export function ReviewStats({
     });
   }, [periodFixedBugs]);
 
+  // PRs waiting for Tech Lead Truong (checking GitHub PR labels 'wait for deployment', 'ready for re-review', 'changes requested' AND Notion Status)
   const truongPendingBugs = useMemo(() => {
     return periodFixedBugs.filter((b) => {
       if (!b.pullRequestUrl) return false;
-      // Pending if status is No review or empty and comment count by Truong is 0
-      return (
-        ((b.ghReviewStatus ?? "").toLowerCase() === "no review" ||
-          !b.ghReviewStatus) &&
-        (b.prCommentsByTruong ?? 0) === 0
-      );
+      const st = (b.status ?? "").toLowerCase();
+      const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
+
+      const isWait =
+        st === "wait for development" ||
+        st.includes("wait") ||
+        ghLbls.some((l) => l.includes("wait"));
+
+      const isReady =
+        st === "ready for review" ||
+        st.includes("ready") ||
+        ghLbls.some((l) => l.includes("ready"));
+
+      return isWait || isReady;
     });
   }, [periodFixedBugs]);
 
   // Compute breakdown for developers under Huyen
   const devReviewStats = useMemo(() => {
     return dev3People.map(dev => {
+      const devBugs = huyenReviewedBugs.filter(b => bugBelongsToPerson(b, dev));
       const fixedCount = periodFixedBugs.filter(b => bugBelongsToPerson(b, dev)).length;
-      const reviewedCount = huyenReviewedBugs.filter(b => bugBelongsToPerson(b, dev)).length;
+      const reviewedCount = devBugs.length;
+      const withCommentCount = devBugs.filter(isHuyenBugWithComment).length;
+      const noCommentCount = devBugs.length - withCommentCount;
       const pendingCount = pendingHuyenReviewBugs.filter(b => bugBelongsToPerson(b, dev)).length;
       const reviewRate = fixedCount > 0 ? (reviewedCount / fixedCount) * 100 : 0;
       return {
         dev,
         fixedCount,
         reviewedCount,
+        withCommentCount,
+        noCommentCount,
         pendingCount,
         reviewRate
       };
     });
   }, [dev3People, periodFixedBugs, huyenReviewedBugs, pendingHuyenReviewBugs]);
 
-  // Filter Huyen reviewed bugs by selected developer
+  // Filter Huyen reviewed bugs by selected developer and comment filter
   const displayedReviewed = useMemo(() => {
     return huyenReviewedBugs.filter(b => {
-      if (selectedDevFilter === "all") return true;
-      const dev = dev3People.find(p => p.code === selectedDevFilter);
-      return dev ? bugBelongsToPerson(b, dev) : false;
+      if (selectedDevFilter !== "all") {
+        const dev = dev3People.find(p => p.code === selectedDevFilter);
+        if (!dev || !bugBelongsToPerson(b, dev)) return false;
+      }
+      if (huyenCommentFilter === "comments") return isHuyenBugWithComment(b);
+      if (huyenCommentFilter === "nocomments") return !isHuyenBugWithComment(b);
+      return true;
     });
-  }, [huyenReviewedBugs, selectedDevFilter, dev3People]);
+  }, [huyenReviewedBugs, selectedDevFilter, huyenCommentFilter, dev3People]);
 
   // Filter Huyen pending bugs by selected developer
   const displayedPending = useMemo(() => {
@@ -230,6 +374,8 @@ export function ReviewStats({
     const matched = all4People.find((p) => bugBelongsToPerson(bug, p));
     return matched ? matched.code : "—";
   };
+
+
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -513,7 +659,7 @@ export function ReviewStats({
                     style={{ fontSize: "11px", padding: "3px 8px" }}
                     onClick={() => setSelectedDevFilter(p.code)}
                   >
-                    {p.code}
+                    {p.displayName}
                   </button>
                 ))}
               </div>
@@ -564,11 +710,11 @@ export function ReviewStats({
                     <th
                       style={{
                         padding: "10px",
-                        width: "90px",
+                        width: "210px",
                         textAlign: "center",
                       }}
                     >
-                      Trạng thái
+                      LABEL PR (NOTION)
                     </th>
                     <th style={{ padding: "10px", width: "120px" }}>
                       GitHub PR
@@ -687,26 +833,9 @@ export function ReviewStats({
                               </span>
                             )}
                           </td>
-                          {/* Notion Status */}
+                          {/* Notion Status / Label PR */}
                           <td style={{ padding: "10px", textAlign: "center" }}>
-                            <span
-                              style={{
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                fontSize: "10px",
-                                fontWeight: "bold",
-                                background:
-                                  (bug.status ?? "").toLowerCase() === "closed"
-                                    ? "rgba(16,185,129,0.15)"
-                                    : "rgba(37,99,235,0.15)",
-                                color:
-                                  (bug.status ?? "").toLowerCase() === "closed"
-                                    ? "var(--green)"
-                                    : "var(--blue)",
-                              }}
-                            >
-                              {bug.status}
-                            </span>
+                            {renderLabelBadge(bug)}
                           </td>
                           {/* GitHub Link */}
                           <td style={{ padding: "10px" }}>
@@ -1128,6 +1257,15 @@ export function ReviewStats({
                           style={{
                             padding: "8px",
                             textAlign: "center",
+                            width: "140px",
+                          }}
+                        >
+                          Trạng Thái Label
+                        </th>
+                        <th
+                          style={{
+                            padding: "8px",
+                            textAlign: "center",
                             width: "100px",
                           }}
                         >
@@ -1191,6 +1329,9 @@ export function ReviewStats({
                             )}
                           </td>
                           <td style={{ padding: "8px", textAlign: "center" }}>
+                            {renderLabelBadge(b)}
+                          </td>
+                          <td style={{ padding: "8px", textAlign: "center" }}>
                             <span
                               className={
                                 b.ghReviewStatus === "Approved"
@@ -1218,9 +1359,17 @@ export function ReviewStats({
                   fontSize: "13px",
                   color: "var(--yellow)",
                   marginBottom: "12px",
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "space-between",
+                  flexWrap: "wrap",
+                  gap: "8px",
                 }}
               >
-                ⏳ PR Đang Chờ Anh Trường Duyệt ({truongPendingBugs.length})
+                <span>⏳ PR Đang Chờ Anh Trường Duyệt Vòng 2 ({truongPendingBugs.length})</span>
+                <span style={{ fontSize: "11px", fontWeight: "normal", color: "var(--text-2)", background: "var(--surface-3)", padding: "3px 8px", borderRadius: "6px", border: "1px solid var(--border)" }}>
+                  📌 Chỉ bao gồm nhãn <strong style={{ color: "var(--green)" }}>wait for development</strong> &amp; <strong style={{ color: "var(--blue)" }}>ready for review</strong>
+                </span>
               </div>
               <div
                 style={{
@@ -1240,7 +1389,7 @@ export function ReviewStats({
                       fontSize: "12px",
                     }}
                   >
-                    🎉 Tuyệt vời! Không có PR nào đang chờ review.
+                    🎉 Tuyệt vời! Không có PR nào đang chờ review (nhãn wait for development / ready for review).
                   </div>
                 ) : (
                   <table
@@ -1278,6 +1427,15 @@ export function ReviewStats({
                         </th>
                         <th style={{ padding: "8px", textAlign: "left" }}>
                           Nội dung PR
+                        </th>
+                        <th
+                          style={{
+                            padding: "8px",
+                            textAlign: "center",
+                            width: "210px",
+                          }}
+                        >
+                          TRẠNG THÁI NOTION (STATUS/LABEL)
                         </th>
                         <th
                           style={{
@@ -1327,6 +1485,9 @@ export function ReviewStats({
                             {b.title}
                           </td>
                           <td style={{ padding: "8px", textAlign: "center" }}>
+                            {renderLabelBadge(b)}
+                          </td>
+                          <td style={{ padding: "8px", textAlign: "center" }}>
                             {b.pullRequestUrl ? (
                               <a
                                 href={b.pullRequestUrl}
@@ -1360,11 +1521,11 @@ export function ReviewStats({
       {/* ──────────────────────────────────────────────────────── */}
       {subTab === "huyen" && (
         <>
-          {/* KPI Cards */}
+          {/* KPI Cards (Split into 4 key metrics: Total, With Comment, No Comment, Pending) */}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(220px, 1fr))",
+              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
               gap: "16px",
             }}
           >
@@ -1374,7 +1535,7 @@ export function ReviewStats({
                 display: "flex",
                 flexDirection: "column",
                 gap: "6px",
-                borderLeft: "4px solid var(--green)",
+                borderLeft: "4px solid #a855f7",
               }}
             >
               <div
@@ -1390,7 +1551,7 @@ export function ReviewStats({
                 style={{
                   fontSize: "28px",
                   fontWeight: "bold",
-                  color: "var(--green)",
+                  color: "#a855f7",
                 }}
               >
                 {huyenReviewedBugs.length}
@@ -1414,39 +1575,63 @@ export function ReviewStats({
                 display: "flex",
                 flexDirection: "column",
                 gap: "6px",
-                borderLeft: "4px solid var(--cyan)",
+                borderLeft: "4px solid #ef4444",
+                background: "rgba(239,68,68,0.04)",
               }}
             >
               <div
                 style={{
                   fontSize: "12px",
-                  color: "var(--text-3)",
+                  color: "#ef4444",
                   fontWeight: "bold",
                 }}
               >
-                TỶ LỆ PHỦ REVIEW
+                💬 REVIEW CÓ COMMENT (RA LỖI)
               </div>
               <div
                 style={{
                   fontSize: "28px",
                   fontWeight: "bold",
-                  color: "var(--cyan)",
+                  color: "#ef4444",
                 }}
               >
-                {periodFixedBugs.filter((b) => getDevNameByBug(b) !== "HuyenTN")
-                  .length > 0
-                  ? (
-                      (huyenReviewedBugs.length /
-                        periodFixedBugs.filter(
-                          (b) => getDevNameByBug(b) !== "HuyenTN",
-                        ).length) *
-                      100
-                    ).toFixed(1)
-                  : "0.0"}
-                %
+                {huyenReviewedWithComments.length}
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
-                Mục tiêu: Đạt 100% các bug hoàn thành (Closed)
+                Dev bắt buộc reply comment &amp; Resolve conversation
+              </div>
+            </div>
+
+            <div
+              className="card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                borderLeft: "4px solid #10b981",
+                background: "rgba(16,185,129,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#10b981",
+                  fontWeight: "bold",
+                }}
+              >
+                ✨ REVIEW KHÔNG COMMENT (PASS NGAY)
+              </div>
+              <div
+                style={{
+                  fontSize: "28px",
+                  fontWeight: "bold",
+                  color: "#10b981",
+                }}
+              >
+                {huyenReviewedNoComments.length}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
+                Test đạt 100% không phát hiện thêm lỗi
               </div>
             </div>
 
@@ -1466,7 +1651,7 @@ export function ReviewStats({
                   fontWeight: "bold",
                 }}
               >
-                BUG CHỜ REVIEW
+                ⏳ BUG CHỜ REVIEW
               </div>
               <div
                 style={{
@@ -1611,6 +1796,8 @@ export function ReviewStats({
                 justifyContent: "space-between",
                 alignItems: "center",
                 marginBottom: "16px",
+                flexWrap: "wrap",
+                gap: "12px",
               }}
             >
               <div
@@ -1622,24 +1809,52 @@ export function ReviewStats({
               >
                 📋 Chi Tiết Lỗi Theo Trạng Thái Review (Lead: HuyenTN)
               </div>
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button
-                  className={`ctrl ${selectedDevFilter === "all" ? "ctrl-primary" : ""}`}
-                  style={{ fontSize: "11px", padding: "4px 10px" }}
-                  onClick={() => setSelectedDevFilter("all")}
-                >
-                  Tất cả
-                </button>
-                {dev3People.map((d) => (
+              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                {/* Phễu lọc Có comment / Không comment */}
+                <div style={{ display: "flex", gap: "3px", background: "var(--surface-3)", padding: "3px", borderRadius: "8px", border: "1px solid var(--border)" }}>
                   <button
-                    key={d.code}
-                    className={`ctrl ${selectedDevFilter === d.code ? "ctrl-primary" : ""}`}
-                    style={{ fontSize: "11px", padding: "4px 10px" }}
-                    onClick={() => setSelectedDevFilter(d.code)}
+                    className={`ctrl ${huyenCommentFilter === "all" ? "ctrl-primary" : ""}`}
+                    style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "6px" }}
+                    onClick={() => setHuyenCommentFilter("all")}
                   >
-                    {d.code}
+                    🌐 Tất cả ({huyenReviewedBugs.length})
                   </button>
-                ))}
+                  <button
+                    className={`ctrl ${huyenCommentFilter === "comments" ? "ctrl-primary" : ""}`}
+                    style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "6px" }}
+                    onClick={() => setHuyenCommentFilter("comments")}
+                  >
+                    💬 Có comment / Ra lỗi ({huyenReviewedWithComments.length})
+                  </button>
+                  <button
+                    className={`ctrl ${huyenCommentFilter === "nocomments" ? "ctrl-primary" : ""}`}
+                    style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "6px" }}
+                    onClick={() => setHuyenCommentFilter("nocomments")}
+                  >
+                    ✨ Pass ngay ({huyenReviewedNoComments.length})
+                  </button>
+                </div>
+
+                {/* Filter theo Dev */}
+                <div style={{ display: "flex", gap: "4px" }}>
+                  <button
+                    className={`ctrl ${selectedDevFilter === "all" ? "ctrl-primary" : ""}`}
+                    style={{ fontSize: "11px", padding: "4px 8px" }}
+                    onClick={() => setSelectedDevFilter("all")}
+                  >
+                    Tất cả Dev
+                  </button>
+                  {dev3People.map((d) => (
+                    <button
+                      key={d.code}
+                      className={`ctrl ${selectedDevFilter === d.code ? "ctrl-primary" : ""}`}
+                      style={{ fontSize: "11px", padding: "4px 8px" }}
+                      onClick={() => setSelectedDevFilter(d.code)}
+                    >
+                      {d.code}
+                    </button>
+                  ))}
+                </div>
               </div>
             </div>
 
@@ -1788,26 +2003,23 @@ export function ReviewStats({
                               <td
                                 style={{ padding: "8px", textAlign: "center" }}
                               >
-                                <span
-                                  style={{
-                                    padding: "2px 6px",
-                                    borderRadius: "4px",
-                                    fontSize: "10px",
-                                    fontWeight: "bold",
-                                    background:
-                                      (b.status ?? "").toLowerCase() ===
-                                      "closed"
-                                        ? "rgba(16,185,129,0.15)"
-                                        : "rgba(37,99,235,0.15)",
-                                    color:
-                                      (b.status ?? "").toLowerCase() ===
-                                      "closed"
-                                        ? "var(--green)"
-                                        : "var(--blue)",
-                                  }}
-                                >
-                                  {b.status}
-                                </span>
+                                {isHuyenBugWithComment(b) ? (
+                                  <span
+                                    className="tag tag-red"
+                                    style={{ fontSize: "10px", padding: "2px 6px" }}
+                                    title="Huyền review phát hiện lỗi / có comment thảo luận"
+                                  >
+                                    💬 Có comment
+                                  </span>
+                                ) : (
+                                  <span
+                                    className="tag tag-green"
+                                    style={{ fontSize: "10px", padding: "2px 6px" }}
+                                    title="Huyền test đạt ngay 100%, không phát hiện lỗi"
+                                  >
+                                    ✨ Pass ngay
+                                  </span>
+                                )}
                               </td>
                             </tr>
                           ))}
@@ -1830,7 +2042,7 @@ export function ReviewStats({
                     gap: "6px",
                   }}
                 >
-                  <span>⏳</span> Đang Chờ Lead Review (
+                  <span>⏳</span> Đang Chờ Huyền Review (Vòng 1 - QC Lead) (
                   {
                     displayedPending.filter(
                       (b) => getDevNameByBug(b) !== "HuyenTN",
@@ -1902,10 +2114,10 @@ export function ReviewStats({
                             style={{
                               padding: "8px",
                               textAlign: "center",
-                              width: "80px",
+                              width: "140px",
                             }}
                           >
-                            Trạng thái
+                            Trạng Thái Label
                           </th>
                         </tr>
                       </thead>
@@ -1955,18 +2167,7 @@ export function ReviewStats({
                               <td
                                 style={{ padding: "8px", textAlign: "center" }}
                               >
-                                <span
-                                  style={{
-                                    padding: "2px 6px",
-                                    borderRadius: "4px",
-                                    fontSize: "10px",
-                                    fontWeight: "bold",
-                                    background: "rgba(245,158,11,0.15)",
-                                    color: "var(--yellow)",
-                                  }}
-                                >
-                                  {b.status}
-                                </span>
+                                {renderLabelBadge(b)}
                               </td>
                             </tr>
                           ))}

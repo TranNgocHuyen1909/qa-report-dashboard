@@ -1,0 +1,150 @@
+<title>Các loại lỗi hay mắc — Lisa AI</title>
+<style>
+  :root {
+    --paper: #f5f7f8; --surface: #ffffff; --surface-2: #eef2f3;
+    --ink: #15191d; --ink-soft: #3a444c; --muted: #626d77;
+    --line: #dde4e7; --line-strong: #c6d0d4;
+    --accent: #0f6f66; --accent-soft: #0f6f6614;
+    --shadow: 0 1px 2px rgba(20,30,35,.04), 0 8px 24px -12px rgba(20,30,35,.14);
+    --radius: 12px;
+    --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", sans-serif;
+    --font-mono: ui-monospace, "SF Mono", "SFMono-Regular", "Menlo", "Cascadia Code", "Consolas", monospace;
+    --maxw: 62rem;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --paper: #0d1013; --surface: #151a1f; --surface-2: #1b2229;
+      --ink: #e7ecee; --ink-soft: #c2cbd0; --muted: #8b97a0;
+      --line: #232c33; --line-strong: #2f3a42;
+      --accent: #46c9bd; --accent-soft: #46c9bd1f;
+      --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -14px rgba(0,0,0,.6);
+    }
+  }
+  :root[data-theme="light"] {
+    --paper: #f5f7f8; --surface: #ffffff; --surface-2: #eef2f3;
+    --ink: #15191d; --ink-soft: #3a444c; --muted: #626d77;
+    --line: #dde4e7; --line-strong: #c6d0d4;
+    --accent: #0f6f66; --accent-soft: #0f6f6614;
+    --shadow: 0 1px 2px rgba(20,30,35,.04), 0 8px 24px -12px rgba(20,30,35,.14);
+  }
+  :root[data-theme="dark"] {
+    --paper: #0d1013; --surface: #151a1f; --surface-2: #1b2229;
+    --ink: #e7ecee; --ink-soft: #c2cbd0; --muted: #8b97a0;
+    --line: #232c33; --line-strong: #2f3a42;
+    --accent: #46c9bd; --accent-soft: #46c9bd1f;
+    --shadow: 0 1px 2px rgba(0,0,0,.3), 0 12px 32px -14px rgba(0,0,0,.6);
+  }
+
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--paper); color: var(--ink); font-family: var(--font-sans); font-size: 16px; line-height: 1.62; -webkit-font-smoothing: antialiased; }
+  .wrap { max-width: var(--maxw); margin: 0 auto; padding: 0 1.5rem 4rem; }
+
+  .eyebrow { font-family: var(--font-mono); font-size: .72rem; letter-spacing: .12em; text-transform: uppercase; color: var(--accent); font-weight: 600; margin: 0 0 .5rem; }
+  h1 { font-size: clamp(1.7rem, 3.6vw, 2.5rem); line-height: 1.12; letter-spacing: -.02em; margin: 0 0 .6rem; text-wrap: balance; }
+  .lead { font-size: 1.05rem; color: var(--ink-soft); max-width: 60ch; margin: 0; }
+  .metarow { display: flex; flex-wrap: wrap; gap: .5rem .75rem; font-family: var(--font-mono); font-size: .78rem; color: var(--muted); margin-top: 1rem; }
+  .metarow span { display: inline-flex; align-items: center; gap: .4rem; }
+  .metarow .dot { width: 5px; height: 5px; border-radius: 50%; background: var(--line-strong); }
+
+  header.hero { padding: 3rem 0 1.6rem; border-bottom: 1px solid var(--line); margin-bottom: 2rem; }
+
+  code, .mono { font-family: var(--font-mono); font-size: .85em; }
+
+  .tbl-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); }
+  table { border-collapse: collapse; width: 100%; min-width: 760px; background: var(--surface); }
+  th, td { text-align: left; padding: .85rem .9rem; border-bottom: 1px solid var(--line); vertical-align: top; font-size: .9rem; }
+  th { font-family: var(--font-mono); font-size: .72rem; text-transform: uppercase; letter-spacing: .07em; color: var(--muted); font-weight: 600; background: var(--surface-2); position: sticky; top: 0; }
+  tr:last-child td { border-bottom: none; }
+  tr.key td { background: var(--accent-soft); }
+
+  .ecode { display: inline-flex; align-items: center; gap: .1rem; font-family: var(--font-mono); font-weight: 700; font-size: .72rem; color: var(--accent); background: var(--accent-soft); border: 1px solid color-mix(in srgb, var(--accent) 32%, transparent); border-radius: 5px; padding: .06em .44em; margin-bottom: .45rem; }
+  .ecode .star { color: var(--accent); }
+  .l-title { display: block; font-weight: 700; font-size: .95rem; color: var(--ink); letter-spacing: -.005em; }
+  .ex { color: var(--ink-soft); line-height: 1.5; }
+  .ex .q { color: var(--ink); font-style: italic; }
+  .ex .prs { margin-top: .55rem; display: flex; flex-wrap: wrap; gap: .28rem; }
+  .lesson-txt { color: var(--ink-soft); line-height: 1.5; }
+  .lesson-txt b { color: var(--ink); font-weight: 600; }
+
+  .pr { font-family: var(--font-mono); font-size: .74rem; color: var(--ink-soft); background: var(--surface-2); border: 1px solid var(--line); border-radius: 5px; padding: .05em .38em; white-space: nowrap; text-decoration: none; }
+  a.pr { cursor: pointer; }
+  a.pr:hover { border-color: var(--accent); color: var(--accent); background: var(--accent-soft); }
+  a.pr::after { content: "↗"; font-size: .8em; opacity: .45; margin-left: .18em; }
+  a.pr:hover::after { opacity: 1; }
+
+  .legend { display: flex; flex-wrap: wrap; gap: .3rem .9rem; margin-top: .9rem; font-size: .82rem; color: var(--muted); }
+  .legend b { color: var(--accent); }
+
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; border-radius: 4px; }
+</style>
+
+<div class="wrap">
+
+  <header class="hero">
+    <p class="eyebrow">Weekly Code Review · Lisa AI</p>
+    <h1>Các loại lỗi hay mắc — ví dụ &amp; bài học</h1>
+    <p class="lead">Phân theo loại lỗi để dễ tự soi: <em>lỗi gì → một ví dụ thật → bài học rút ra</em>. Cả 3 tuần trên cụm Lisa AI (lisa-ai-agent · tool-100 · lisa-visa-web-backend).</p>
+    <div class="metarow">
+      <span><span class="dot"></span>Họp tuần 2026-07-13</span>
+      <span><span class="dot"></span>9 loại lỗi</span>
+      <span><span class="dot"></span>★ 3 loại hay gặp nhất · ◆ case study</span>
+    </div>
+  </header>
+
+  <div class="tbl-wrap">
+    <table class="errtable">
+      <thead>
+        <tr><th>Loại lỗi hay mắc</th><th>Ví dụ cụ thể</th><th>Bài học</th></tr>
+      </thead>
+      <tbody>
+        <tr class="key">
+          <td><span class="ecode">L1<span class="star">★</span></span><span class="l-title">Sửa sai tầng — vá triệu chứng</span></td>
+          <td><div class="ex">Sửa prompt AI cho bug <span class="q">"1–15 ngày"</span>, nhưng lỗi thật ở tool-100 extract sai. PR#171 vá prompt khi chưa kiểm docs nào được load ra.<div class="prs"><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/171" target="_blank" rel="noopener noreferrer">AI #171</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/154" target="_blank" rel="noopener noreferrer">#154</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/148" target="_blank" rel="noopener noreferrer">#148</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/165" target="_blank" rel="noopener noreferrer">#165</a></div></div></td>
+          <td><span class="lesson-txt">Trace đúng tầng trước khi sửa: <b>tool-100 → group-rule → COLUMN_PROMPTS (frozen) → COT_HINTS → docs → prompt</b>. Nhớ "Tool &gt; AI".</span></td>
+        </tr>
+        <tr class="key">
+          <td><span class="ecode">L2<span class="star">★</span></span><span class="l-title">Test "xanh giả" — không fail khi logic sai</span></td>
+          <td><div class="ex">Assert nguyên văn <span class="q">"Du lịch"</span> nằm trong prompt (đổi wording là vỡ); test backend chỉ so chuỗi SQL, không chạy DB; eval <code>equals</code> hạ lowercase nên <span class="q">"du lịch"</span> pass mà production drop.<div class="prs"><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/150" target="_blank" rel="noopener noreferrer">AI #150</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/146" target="_blank" rel="noopener noreferrer">#146</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/160" target="_blank" rel="noopener noreferrer">#160</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/126" target="_blank" rel="noopener noreferrer">#126</a><a class="pr" href="https://github.com/truongtc/lisa-visa-web-backend/pull/32" target="_blank" rel="noopener noreferrer">BE #32</a></div></div></td>
+          <td><span class="lesson-txt">Test phải <b>fail khi nghiệp vụ sai</b>, không phải khi câu chữ đổi. Cần đúng casing thì dùng <code>contains</code>/<code>regex</code>.</span></td>
+        </tr>
+        <tr class="key">
+          <td><span class="ecode">L3<span class="star">★</span></span><span class="l-title">Test thiếu — chỉ vá đúng câu bug</span></td>
+          <td><div class="ex">o2001 thiếu present-mirror <span class="q">"Thất nghiệp"</span>; m0002 nhánh fallback vừa restructure lại mù test; fix <span class="q">"Bỉ 45 ngày"</span> không kèm test.<div class="prs"><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/146" target="_blank" rel="noopener noreferrer">AI #146</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/160" target="_blank" rel="noopener noreferrer">#160</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/166" target="_blank" rel="noopener noreferrer">#166</a></div></div></td>
+          <td><span class="lesson-txt">Sửa 1 nhánh → cover <b>cả nhánh</b>: happy + absent (kèm present-mirror) + biến thể, không chỉ câu bug gốc.</span></td>
+        </tr>
+        <tr>
+          <td><span class="ecode">L4</span><span class="l-title">Guard/regex allowlist rộng → xoá oan</span></td>
+          <td><div class="ex">Guard O9004 "chỉ giữ khi khớp regex" xoá oan câu thật <span class="q">"visa Nhật được cấp năm ngoái"</span>; m0003 bắt nhầm câu hỏi <span class="q">"…2 tháng à?"</span>.<div class="prs"><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/162" target="_blank" rel="noopener noreferrer">AI #162</a><a class="pr" href="https://github.com/truongtc/tool-100/pull/17" target="_blank" rel="noopener noreferrer">tool100 #17</a></div></div></td>
+          <td><span class="lesson-txt"><b>Denylist hẹp</b> — chặn đúng cái sai đã kiểm chứng, mặc định tin model; thiết kế theo intent, đừng liệt kê "mọi cách khách nói".</span></td>
+        </tr>
+        <tr>
+          <td><span class="ecode">L5<span class="star">◆</span></span><span class="l-title">Hiểu sai định nghĩa field / nghiệp vụ</span></td>
+          <td><div class="ex">O9004 scoped theo <b>NƯỚC ĐÍCH</b>, nhưng test gán <span class="q">"đậu visa Mỹ, giờ xin Schengen"</span> = "đã đậu" — sai, vì Schengen chưa có lịch sử.<div class="prs"><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/162" target="_blank" rel="noopener noreferrer">AI #162</a></div></div></td>
+          <td><span class="lesson-txt">Bám <b>nguồn chuẩn</b> (COLUMN_PROMPTS "for destination country", tool-100 nhận <code>destinations</code>) trước khi viết expected.</span></td>
+        </tr>
+        <tr>
+          <td><span class="ecode">L6</span><span class="l-title">Sửa 1 chỗ, sót N chỗ cùng pattern</span></td>
+          <td><div class="ex">Fix mapping Schengen nhưng thiếu Iceland / Switzerland / Liechtenstein; token <code>visa</code> copy-paste ở 8 module.<div class="prs"><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/143" target="_blank" rel="noopener noreferrer">AI #143</a></div></div></td>
+          <td><span class="lesson-txt"><b>Fix hệ thống</b> — quét hết vị trí cùng pattern, ghi rõ "đã rà soát X, Y, Z" vào PR.</span></td>
+        </tr>
+        <tr>
+          <td><span class="ecode">L7</span><span class="l-title">Prompt mơ hồ / dài dòng</span></td>
+          <td><div class="ex">task_1 viết <span class="q">"ngược lại cái gì?"</span> để model tự đoán; rule THÁI ĐỘ ~1k token; thiếu nhãn <span class="q">"Ví dụ:"</span> khiến model hiểu nhầm.<div class="prs"><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/126" target="_blank" rel="noopener noreferrer">AI #126</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/122" target="_blank" rel="noopener noreferrer">#122</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/166" target="_blank" rel="noopener noreferrer">#166</a><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/137" target="_blank" rel="noopener noreferrer">#137</a></div></div></td>
+          <td><span class="lesson-txt">Mỗi câu <b>một intent</b>, có nhãn ("Ví dụ:"), cắt token thừa; sửa ở COT_HINTS/yaml, <b>không đụng</b> COLUMN_PROMPTS finetune.</span></td>
+        </tr>
+        <tr>
+          <td><span class="ecode">L8</span><span class="l-title">Ẩu quy trình — hygiene &amp; convention</span></td>
+          <td><div class="ex">Comment <span class="q">"giải trình chỉnh sửa AI"</span> thừa; thiếu mã ticket BSVA trong fixture; báo <span class="q">"đã test"</span> chung chung không kèm ảnh.<div class="prs"><a class="pr" href="https://github.com/truongtc/lisa-ai-agent/pull/142" target="_blank" rel="noopener noreferrer">AI #142</a><a class="pr" href="https://github.com/truongtc/tool-100/pull/18" target="_blank" rel="noopener noreferrer">tool100 #18</a><a class="pr" href="https://github.com/truongtc/tool-100/pull/19" target="_blank" rel="noopener noreferrer">#19</a><a class="pr" href="https://github.com/truongtc/tool-100/pull/22" target="_blank" rel="noopener noreferrer">#22</a><a class="pr" href="https://github.com/truongtc/tool-100/pull/23" target="_blank" rel="noopener noreferrer">#23</a></div></div></td>
+          <td><span class="lesson-txt">Gắn ticket; <b>hiểu vì sao code tồn tại rồi mới bỏ</b> (Chesterton's fence); "đã test" phải kèm ảnh/output.</span></td>
+        </tr>
+        <tr>
+          <td><span class="ecode">L9</span><span class="l-title">An toàn input &amp; vận hành</span></td>
+          <td><div class="ex">Search ghép <span class="q">f"%{q}%"</span> vào ILIKE → <span class="q">"50%"</span> khớp mọi thứ (wildcard injection); migration <code>CREATE EXTENSION</code> cần superuser, dễ nổ trên prod least-privilege.<div class="prs"><a class="pr" href="https://github.com/truongtc/lisa-visa-web-backend/pull/32" target="_blank" rel="noopener noreferrer">BE #32</a></div></div></td>
+          <td><span class="lesson-txt">Escape input LIKE (<code>% _ \</code>) + khai báo <code>ESCAPE</code>; tách thao tác superuser khỏi migration app, note runbook.</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <div class="legend"><span><b>★</b> 3 loại hay gặp nhất (L1 · L2 · L3)</span><span><b>◆</b> case study chiếu kỹ (L5)</span><span>Hàng tô nhạt = ưu tiên đưa ra họp</span></div>
+
+</div>

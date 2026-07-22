@@ -97,7 +97,7 @@ interface RepoConfig {
 
 const repoChecklistsConfig: Record<string, RepoConfig> = {
   "tool-100": {
-    title: "📦 tool-100 (Regex & Extractors Metadata)",
+    title: "tool-100 (Regex & Extractors Metadata)",
     badgeColor: "var(--blue)",
     rules: [
       {
@@ -128,7 +128,7 @@ const repoChecklistsConfig: Record<string, RepoConfig> = {
     ],
   },
   "lisa-ai-agent": {
-    title: "🤖 lisa-ai-agent (Prompts, Decision Matrix & Graph)",
+    title: "lisa-ai-agent (Prompts, Decision Matrix & Graph)",
     badgeColor: "#a855f7",
     rules: [
       {
@@ -180,7 +180,7 @@ const repoChecklistsConfig: Record<string, RepoConfig> = {
     ],
   },
   "lisa-visa-web-backend": {
-    title: "⚙️ lisa-visa-web-backend (SQL, Alembic & DB Queries)",
+    title: "lisa-visa-web-backend (SQL, Alembic & DB Queries)",
     badgeColor: "var(--cyan)",
     rules: [
       {
@@ -201,7 +201,7 @@ const repoChecklistsConfig: Record<string, RepoConfig> = {
     ],
   },
   "lisa-visa-web": {
-    title: "🌐 lisa-visa-web (QA Dashboard & UI Components)",
+    title: "lisa-visa-web (QA Dashboard & UI Components)",
     badgeColor: "var(--green)",
     rules: [
       {
@@ -365,10 +365,10 @@ export function ChecklistView({ initialRepoFilter = "all" }: { initialRepoFilter
         </span>
         {[
           { id: "all", label: "🌐 Tất cả Repositories (4)" },
-          { id: "tool-100", label: "📦 tool-100" },
-          { id: "lisa-ai-agent", label: "🤖 lisa-ai-agent" },
-          { id: "lisa-visa-web-backend", label: "⚙️ lisa-visa-web-backend" },
-          { id: "lisa-visa-web", label: "🖥️ lisa-visa-web" },
+          { id: "tool-100", label: "tool-100" },
+          { id: "lisa-ai-agent", label: "lisa-ai-agent" },
+          { id: "lisa-visa-web-backend", label: "lisa-visa-web-backend" },
+          { id: "lisa-visa-web", label: "lisa-visa-web" },
         ].map((f) => (
           <button
             key={f.id}

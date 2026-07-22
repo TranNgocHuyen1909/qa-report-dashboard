@@ -70,6 +70,10 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     { weekLabel: "Tuần 4", targetPerDev: 25, milestoneLabel: "Mốc T2: Tự làm các task luồng khó" },
     { weekLabel: "Tuần 5", targetPerDev: 30, milestoneLabel: "Mốc T3: Tiệm cận năng suất tối đa" },
     { weekLabel: "Tuần 6", targetPerDev: 40, milestoneLabel: "Mốc 100%: Năng suất tối đa (~40 Bug/Tuần)" },
+    { weekLabel: "Tuần 7", targetPerDev: 40, milestoneLabel: "Duy trì năng suất tối đa" },
+    { weekLabel: "Tuần 8", targetPerDev: 40, milestoneLabel: "Duy trì năng suất tối đa" },
+    { weekLabel: "Tuần 9", targetPerDev: 40, milestoneLabel: "Duy trì năng suất tối đa" },
+    { weekLabel: "Tuần 10", targetPerDev: 40, milestoneLabel: "Duy trì năng suất tối đa" },
   ];
 
   const handleAutoDraft = () => {
@@ -146,31 +150,65 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
 
   const activeDevsCount = view.personnel.filter(p => p.role !== "benchmark").length || 3;
 
-  // Chart Data Calculations (Either All Team Total OR Individual Dev)
-  const chartData = weeklyTargetTrajectory.map((t, idx) => {
-    const matchedMetric = view.weeklyMetrics[view.weeklyMetrics.length - 1 - idx] || view.weeklyMetrics[idx];
-    
+  const getOnboardingWeek = (startDate: string, periodStartDate: string) => {
+    const start = new Date(`${startDate}T00:00:00Z`);
+    const periodStart = new Date(`${periodStartDate}T00:00:00Z`);
+    const startDay = start.getUTCDay() || 7;
+    const periodDay = periodStart.getUTCDay() || 7;
+    start.setUTCDate(start.getUTCDate() - startDay + 1);
+    periodStart.setUTCDate(periodStart.getUTCDate() - periodDay + 1);
+    return Math.max(1, Math.floor((periodStart.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1);
+  };
+
+  // Chart follows each person's onboarding timeline, not one shared team week.
+  const selectedDev = selectedDevFilter !== "all"
+    ? view.personnel.find(p => p.code === selectedDevFilter)
+    : undefined;
+  const chartMetrics = [...view.weeklyMetrics]
+    .filter(metric => !selectedDev || metric.period.endDate >= selectedDev.startDate)
+    .slice(0, 10)
+    .reverse();
+  const chartSlots = Array.from({ length: 10 }, (_, index) => chartMetrics[index]);
+  const chartData = chartSlots.map((matchedMetric, index) => {
     let displayActual = 0;
-    let displayTarget = t.targetPerDev;
+    let displayTarget = 0;
+    let weekLabel = weeklyTargetTrajectory[index].weekLabel;
+    let milestoneLabel = weeklyTargetTrajectory[index].milestoneLabel;
 
     if (selectedDevFilter === "all") {
       const teamTotalFixed = matchedMetric ? matchedMetric.totalFixed : 0;
       displayActual = teamTotalFixed;
-      displayTarget = t.targetPerDev * activeDevsCount;
+      displayTarget = matchedMetric ? view.personnel
+        .filter(person => person.role !== "benchmark" && person.startDate <= matchedMetric.period.endDate)
+        .reduce((sum, person) => {
+          const week = getOnboardingWeek(person.startDate, matchedMetric.period.startDate);
+          return sum + (weeklyTargetTrajectory[week - 1]?.targetPerDev ?? weeklyTargetTrajectory.at(-1)?.targetPerDev ?? 0);
+        }, 0) : weeklyTargetTrajectory[index].targetPerDev * activeDevsCount;
+      if (matchedMetric) {
+        weekLabel = matchedMetric.period.label;
+        milestoneLabel = "Theo tuần lịch";
+      }
     } else {
       const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
       displayActual = personData ? personData.bugsFixed : 0;
-      displayTarget = t.targetPerDev;
+      const onboardingWeek = matchedMetric && selectedDev
+        ? getOnboardingWeek(selectedDev.startDate, matchedMetric.period.startDate)
+        : index + 1;
+      const targetStep = weeklyTargetTrajectory[onboardingWeek - 1] ?? weeklyTargetTrajectory.at(-1);
+      displayTarget = targetStep?.targetPerDev ?? 0;
+      weekLabel = `Tuần ${onboardingWeek}`;
+      milestoneLabel = targetStep?.milestoneLabel ?? "Năng suất ổn định";
     }
 
-    const maxScale = selectedDevFilter === "all" ? (45 * activeDevsCount) : 45;
+    const maxScale = selectedDevFilter === "all" ? Math.max(45 * activeDevsCount, displayTarget) : 45;
     const targetPct = Math.min((displayTarget / maxScale) * 100, 100);
     const actualPct = Math.min((displayActual / maxScale) * 100, 100);
     const achieveRate = displayTarget > 0 ? Math.round((displayActual / displayTarget) * 100) : 0;
     const isTargetMet = displayActual >= displayTarget;
 
     return {
-      ...t,
+      weekLabel,
+      milestoneLabel,
       displayActual,
       displayTarget,
       targetPct,
@@ -191,13 +229,13 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
   const usableH = svgHeight - paddingTop - paddingBottom;
 
   const targetPoints = chartData.map((d, i) => {
-    const x = paddingX + (i / (chartData.length - 1)) * usableW;
+    const x = paddingX + (i / Math.max(chartData.length - 1, 1)) * usableW;
     const y = svgHeight - paddingBottom - (d.targetPct / 100) * usableH;
     return `${x},${y}`;
   }).join(" ");
 
   const actualPoints = chartData.map((d, i) => {
-    const x = paddingX + (i / (chartData.length - 1)) * usableW;
+    const x = paddingX + (i / Math.max(chartData.length - 1, 1)) * usableW;
     const y = svgHeight - paddingBottom - (d.actualPct / 100) * usableH;
     return `${x},${y}`;
   }).join(" ");
@@ -313,6 +351,12 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
               </linearGradient>
             </defs>
 
+            {chartData.length === 0 && (
+              <text x={svgWidth / 2} y={svgHeight / 2} textAnchor="middle" fill="var(--text-2)" fontSize="13">
+                Chưa có dữ liệu trong thời gian làm việc của thành viên này
+              </text>
+            )}
+
             {/* Grid lines */}
             {[0, 0.33, 0.66, 1].map((ratio, i) => (
               <line 
@@ -355,7 +399,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
 
             {/* Data Points & Smart Non-Colliding Labels */}
             {chartData.map((d, i) => {
-              const x = paddingX + (i / (chartData.length - 1)) * usableW;
+              const x = paddingX + (i / Math.max(chartData.length - 1, 1)) * usableW;
               const yTarget = svgHeight - paddingBottom - (d.targetPct / 100) * usableH;
               const yActual = svgHeight - paddingBottom - (d.actualPct / 100) * usableH;
 

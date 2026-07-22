@@ -35,12 +35,12 @@ export function ReviewStats({
   const [selectedDevFilter, setSelectedDevFilter] = useState<string>("all");
   const [huyenCommentFilter, setHuyenCommentFilter] = useState<"all" | "comments" | "nocomments">("all");
 
-  // Find active period details from topbar filters
+  // An empty topbar period means all available periods, not the latest one.
   const activePeriod = useMemo(() => {
     if (periodKey) {
       return view.availablePeriods.find((p) => p.key === periodKey);
     }
-    return view.availablePeriods[0];
+    return undefined;
   }, [view.availablePeriods, periodKey]);
 
   // Personnel lists
@@ -49,7 +49,7 @@ export function ReviewStats({
     return view.personnel.filter(
       (p) =>
         p.role !== "benchmark" &&
-        (!p.startDate || p.startDate <= (activePeriod?.endDate ?? "")),
+        (!activePeriod || !p.startDate || p.startDate <= activePeriod.endDate),
     );
   }, [view.personnel, activePeriod]);
 
@@ -59,16 +59,17 @@ export function ReviewStats({
       (p) =>
         p.role !== "benchmark" &&
         p.role !== "lead" &&
-        (!p.startDate || p.startDate <= (activePeriod?.endDate ?? "")),
+        (!activePeriod || !p.startDate || p.startDate <= activePeriod.endDate),
     );
   }, [view.personnel, activePeriod]);
 
   // Helper to match a bug to a person
   const bugBelongsToPerson = (bug: BugRecord, person: Person) => {
-    if (bug.pullRequestUrl && bug.prAuthor) {
+    const prAuthor = bug.prAuthor?.toLowerCase();
+    if (bug.pullRequestUrl && prAuthor) {
       if (
         person.githubUsername &&
-        bug.prAuthor.toLowerCase() === person.githubUsername.toLowerCase()
+        prAuthor === person.githubUsername.toLowerCase()
       )
         return true;
       if (
@@ -76,7 +77,7 @@ export function ReviewStats({
           (p) =>
             p.code !== person.code &&
             p.githubUsername &&
-            p.githubUsername.toLowerCase() === bug.prAuthor.toLowerCase(),
+            p.githubUsername.toLowerCase() === prAuthor,
         )
       )
         return false;
@@ -226,14 +227,13 @@ export function ReviewStats({
     return dateKey(b.lastEditedTime) ?? dateKey(b.confirmedDate);
   };
 
-  // Bugs fixed in active period
+  // Bugs fixed in the selected period, or across the full history when no period is selected.
   const periodFixedBugs = useMemo(() => {
-    if (!activePeriod) return [];
     return view.bugs.filter((b) => {
       const fDate = bugFixedDate(b);
       return (
         fDate &&
-        dateInRange(fDate, activePeriod.startDate, activePeriod.endDate) &&
+        (!activePeriod || dateInRange(fDate, activePeriod.startDate, activePeriod.endDate)) &&
         isFixed(b) &&
         (b.status ?? "").toLowerCase() !== "cancel"
       );
@@ -241,9 +241,8 @@ export function ReviewStats({
   }, [view.bugs, activePeriod]);
 
   // ── HUYEN REVIEW TAB DATA ──
-  // Filter bugs reviewed by HuyenTN in active period
+  // Filter bugs reviewed by HuyenTN in the selected period or across all periods.
   const huyenReviewedBugs = useMemo(() => {
-    if (!activePeriod) return [];
     return view.bugs.filter((b) => {
       if ((b.status ?? "").toLowerCase() === "cancel") return false;
       if (!isReviewedByHuyen(b)) return false;
@@ -251,7 +250,7 @@ export function ReviewStats({
         b.confirmedDate || dateKey(b.prCreatedAt) || dateKey(b.lastEditedTime);
       return (
         rDate &&
-        dateInRange(rDate, activePeriod.startDate, activePeriod.endDate)
+        (!activePeriod || dateInRange(rDate, activePeriod.startDate, activePeriod.endDate))
       );
     });
   }, [view.bugs, activePeriod]);
@@ -277,7 +276,6 @@ export function ReviewStats({
 
   // Filter bugs waiting for Huyen review
   const pendingHuyenReviewBugs = useMemo(() => {
-    if (!activePeriod) return [];
     return view.bugs.filter((b) => {
       if ((b.status ?? "").toLowerCase() !== "resolved") return false;
       if (isReviewedByHuyen(b)) return false;
@@ -285,7 +283,7 @@ export function ReviewStats({
       const rDate = dateKey(b.lastEditedTime) ?? dateKey(b.createdTime);
       return (
         rDate &&
-        dateInRange(rDate, activePeriod.startDate, activePeriod.endDate)
+        (!activePeriod || dateInRange(rDate, activePeriod.startDate, activePeriod.endDate))
       );
     });
   }, [view.bugs, activePeriod]);

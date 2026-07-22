@@ -31,9 +31,10 @@ export function PersonalStats({ view, personCode, periodType }: { view: Dashboar
 
   // Helper to match a bug to a developer
   const bugBelongsTo = (bug: BugRecord, person: typeof developers[0]) => {
-    if (bug.pullRequestUrl && bug.prAuthor) {
-      if (person.githubUsername && person.githubUsername.toLowerCase() === bug.prAuthor.toLowerCase()) return true;
-      if (developers.some(p => p.code !== person.code && p.githubUsername && p.githubUsername.toLowerCase() === bug.prAuthor.toLowerCase())) return false;
+    const prAuthor = bug.prAuthor?.toLowerCase();
+    if (bug.pullRequestUrl && prAuthor) {
+      if (person.githubUsername && person.githubUsername.toLowerCase() === prAuthor) return true;
+      if (developers.some(p => p.code !== person.code && p.githubUsername && p.githubUsername.toLowerCase() === prAuthor)) return false;
     }
     const notionIds = person.notionIds || [];
     return (bug.fixedByIds ?? []).some(id => notionIds.includes(id));

@@ -237,14 +237,17 @@ export function ReviewStats({
   }, [view.bugs, activePeriod]);
 
   // ── HUYEN REVIEW TAB DATA ──
-  // Filter bugs reviewed by HuyenTN in active period
+  // Filter bugs reviewed by HuyenTN in active period (prioritizing exact GitHub comment timestamp by TranNgocHuyen1909)
   const huyenReviewedBugs = useMemo(() => {
     if (!activePeriod) return [];
     return view.bugs.filter((b) => {
       if ((b.status ?? "").toLowerCase() === "cancel") return false;
       if (!isReviewedByHuyen(b)) return false;
       const rDate =
-        b.confirmedDate || dateKey(b.prCreatedAt) || dateKey(b.lastEditedTime);
+        dateKey(b.huyenLastCommentAt) ||
+        b.confirmedDate ||
+        dateKey(b.prCreatedAt) ||
+        dateKey(b.lastEditedTime);
       return (
         rDate &&
         dateInRange(rDate, activePeriod.startDate, activePeriod.endDate)
@@ -266,6 +269,13 @@ export function ReviewStats({
 
   const huyenReviewedNoComments = useMemo(() => {
     return huyenReviewedBugs.filter((b) => !isHuyenBugWithComment(b));
+  }, [huyenReviewedBugs]);
+
+  // PRs requiring >1 review round (Multi-turn recheck by TranNgocHuyen1909)
+  const huyenMultiRoundBugs = useMemo(() => {
+    return huyenReviewedBugs.filter(
+      (b) => (b.prCommentsByHuyen ?? 0) > 1 || (b.huyenReviewRounds ?? 0) > 1
+    );
   }, [huyenReviewedBugs]);
 
   // Filter bugs waiting for Huyen review
@@ -1595,6 +1605,39 @@ export function ReviewStats({
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
                 Dev bắt buộc reply comment &amp; Resolve conversation
+              </div>
+            </div>
+
+            <div
+              className="card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                borderLeft: "4px solid #f59e0b",
+                background: "rgba(245,158,11,0.04)",
+              }}
+            >
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#f59e0b",
+                  fontWeight: "bold",
+                }}
+              >
+                🔁 RE-CHECK LẶP LẠI (&gt;1 VÒNG)
+              </div>
+              <div
+                style={{
+                  fontSize: "28px",
+                  fontWeight: "bold",
+                  color: "#f59e0b",
+                }}
+              >
+                {huyenMultiRoundBugs.length}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
+                PR phải review &amp; comment lại nhiều lần
               </div>
             </div>
 

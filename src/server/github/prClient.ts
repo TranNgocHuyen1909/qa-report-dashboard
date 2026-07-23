@@ -44,12 +44,44 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
     const prCommentsByTruong = allAuthors.filter(a => a.toLowerCase() === "truongtc" || a.toLowerCase() === "dract").length;
     const prCommentsByHuyen = allAuthors.filter(a => a.toLowerCase() === "tranngochuyen1909" || a.toLowerCase() === "huyentn").length;
 
+    // Extract timestamps of Huyen's review activities
+    const huyenActivityDates: string[] = [];
+    revData.forEach((r: any) => {
+      const a = (r.user?.login ?? "").toLowerCase();
+      if ((a === "tranngochuyen1909" || a === "huyentn") && r.submitted_at) {
+        huyenActivityDates.push(r.submitted_at);
+      }
+    });
+    comData.forEach((c: any) => {
+      const a = (c.user?.login ?? "").toLowerCase();
+      if ((a === "tranngochuyen1909" || a === "huyentn") && c.created_at) {
+        huyenActivityDates.push(c.created_at);
+      }
+    });
+    huyenActivityDates.sort();
+
+    const huyenLastCommentAt = huyenActivityDates.length > 0 ? huyenActivityDates[huyenActivityDates.length - 1] : undefined;
+    const huyenReviewRounds = huyenActivityDates.length;
+
     let status: BugRecord["ghReviewStatus"] = "No review";
     if (reviews.some(r => r.state === "CHANGES_REQUESTED")) status = "Changes Requested";
     else if (reviews.some(r => r.state === "APPROVED")) status = "Approved";
     else if (reviews.some(r => r.state === "COMMENTED")) status = "Commented";
 
-    return { ...bug, ghReviewStatus: status, ghReviewCount: reviews.length, ghReviews: reviews, prAuthor, prCreatedAt, prCommentsByAuthor, prCommentsByTruong, prCommentsByHuyen, ghLabels };
+    return {
+      ...bug,
+      ghReviewStatus: status,
+      ghReviewCount: reviews.length,
+      ghReviews: reviews,
+      prAuthor,
+      prCreatedAt,
+      prCommentsByAuthor,
+      prCommentsByTruong,
+      prCommentsByHuyen,
+      huyenLastCommentAt,
+      huyenReviewRounds,
+      ghLabels,
+    };
   } catch {
     return { ...bug, ghReviewStatus: "Error" as const, ghReviewCount: 0, ghReviews: [] };
   }

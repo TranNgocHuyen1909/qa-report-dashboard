@@ -16,9 +16,10 @@ function dateKey(v: string | undefined): string | undefined {
 // Helper to check if a date is within a range
 function dateInRange(
   d: string | undefined,
-  start: string,
-  end: string,
+  start?: string,
+  end?: string,
 ): boolean {
+  if (!start || !end) return true;
   return !!d && d >= start && d <= end;
 }
 
@@ -40,7 +41,7 @@ export function ReviewStats({
     if (periodKey) {
       return view.availablePeriods.find((p) => p.key === periodKey);
     }
-    return view.availablePeriods[0];
+    return undefined; // undefined = Tất cả các kỳ (All time)
   }, [view.availablePeriods, periodKey]);
 
   // Personnel lists
@@ -231,12 +232,10 @@ export function ReviewStats({
 
   // Bugs fixed in active period
   const periodFixedBugs = useMemo(() => {
-    if (!activePeriod) return [];
     return view.bugs.filter((b) => {
       const fDate = bugFixedDate(b);
       return (
-        fDate &&
-        dateInRange(fDate, activePeriod.startDate, activePeriod.endDate) &&
+        dateInRange(fDate, activePeriod?.startDate, activePeriod?.endDate) &&
         isFixed(b) &&
         (b.status ?? "").toLowerCase() !== "cancel"
       );
@@ -246,7 +245,6 @@ export function ReviewStats({
   // ── HUYEN REVIEW TAB DATA ──
   // Filter bugs reviewed by HuyenTN in active period (prioritizing exact GitHub comment timestamp by TranNgocHuyen1909)
   const huyenReviewedBugs = useMemo(() => {
-    if (!activePeriod) return [];
     return view.bugs.filter((b) => {
       if ((b.status ?? "").toLowerCase() === "cancel") return false;
       if (!isReviewedByHuyen(b)) return false;
@@ -255,10 +253,7 @@ export function ReviewStats({
         b.confirmedDate ||
         dateKey(b.prCreatedAt) ||
         dateKey(b.lastEditedTime);
-      return (
-        rDate &&
-        dateInRange(rDate, activePeriod.startDate, activePeriod.endDate)
-      );
+      return dateInRange(rDate, activePeriod?.startDate, activePeriod?.endDate);
     });
   }, [view.bugs, activePeriod]);
 
@@ -287,7 +282,6 @@ export function ReviewStats({
 
   // Filter bugs waiting for Huyen review (If NOT yet reviewed by Huyen, definitely WAITING for Huyen review)
   const pendingHuyenReviewBugs = useMemo(() => {
-    if (!activePeriod) return [];
     return view.bugs.filter((b) => {
       if ((b.status ?? "").toLowerCase() === "cancel") return false;
       if (isReviewedByHuyen(b)) return false;
@@ -296,10 +290,7 @@ export function ReviewStats({
         dateKey(b.prCreatedAt) ??
         dateKey(b.lastEditedTime) ??
         dateKey(b.createdTime);
-      return (
-        rDate &&
-        dateInRange(rDate, activePeriod.startDate, activePeriod.endDate)
-      );
+      return dateInRange(rDate, activePeriod?.startDate, activePeriod?.endDate);
     });
   }, [view.bugs, activePeriod]);
 

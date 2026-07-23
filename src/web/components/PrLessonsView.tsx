@@ -176,8 +176,13 @@ export function PrLessonsView({ view, onUpdate }: { view: DashboardView; onUpdat
   function getItemRepo(item: Partial<ChecklistItem>): string {
     if (item.repo) return item.repo;
     if (item.prs && item.prs.length > 0) {
-      const parsed = parsePrUrl(item.prs[0]);
-      if (parsed.repo) return parsed.repo;
+      const pr = item.prs[0].trim();
+      const parts = pr.split("/");
+      const pullIndex = parts.indexOf("pull");
+      const commitIndex = parts.indexOf("commit");
+      const markerIndex = pullIndex >= 0 ? pullIndex : commitIndex;
+      if (markerIndex > 0) return parts[markerIndex - 1];
+      if (parts[0]) return parts[0].split("#")[0];
     }
     return "";
   }

@@ -12,23 +12,23 @@ export function BugWorkflowView({
       shortTitle: "1. Nhận Task",
       title:
         "1. Tự Chọn Task (Ưu Tiên Priority), Đổi Status & Test Tái Hiện 10 Lần",
-      color: "#eab308",
-      borderColor: "rgba(234,179,8,0.5)",
-      bg: "rgba(234,179,8,0.06)",
+      color: "#52708c",
+      borderColor: "var(--border-2)",
+      bg: "var(--surface-2)",
       desc: "Kiểm tra Priority khi nhận task trên Notion, gán chính chủ, điền ngày Estimate và test tái hiện biến thể.",
       actionNodes: [
         <>
           <strong>Ưu tiên Priority:</strong> Nhận task theo thứ tự:{" "}
-          <span style={{ color: "#ef4444", fontWeight: "bold" }}>Critical</span>{" "}
-          ➔ <span style={{ color: "#f97316", fontWeight: "bold" }}>High</span> ➔{" "}
-          <span style={{ color: "#eab308", fontWeight: "bold" }}>Medium</span> ➔{" "}
-          <span style={{ color: "#3b82f6", fontWeight: "bold" }}>Low</span>. Đọc
+          <span style={{ color: "var(--text-1)", fontWeight: "bold" }}>Critical</span>{" "}
+          ➔ <span style={{ color: "var(--text-1)", fontWeight: "bold" }}>High</span> ➔{" "}
+          <span style={{ color: "var(--text-1)", fontWeight: "bold" }}>Medium</span> ➔{" "}
+          <span style={{ color: "var(--text-1)", fontWeight: "bold" }}>Low</span>. Đọc
           kỹ ô <strong>Note</strong> trước khi nhận.
         </>,
         <>
           <strong>Đổi Status Notion:</strong> Chuyển <code>Status</code> từ{" "}
           <strong>New</strong> ➔{" "}
-          <strong style={{ color: "#eab308" }}>In Progress</strong>.
+          <strong style={{ color: "var(--text-1)" }}>In Progress</strong>.
         </>,
         <>
           <strong>Gán Assignee:</strong> Đổi trường <code>Fixed by</code> sang{" "}
@@ -64,12 +64,12 @@ export function BugWorkflowView({
               🟢 <strong>10/10 PASS:</strong> Ghi rõ vào ô <code>Note</code> là{" "}
               <strong>"Không tái hiện được (Đã test 10 lần biến thể)"</strong> ➔
               Chuyển <code>Status</code> sang{" "}
-              <strong style={{ color: "#ef4444" }}>Cancel</strong> (tránh sai
+              <strong style={{ color: "var(--text-1)" }}>Cancel</strong> (tránh sai
               Effort).
             </div>
             <div>
               🔴 <strong>1/10 FAIL:</strong>{" "}
-              <strong style={{ color: "#ef4444" }}>
+              <strong style={{ color: "var(--text-1)" }}>
                 BẮT BUỘC XÁC NHẬN LÀ BUG THỰC SỰ
               </strong>{" "}
               (Theo chỉ đạo anh Đạt: Không coi thường lỗi thi thoảng, bắt buộc
@@ -93,16 +93,16 @@ export function BugWorkflowView({
       badge: "Root Cause Analysis",
       shortTitle: "2. Phân Tích",
       title: "2. Phân Tích Nguyên Nhân Gốc Rễ & Báo Cáo Team Lead",
-      color: "#a855f7",
-      borderColor: "rgba(168,85,247,0.5)",
-      bg: "rgba(168,85,247,0.06)",
+      color: "#52708c",
+      borderColor: "var(--border-2)",
+      bg: "var(--surface-2)",
       desc: "Phân tích kỹ lưỡng tầng phát sinh lỗi trước khi gõ code, áp dụng nguyên tắc Tool > AI.",
       actionNodes: [
         <>
           <strong>Trace đúng 6 tầng lỗi:</strong> <code>tool-100</code> ➔{" "}
           <code>group-rule</code> ➔ <code>COLUMN_PROMPTS (frozen)</code> ➔{" "}
           <code>COT_HINTS</code> ➔ <code>docs</code> ➔ <code>prompt</code>. Khẩu
-          quyết: <strong style={{ color: "#a855f7" }}>"Tool &gt; AI"</strong>.
+          quyết: <strong style={{ color: "var(--text-1)" }}>"Tool &gt; AI"</strong>.
         </>,
         <>
           <div
@@ -119,7 +119,7 @@ export function BugWorkflowView({
                 textAlign: "center",
                 fontWeight: "bold",
                 fontSize: "13px",
-                color: "var(--accent-2)",
+                color: "var(--text-1)",
                 marginBottom: "12px",
               }}
             >
@@ -141,7 +141,7 @@ export function BugWorkflowView({
                   background: "var(--card-bg)",
                   padding: "10px",
                   borderRadius: "8px",
-                  border: "1.5px solid var(--blue)",
+                  border: "1.5px solid var(--text-1)",
                   display: "flex",
                   flexDirection: "column",
                   gap: "6px",
@@ -151,7 +151,7 @@ export function BugWorkflowView({
                   style={{
                     fontSize: "12px",
                     fontWeight: "800",
-                    color: "var(--blue)",
+                    color: "var(--text-1)",
                     borderBottom: "1px solid var(--border-2)",
                     paddingBottom: "4px",
                   }}
@@ -161,7 +161,7 @@ export function BugWorkflowView({
                 <div
                   style={{
                     fontSize: "11px",
-                    color: "var(--text-2)",
+                    color: "var(--text-1)",
                     fontStyle: "italic",
                   }}
                 >
@@ -177,10 +177,10 @@ export function BugWorkflowView({
                 >
                   <div
                     style={{
-                      background: "rgba(239,68,68,0.08)",
+                      background: "var(--surface-3)",
                       padding: "6px",
                       borderRadius: "6px",
-                      borderLeft: "3px solid #ef4444",
+                      borderLeft: "3px solid var(--text-1)",
                       fontSize: "11px",
                       lineHeight: "1.3",
                     }}
@@ -190,17 +190,17 @@ export function BugWorkflowView({
                       Status = <code>exactly</code>:
                     </strong>
                     <br />➔{" "}
-                    <strong style={{ color: "#ef4444" }}>
+                    <strong style={{ color: "var(--text-1)" }}>
                       SỬA Ở REPO <code>tool-100</code>
                     </strong>{" "}
                     (Cấm đụng prompt AI)
                   </div>
                   <div
                     style={{
-                      background: "rgba(168,85,247,0.08)",
+                      background: "var(--surface-3)",
                       padding: "6px",
                       borderRadius: "6px",
-                      borderLeft: "3px solid #a855f7",
+                      borderLeft: "3px solid var(--text-1)",
                       fontSize: "11px",
                       lineHeight: "1.3",
                     }}
@@ -220,7 +220,7 @@ export function BugWorkflowView({
                   background: "var(--card-bg)",
                   padding: "10px",
                   borderRadius: "8px",
-                  border: "1.5px solid var(--green)",
+                  border: "1.5px solid var(--text-1)",
                   display: "flex",
                   flexDirection: "column",
                   gap: "6px",
@@ -230,7 +230,7 @@ export function BugWorkflowView({
                   style={{
                     fontSize: "12px",
                     fontWeight: "800",
-                    color: "var(--green)",
+                    color: "var(--text-1)",
                     borderBottom: "1px solid var(--border-2)",
                     paddingBottom: "4px",
                   }}
@@ -240,7 +240,7 @@ export function BugWorkflowView({
                 <div
                   style={{
                     fontSize: "11px",
-                    color: "var(--text-2)",
+                    color: "var(--text-1)",
                     fontStyle: "italic",
                   }}
                 >
@@ -256,10 +256,10 @@ export function BugWorkflowView({
                 >
                   <div
                     style={{
-                      background: "rgba(234,179,8,0.1)",
+                      background: "var(--surface-3)",
                       padding: "5px 6px",
                       borderRadius: "5px",
-                      borderLeft: "3px solid #eab308",
+                      borderLeft: "3px solid var(--text-1)",
                       fontSize: "11px",
                     }}
                   >
@@ -267,10 +267,10 @@ export function BugWorkflowView({
                   </div>
                   <div
                     style={{
-                      background: "rgba(59,130,246,0.1)",
+                      background: "var(--surface-3)",
                       padding: "5px 6px",
                       borderRadius: "5px",
-                      borderLeft: "3px solid var(--blue)",
+                      borderLeft: "3px solid var(--text-1)",
                       fontSize: "11px",
                     }}
                   >
@@ -278,10 +278,10 @@ export function BugWorkflowView({
                   </div>
                   <div
                     style={{
-                      background: "rgba(168,85,247,0.1)",
+                      background: "var(--surface-3)",
                       padding: "5px 6px",
                       borderRadius: "5px",
-                      borderLeft: "3px solid #a855f7",
+                      borderLeft: "3px solid var(--text-1)",
                       fontSize: "11px",
                     }}
                   >
@@ -292,7 +292,7 @@ export function BugWorkflowView({
                       background: "rgba(34,197,94,0.1)",
                       padding: "5px 6px",
                       borderRadius: "5px",
-                      borderLeft: "3px solid var(--green)",
+                      borderLeft: "3px solid var(--text-1)",
                       fontSize: "11px",
                     }}
                   >
@@ -307,7 +307,7 @@ export function BugWorkflowView({
                   background: "var(--card-bg)",
                   padding: "10px",
                   borderRadius: "8px",
-                  border: "1.5px solid #a855f7",
+                  border: "1.5px solid var(--text-1)",
                   display: "flex",
                   flexDirection: "column",
                   gap: "6px",
@@ -317,7 +317,7 @@ export function BugWorkflowView({
                   style={{
                     fontSize: "12px",
                     fontWeight: "800",
-                    color: "#a855f7",
+                    color: "var(--text-1)",
                     borderBottom: "1px solid var(--border-2)",
                     paddingBottom: "4px",
                   }}
@@ -327,7 +327,7 @@ export function BugWorkflowView({
                 <div
                   style={{
                     fontSize: "11px",
-                    color: "var(--text-2)",
+                    color: "var(--text-1)",
                     fontStyle: "italic",
                   }}
                 >
@@ -343,7 +343,7 @@ export function BugWorkflowView({
                 >
                   <div
                     style={{
-                      background: "rgba(168,85,247,0.08)",
+                      background: "var(--surface-3)",
                       padding: "5px 6px",
                       borderRadius: "5px",
                       fontSize: "11px",
@@ -353,7 +353,7 @@ export function BugWorkflowView({
                   </div>
                   <div
                     style={{
-                      background: "rgba(168,85,247,0.08)",
+                      background: "var(--surface-3)",
                       padding: "5px 6px",
                       borderRadius: "5px",
                       fontSize: "11px",
@@ -363,15 +363,15 @@ export function BugWorkflowView({
                   </div>
                   <div
                     style={{
-                      background: "rgba(239,68,68,0.08)",
+                      background: "var(--surface-3)",
                       padding: "5px 6px",
                       borderRadius: "5px",
-                      borderLeft: "3px solid #ef4444",
+                      borderLeft: "3px solid var(--text-1)",
                       fontSize: "11px",
                     }}
                   >
                     🛑{" "}
-                    <strong style={{ color: "#ef4444" }}>
+                    <strong style={{ color: "var(--text-1)" }}>
                       CẤM ĐỤNG COLUMN_PROMPTS
                     </strong>{" "}
                     (Frozen)
@@ -385,7 +385,7 @@ export function BugWorkflowView({
                   background: "var(--card-bg)",
                   padding: "10px",
                   borderRadius: "8px",
-                  border: "1.5px solid #f97316",
+                  border: "1.5px solid var(--text-1)",
                   display: "flex",
                   flexDirection: "column",
                   gap: "6px",
@@ -395,7 +395,7 @@ export function BugWorkflowView({
                   style={{
                     fontSize: "12px",
                     fontWeight: "800",
-                    color: "#f97316",
+                    color: "var(--text-1)",
                     borderBottom: "1px solid var(--border-2)",
                     paddingBottom: "4px",
                   }}
@@ -405,7 +405,7 @@ export function BugWorkflowView({
                 <div
                   style={{
                     fontSize: "11px",
-                    color: "var(--text-2)",
+                    color: "var(--text-1)",
                     fontStyle: "italic",
                   }}
                 >
@@ -435,10 +435,10 @@ export function BugWorkflowView({
                   </div>
                   <div
                     style={{
-                      background: "rgba(249,115,22,0.1)",
+                      background: "var(--surface-3)",
                       padding: "5px 6px",
                       borderRadius: "5px",
-                      borderLeft: "3px solid #f97316",
+                      borderLeft: "3px solid var(--text-1)",
                       fontSize: "11px",
                     }}
                   >
@@ -453,9 +453,9 @@ export function BugWorkflowView({
         <>
           🚨 <strong>Quy trình Leo Thang khi vướng (Escalation Rule):</strong>{" "}
           Lỗi ảnh hưởng quá rộng hoặc <strong>không chắc cách sửa</strong> ➔{" "}
-          <strong style={{ color: "#ef4444" }}>BẮT BUỘC hỏi Huyền trước</strong>
+          <strong style={{ color: "var(--text-1)" }}>BẮT BUỘC hỏi Huyền trước</strong>
           . Nếu Huyền không giải quyết được ➔{" "}
-          <strong style={{ color: "#a855f7" }}>
+          <strong style={{ color: "var(--text-1)" }}>
             Gửi sang nhóm Issue hỏi trực tiếp Anh Trường
           </strong>
           .
@@ -475,9 +475,9 @@ export function BugWorkflowView({
       badge: "Code & Self-Test",
       shortTitle: "3. Fix Code",
       title: "3. Fix Code & Tự Kiểm Tra QC (Repo Checklist)",
-      color: "#06b6d4",
-      borderColor: "rgba(6,182,212,0.5)",
-      bg: "rgba(6,182,212,0.06)",
+      color: "#52708c",
+      borderColor: "var(--border-2)",
+      bg: "var(--surface-2)",
       desc: "Sửa mã nguồn chính xác và tự kiểm tra chất lượng theo chuẩn Repo Checklist.",
       actionNodes: [
         <>
@@ -491,14 +491,14 @@ export function BugWorkflowView({
             style={{
               marginTop: "6px",
               padding: "8px 12px",
-              background: "rgba(239,68,68,0.08)",
+              background: "var(--surface-3)",
               borderRadius: "6px",
-              borderLeft: "3px solid #ef4444",
+              borderLeft: "3px solid var(--text-1)",
               fontSize: "12px",
               lineHeight: "1.4",
             }}
           >
-            ⚠️ <strong style={{ color: "#ef4444" }}>PHẢI BÁO ANH TRƯỜNG PHÊ DUYỆT:</strong> Khi rà soát phát hiện ra các vị trí cần triển khai ngang, PHẢI nhắn báo lên cho Anh Trường (anh T) để phê duyệt trước khi tiến hành sửa code!
+            ⚠️ <strong style={{ color: "var(--text-1)" }}>PHẢI BÁO ANH TRƯỜNG PHÊ DUYỆT:</strong> Khi rà soát phát hiện ra các vị trí cần triển khai ngang, PHẢI nhắn báo lên cho Anh Trường (anh T) để phê duyệt trước khi tiến hành sửa code!
           </div>
         </>,
         <>
@@ -515,25 +515,25 @@ export function BugWorkflowView({
               {
                 id: "tool-100",
                 badge: "📦 tool-100",
-                color: "var(--blue)",
+                color: "var(--text-1)",
                 detail: "Chạy task audit xanh 100%, check FalsePositiveGuard cùng prefix/accent, rescue anchor & Audit Sheet.",
               },
               {
                 id: "lisa-ai-agent",
                 badge: "🤖 lisa-ai-agent",
-                color: "#a855f7",
+                color: "var(--text-1)",
                 detail: "Chạy task code:check-strict, task test:eval:metadata, mode field_by_field & chỉ sửa COT_HINTS.",
               },
               {
                 id: "lisa-visa-web-backend",
                 badge: "⚙️ lisa-visa-web-backend",
-                color: "var(--cyan)",
+                color: "var(--text-1)",
                 detail: "Chạy bộ 3 lệnh CI Backend (pytest, ruff check ., ruff format .).",
               },
               {
                 id: "lisa-visa-web",
                 badge: "🌐 lisa-visa-web",
-                color: "var(--green)",
+                color: "var(--text-1)",
                 detail: "Chạy pnpm test, lint:fix, format, type-check. Ảnh Pre/Post UI & AI Vision Eval OK.",
               },
             ].map((item) => (
@@ -557,11 +557,11 @@ export function BugWorkflowView({
                   <span style={{ fontSize: "12px", fontWeight: "bold", color: item.color }}>
                     {item.badge}
                   </span>
-                  <span style={{ fontSize: "11px", color: "var(--accent-2)", fontWeight: "bold" }}>
+                  <span style={{ fontSize: "11px", color: "var(--text-1)", fontWeight: "bold" }}>
                     Tới Checklist ↗
                   </span>
                 </div>
-                <div style={{ fontSize: "11px", color: "var(--text-2)", lineHeight: "1.35" }}>
+                <div style={{ fontSize: "11px", color: "var(--text-1)", lineHeight: "1.35" }}>
                   {item.detail}
                 </div>
               </div>
@@ -577,9 +577,9 @@ export function BugWorkflowView({
       badge: "Notion Status: In Progress ➔ Resolved",
       shortTitle: "4. Tạo PR",
       title: "4. Tạo PR trên GitHub & Đính Kèm Link vào Card Notion",
-      color: "#3b82f6",
-      borderColor: "rgba(59,130,246,0.5)",
-      bg: "rgba(59,130,246,0.06)",
+      color: "#52708c",
+      borderColor: "var(--border-2)",
+      bg: "var(--surface-2)",
       desc: "Đẩy code lên GitHub repository, đính kèm mã ticket BSVA và dán PR URL vào Notion.",
       actionNodes: [
         <>
@@ -611,7 +611,7 @@ export function BugWorkflowView({
         <>
           <strong>Đổi Status Notion:</strong> Chuyển <code>Status</code> từ{" "}
           <strong>In Progress</strong> ➔{" "}
-          <strong style={{ color: "#3b82f6" }}>Resolved (Chờ Review)</strong>.
+          <strong style={{ color: "var(--text-1)" }}>Resolved (Chờ Review)</strong>.
         </>,
       ],
       notionFields: [
@@ -627,20 +627,20 @@ export function BugWorkflowView({
       badge: "Notion Status: Resolved ➔ Wait for dev",
       shortTitle: "5. Vòng 1: Huyền",
       title: "5. Review Vòng 1 — Do Huyền Kiểm Soát (BẮT BUỘC QUA VÒNG HUYỀN TRƯỚC)",
-      color: "#ec4899",
-      borderColor: "rgba(236,72,153,0.5)",
-      bg: "rgba(236,72,153,0.06)",
+      color: "#52708c",
+      borderColor: "var(--border-2)",
+      bg: "var(--surface-2)",
       desc: "Mọi PR/bug BẮT BUỘC phải qua Vòng 1 (Huyền test thực tế & kiểm soát ô Reviewers + Số giờ review) trước khi chuyển sang Anh Trường Vòng 2.",
       actionNodes: [
         <>
-          🔒 <strong style={{ color: "#ec4899" }}>QUY TẮC TUẦN TỰ NGUYÊN TẮC:</strong> Bug/PR <strong>BẮT BUỘC PHẢI QUA VÒNG HUYỀN TEST &amp; DUYỆT TRƯỚC (VÒNG 1)</strong> thì mới được cấp nhãn <span className="tag tag-green">wait for development</span> để chuyển sang Vòng 2!
+          🔒 <strong style={{ color: "var(--text-1)" }}>QUY TẮC TUẦN TỰ NGUYÊN TẮC:</strong> Bug/PR <strong>BẮT BUỘC PHẢI QUA VÒNG HUYỀN TEST &amp; DUYỆT TRƯỚC (VÒNG 1)</strong> thì mới được cấp nhãn <span className="tag tag-green">wait for development</span> để chuyển sang Vòng 2!
         </>,
         <>
           👑 <strong>Trường Hợp 1 — Huyền KHÔNG COMMENT (OK Hết):</strong> Test thực tế Pass ➔ Huyền <strong>tự đổi Label Notion ➔</strong> <span className="tag tag-green">wait for development</span> và <strong>tự điền</strong> <span className="tag tag-blue">Số giờ review</span> (2 trường này do duy nhất Huyền quản lý).
         </>,
         <>
           🔔 <strong>Trường Hợp 2 — Huyền CÓ COMMENT (Dev Bắt Buộc Reply &amp; Resolve):</strong>
-          <div style={{ marginTop: "4px", paddingLeft: "10px", display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--text-2)" }}>
+          <div style={{ marginTop: "4px", paddingLeft: "10px", display: "flex", flexDirection: "column", gap: "4px", fontSize: "12px", color: "var(--text-1)" }}>
             <div>• Dev <strong>BẮT BUỘC reply trực tiếp bên dưới comment</strong> (ghi rõ "Đã sửa" hoặc lý do không sửa) để Huyền nhận notification.</div>
             <div>• Dev <strong>bấm nút Resolve conversation</strong>.</div>
             <div>• Huyền nhận noti sẽ re-check ➔ Test Pass thì <strong>tự đổi Label Notion ➔</strong> <span className="tag tag-green">wait for development</span> và <strong>điền Số giờ review</strong>.</div>
@@ -659,13 +659,13 @@ export function BugWorkflowView({
       badge: "Notion Status: Wait for dev ➔ Deployed",
       shortTitle: "6. Vòng 2: Anh Trường",
       title: "6. Review Vòng 2 — Tech Lead Review (Anh Trường 1h Đầu Buổi Chiều)",
-      color: "#a855f7",
-      borderColor: "rgba(168,85,247,0.5)",
-      bg: "rgba(168,85,247,0.06)",
+      color: "#52708c",
+      borderColor: "var(--border-2)",
+      bg: "var(--surface-2)",
       desc: "Anh Trường CHỈ collect và review logic những PR ĐÃ QUA VÒNG HUYỀN (có nhãn wait for development) trong 1 tiếng đầu buổi chiều.",
       actionNodes: [
         <>
-          ⛔ <strong style={{ color: "#a855f7" }}>ĐIỀU KIỆN CẦN (ĐÃ QUA VÒNG HUYỀN):</strong> Anh Trường <strong>CHỈ REVIEW NHỮNG PR ĐÃ QUA VÒNG 1 (HUYỀN DUYỆT PASS)</strong> mang nhãn <span className="tag tag-green">wait for development</span>. Tuyệt đối không review nhảy cóc!
+          ⛔ <strong style={{ color: "var(--text-1)" }}>ĐIỀU KIỆN CẦN (ĐÃ QUA VÒNG HUYỀN):</strong> Anh Trường <strong>CHỈ REVIEW NHỮNG PR ĐÃ QUA VÒNG 1 (HUYỀN DUYỆT PASS)</strong> mang nhãn <span className="tag tag-green">wait for development</span>. Tuyệt đối không review nhảy cóc!
         </>,
         <>
           ⏱️ <strong>Lịch Collect &amp; Review Cố Định Của Anh Trường:</strong> Anh Trường dành <span className="tag tag-yellow" style={{ fontSize: "12px", fontWeight: "bold" }}>⏱️ 1 tiếng đầu buổi chiều mỗi ngày</span> để gom (collect) và review toàn bộ các PR có Label <span className="tag tag-green">wait for development</span> (do Huyền đã duyệt ở Vòng 1).
@@ -677,7 +677,7 @@ export function BugWorkflowView({
           🔄 <strong>Quy Trình Dev Sửa Code &amp; Đổi Label Báo Review Lại:</strong> Sau khi Dev sửa xong, reply giải thích dưới comment, <strong>bấm Resolve conversation</strong> và <strong>tự đổi Label Notion ➔</strong> <span className="tag tag-blue">ready for review</span> để báo Anh Trường review lại!
         </>,
         <>
-          🚀 <strong>Khi Anh Trường Review OK &amp; Merge PR:</strong> Merge PR &amp; deploy server ➔ Chuyển <code>Status</code> Notion ➔ <span className="tag" style={{ background: "rgba(168,85,247,0.2)", color: "#a855f7", fontWeight: "bold" }}>Deployed</span> và <strong>bàn giao cho bên OP (Thương &amp; Linh) test nghiệm thu lại!</strong>
+          🚀 <strong>Khi Anh Trường Review OK &amp; Merge PR:</strong> Merge PR &amp; deploy server ➔ Chuyển <code>Status</code> Notion ➔ <span className="tag" style={{ background: "var(--surface-3)", color: "var(--text-1)", fontWeight: "bold" }}>Deployed</span> và <strong>bàn giao cho bên OP (Thương &amp; Linh) test nghiệm thu lại!</strong>
         </>,
       ],
       notionFields: [
@@ -690,21 +690,21 @@ export function BugWorkflowView({
       badge: "Decision: Closed OR Reopen",
       shortTitle: "7. Close Bug",
       title: "7. OP (Thương & Linh) Test Nghiệm Thu: Closed (Pass) HOẶC Reopen (Fail)",
-      color: "#10b981",
-      borderColor: "rgba(16,185,129,0.5)",
-      bg: "rgba(16,185,129,0.06)",
+      color: "#52708c",
+      borderColor: "var(--border-2)",
+      bg: "var(--surface-2)",
       desc: "Bên OP (Thương & Linh) nghiệm thu thực tế sau khi status chuyển Deployed.",
       actionNodes: [
         <>
           🟢 <strong>NẾU TEST PASS (OP Thương &amp; Linh Nghiệm thu OK):</strong> Tính năng / fix bug chạy chuẩn ➔ Bên OP (Thương &amp; Linh) đổi <code>Status</code> Notion ➔{" "}
-          <strong style={{ color: "#10b981" }}>Closed</strong>. <em>(Lưu ý: OP CHỈ đóng Status trên Notion card; PR trên GitHub do Dev/Lead tự quản lý &amp; merge/close).</em>
+          <strong style={{ color: "var(--text-1)" }}>Closed</strong>. <em>(Lưu ý: OP CHỈ đóng Status trên Notion card; PR trên GitHub do Dev/Lead tự quản lý &amp; merge/close).</em>
         </>,
         <>
           🔴 <strong>NẾU TEST FAIL (Tái phát lỗi):</strong> Chuyển <code>Status</code> ➔{" "}
-          <strong style={{ color: "#ef4444" }}>Reopened</strong>.
+          <strong style={{ color: "var(--text-1)" }}>Reopened</strong>.
         </>,
         <>
-          🔄 <strong style={{ color: "#ef4444" }}>LUỒNG MŨI TÊN QUAY VỀ BƯỚC 2 (PHÂN TÍCH LỖI):</strong> Bug Reopen tự động <strong>chỉa mũi tên quay ngược về ↩️ Bước 2 (Phân Tích &amp; Phân Loại Bug: Logic Code vs RAG Docs)</strong>. Dev bắt buộc re-trace Root Cause &amp; họp với Lead trước khi fix lại!
+          🔄 <strong style={{ color: "var(--text-1)" }}>LUỒNG MŨI TÊN QUAY VỀ BƯỚC 2 (PHÂN TÍCH LỖI):</strong> Bug Reopen tự động <strong>chỉa mũi tên quay ngược về ↩️ Bước 2 (Phân Tích &amp; Phân Loại Bug: Logic Code vs RAG Docs)</strong>. Dev bắt buộc re-trace Root Cause &amp; họp với Lead trước khi fix lại!
         </>,
       ],
       notionFields: [
@@ -740,7 +740,7 @@ export function BugWorkflowView({
         <p
           style={{
             fontSize: "13px",
-            color: "var(--text-2)",
+            color: "var(--text-1)",
             margin: 0,
             fontWeight: 500,
           }}
@@ -755,26 +755,26 @@ export function BugWorkflowView({
 
       {/* Integrated Black Box Model Input/Output Banner */}
       <div className="card" style={{ padding: "16px 20px", background: "var(--card-bg)", border: "1px solid var(--border)", borderRadius: "14px", boxShadow: "var(--shadow-sm)" }}>
-        <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--accent-2)", marginBottom: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
+        <div style={{ fontSize: "14px", fontWeight: "800", color: "var(--text-1)", marginBottom: "10px", display: "flex", alignItems: "center", gap: "8px" }}>
           <span>📦</span> Mô Hình &quot;Black Box&quot; Sửa Bug (Đầu Vào - Quy Trình - Đầu Ra Chuẩn Hóa)
         </div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "12px" }}>
-          <div style={{ background: "rgba(99,102,241,0.06)", borderLeft: "3px solid var(--blue)", padding: "10px 12px", borderRadius: "0 8px 8px 0" }}>
-            <strong style={{ fontSize: "12px", color: "var(--blue)" }}>📥 1. Đầu vào (Input):</strong>
+          <div style={{ background: "var(--surface-3)", borderLeft: "3px solid var(--text-1)", padding: "10px 12px", borderRadius: "0 8px 8px 0" }}>
+            <strong style={{ fontSize: "12px", color: "var(--text-1)" }}>📥 1. Đầu vào (Input):</strong>
             <div style={{ fontSize: "11px", marginTop: "4px", color: "var(--text-1)", lineHeight: "1.4" }}>
               Log defect chi tiết trên Notion (Priority, Deadline, Repro steps, Specs/Design).
             </div>
           </div>
 
-          <div style={{ background: "rgba(234,179,8,0.06)", borderLeft: "3px solid #d97706", padding: "10px 12px", borderRadius: "0 8px 8px 0" }}>
-            <strong style={{ fontSize: "12px", color: "#d97706" }}>⚡ 2. Quy trình tiếp cận:</strong>
+          <div style={{ background: "var(--surface-3)", borderLeft: "3px solid var(--text-1)", padding: "10px 12px", borderRadius: "0 8px 8px 0" }}>
+            <strong style={{ fontSize: "12px", color: "var(--text-1)" }}>⚡ 2. Quy trình tiếp cận:</strong>
             <div style={{ fontSize: "11px", marginTop: "4px", color: "var(--text-1)", lineHeight: "1.4" }}>
               Dev <strong>bắt buộc đề xuất &amp; giải trình phương án sửa</strong> với Team Lead trước khi gõ code nhằm tránh rework.
             </div>
           </div>
 
-          <div style={{ background: "rgba(16,185,129,0.06)", borderLeft: "3px solid var(--green)", padding: "10px 12px", borderRadius: "0 8px 8px 0" }}>
-            <strong style={{ fontSize: "12px", color: "var(--green)" }}>📤 3. Đầu ra (Output):</strong>
+          <div style={{ background: "var(--surface-3)", borderLeft: "3px solid var(--text-1)", padding: "10px 12px", borderRadius: "0 8px 8px 0" }}>
+            <strong style={{ fontSize: "12px", color: "var(--text-1)" }}>📤 3. Đầu ra (Output):</strong>
             <div style={{ fontSize: "11px", marginTop: "4px", color: "var(--text-1)", lineHeight: "1.4" }}>
               Mã nguồn hoàn chỉnh (PR), môi trường Staging test PASS &amp; Pre-handover Checklist chất lượng.
             </div>
@@ -797,7 +797,7 @@ export function BugWorkflowView({
           style={{
             fontSize: "15px",
             fontWeight: "800",
-            color: "var(--accent-2)",
+            color: "var(--text-1)",
             marginBottom: "14px",
             display: "flex",
             alignItems: "center",
@@ -818,9 +818,9 @@ export function BugWorkflowView({
               left: "21.4%",
               right: "7.1%",
               height: "22px",
-              borderTop: "2px dashed #ef4444",
-              borderLeft: "2px dashed #ef4444",
-              borderRight: "2px dashed #ef4444",
+              borderTop: "2px dashed var(--text-1)",
+              borderLeft: "2px dashed var(--text-1)",
+              borderRight: "2px dashed var(--text-1)",
               borderRadius: "14px 14px 0 0",
               pointerEvents: "none",
               zIndex: 5,
@@ -836,7 +836,7 @@ export function BugWorkflowView({
                 height: 0,
                 borderLeft: "4px solid transparent",
                 borderRight: "4px solid transparent",
-                borderTop: "7px solid #ef4444",
+                borderTop: "7px solid var(--text-1)",
               }}
             />
           </div>
@@ -848,13 +848,13 @@ export function BugWorkflowView({
               top: "-4px",
               left: "56%",
               transform: "translateX(-50%)",
-              background: "#ef4444",
+              background: "var(--text-1)",
               color: "#fff",
               fontSize: "10px",
               fontWeight: "800",
               padding: "2px 10px",
               borderRadius: "12px",
-              boxShadow: "0 2px 6px rgba(239,68,68,0.4)",
+              boxShadow: "0 2px 6px var(--surface-3)",
               zIndex: 6,
               display: "flex",
               alignItems: "center",
@@ -904,7 +904,7 @@ export function BugWorkflowView({
                       height: "22px",
                       borderRadius: "50%",
                       background: st.color,
-                      color: st.color === "#eab308" ? "#000" : "#fff",
+                      color: st.color === "var(--text-1)" ? "#000" : "#fff",
                       fontWeight: "bold",
                       fontSize: "11px",
                       display: "inline-flex",
@@ -970,7 +970,7 @@ export function BugWorkflowView({
               padding: "3px 8px",
               background: "var(--card-bg)",
               borderRadius: "4px",
-              color: "var(--blue)",
+              color: "var(--text-1)",
             }}
           >
             New
@@ -979,9 +979,9 @@ export function BugWorkflowView({
           <span
             style={{
               padding: "3px 8px",
-              background: "rgba(234,179,8,0.25)",
+              background: "var(--surface-3)",
               borderRadius: "4px",
-              color: "#d97706",
+              color: "var(--text-1)",
             }}
           >
             In Progress
@@ -990,9 +990,9 @@ export function BugWorkflowView({
           <span
             style={{
               padding: "3px 8px",
-              background: "rgba(59,130,246,0.25)",
+              background: "var(--surface-3)",
               borderRadius: "4px",
-              color: "var(--blue)",
+              color: "var(--text-1)",
             }}
           >
             Resolved
@@ -1001,23 +1001,23 @@ export function BugWorkflowView({
           <span
             style={{
               padding: "3px 8px",
-              background: "rgba(168,85,247,0.25)",
+              background: "var(--surface-3)",
               borderRadius: "4px",
-              color: "#c084fc",
+              color: "var(--text-1)",
             }}
           >
             Deployed
           </span>
-          <span style={{ color: "#10b981", fontWeight: "bold" }}>
+          <span style={{ color: "var(--text-1)", fontWeight: "bold" }}>
             🟢 Closed (Pass)
           </span>
           <span style={{ color: "var(--text-3)" }}>/</span>
           <span
             style={{
               padding: "3px 8px",
-              background: "rgba(239,68,68,0.15)",
+              background: "var(--surface-3)",
               borderRadius: "4px",
-              color: "#ef4444",
+              color: "var(--text-1)",
               fontWeight: "bold",
               display: "inline-flex",
               alignItems: "center",
@@ -1088,7 +1088,7 @@ export function BugWorkflowView({
                       height: "32px",
                       borderRadius: "50%",
                       background: st.color,
-                      color: st.color === "#eab308" ? "#000" : "#ffffff",
+                      color: st.color === "var(--text-1)" ? "#000" : "#ffffff",
                       fontWeight: "bold",
                       fontSize: "14px",
                       display: "inline-flex",
@@ -1196,7 +1196,7 @@ export function BugWorkflowView({
                       style={{
                         fontSize: "11px",
                         background: "var(--card-bg)",
-                        color: "var(--accent-2)",
+                        color: "var(--text-1)",
                         border: "1px solid var(--border-2)",
                         padding: "3px 10px",
                         borderRadius: "6px",

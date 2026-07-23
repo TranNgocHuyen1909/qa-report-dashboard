@@ -67,7 +67,7 @@ export const ReviewProtocolView: React.FC<ReviewProtocolViewProps> = ({
             gap: "14px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyBetween: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div
                 style={{
@@ -133,7 +133,7 @@ export const ReviewProtocolView: React.FC<ReviewProtocolViewProps> = ({
             gap: "14px",
           }}
         >
-          <div style={{ display: "flex", alignItems: "center", justifyBetween: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
             <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
               <div
                 style={{
@@ -168,9 +168,7 @@ export const ReviewProtocolView: React.FC<ReviewProtocolViewProps> = ({
           <div style={{ fontSize: "13px", color: "var(--text-1)", lineHeight: "1.6", display: "flex", flexDirection: "column", gap: "10px" }}>
             <div style={{ background: "rgba(234,179,8,0.08)", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #d97706" }}>
               ⏰ <strong>Lịch Collect &amp; Review Cố Định:</strong> Anh Trường dành <span className="tag tag-yellow" style={{ fontSize: "12px", fontWeight: "bold" }}>⏱️ 1 tiếng đầu buổi chiều mỗi ngày</span> để gom (collect) và review toàn bộ các PR có Label <span className="tag tag-green">wait for development</span> (do Huyền đã duyệt ở Vòng 1).
-            </div>ag tag-yellow" style={{ fontSize: "12px", fontWeight: "bold" }}>⏱️ 1 tiếng đầu buổi chiều mỗi ngày</span> để gom (collect) và review toàn bộ các PR có Label <span className="tag tag-green">wait for development</span> (do Chị Huyền đã duyệt ở Vòng 1).
             </div>
-
             <div style={{ background: "var(--surface-3)", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #a855f7" }}>
               💬 <strong>Anh Trường CHỈ CÓ COMMENT (Khi Cần Sửa Logic):</strong> Anh Trường sẽ <strong>viết comment chỉ rõ chỗ cần sửa</strong> trên PR và <strong>đổi Label Notion ➔</strong> <span className="tag tag-red">change requested</span>.
             </div>

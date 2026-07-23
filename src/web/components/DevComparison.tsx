@@ -81,9 +81,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
   // Helper to match a bug to a developer (with PR priority)
   const bugBelongsToDev = (bug: BugRecord, dev: typeof developers[0]) => {
-    if (bug.pullRequestUrl && bug.prAuthor) {
-      if (dev.githubUsername && bug.prAuthor.toLowerCase() === dev.githubUsername.toLowerCase()) return true;
-      if (developers.some(p => p.code !== dev.code && p.githubUsername && p.githubUsername.toLowerCase() === bug.prAuthor.toLowerCase())) return false;
+    const prAuthor = bug.prAuthor?.toLowerCase();
+    if (bug.pullRequestUrl && prAuthor) {
+      if (dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase()) return true;
+      if (developers.some(p => p.code !== dev.code && p.githubUsername && p.githubUsername.toLowerCase() === prAuthor)) return false;
     }
     const notionIds = dev.notionIds || [];
     return (bug.fixedByIds ?? []).some(id => notionIds.includes(id));
@@ -204,8 +205,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
   }, [developers, view.bugs, view.checklist, activePeriod]);
 
   const aggregatedDevStats = useMemo(() => {
+    if (!activePeriod) return [];
+
     // Find previous period for trend tracking (if active period is weekly)
-    const weeklyIdx = view.weeklyMetrics.findIndex(m => m.period.key === activePeriod?.key);
+    const weeklyIdx = view.weeklyMetrics.findIndex(m => m.period.key === activePeriod.key);
     const prevMetric = (weeklyIdx !== -1 && weeklyIdx + 1 < view.weeklyMetrics.length)
       ? view.weeklyMetrics[weeklyIdx + 1]
       : null;
@@ -253,7 +256,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         commentsCount: b.prCommentsByTruong ?? 0,
       }));
       
-      const activeMetric = view.teamMetrics.find(m => m.period.key === activePeriod?.key);
+      const activeMetric = view.teamMetrics.find(m => m.period.key === activePeriod.key);
       const pMetric = activeMetric?.byPerson.find(p => p.personCode === dev.code);
       
       // Use local overrides if defined, otherwise fallback to the backend metric's value

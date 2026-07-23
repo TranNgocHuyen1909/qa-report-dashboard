@@ -198,7 +198,7 @@ export function BugLifecycle({ view }: { view: DashboardView }) {
                     <tr key={b.id ?? idx}>
                       <td>{idx + 1}</td>
                       <td><strong>{b.title}</strong></td>
-                      <td>{b.assignee || "Chưa gán"}</td>
+                      <td>{(b.fixedByIds ?? []).join(", ") || "Chưa gán"}</td>
                       <td>
                         {b.pullRequestUrl ? (
                           <a href={b.pullRequestUrl} target="_blank" rel="noopener noreferrer" style={{ color: "var(--blue)", fontWeight: "bold" }}>
@@ -208,7 +208,7 @@ export function BugLifecycle({ view }: { view: DashboardView }) {
                           <span style={{ color: "var(--red)", fontSize: "10px" }}>⚠️ Thiếu PR URL</span>
                         )}
                       </td>
-                      <td style={{ color: "var(--text-3)" }}>{b.notes || "—"}</td>
+                      <td style={{ color: "var(--text-3)" }}>{b.note || "—"}</td>
                     </tr>
                   ))}
                 </tbody>

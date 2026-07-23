@@ -90,7 +90,7 @@ let checklistData = loadChecklist();
 let conclusionsData = loadConclusions();
 
 const app = createApi({
-  getBugs: () => cachedBugs,
+  getBugs: () => loadCache(),
   getChecklist: () => checklistData,
   saveChecklist: (items) => { checklistData = items; saveChecklist(items); },
   refresh: refreshBugs,

@@ -65,14 +65,23 @@ Review không chỉ là kiểm tra code có chạy hay không. Phải xác nhậ
 
   ## Comment 1 — `<repo-relative-path>:<new-side-line>`
 
-  > <Nội dung copy-paste: lỗi, repro hoặc bằng chứng chính, expected và hướng sửa; tối đa 3 câu.>
+  <Nói thẳng vấn đề bằng giọng review tự nhiên.>
+
+  - `<Case visa cụ thể>` → `<actual>`, expected `<expected>`.
+  - `<Case đối chứng>` → `<expected cần giữ>`.
+
+  Review Record: <STT/dòng Excel liên quan hoặc ghi rõ corpus chưa cover>.
+
+  Nên/Đề xuất: <hướng sửa bám cấu trúc và ngữ cảnh nghiệp vụ>.
 
   ## General review summary
 
-  > Approve | Request changes: <một câu kết luận>.
+  **Approve | Request changes:** <một câu kết luận>.
   ```
 
 - Mỗi finding là một `Comment N`; neo đúng dòng diff mới. Không thêm mục phân tích riêng, bảng tổng kết, điểm tốt, checklist, code snippet dài hoặc log test.
+- Không bọc toàn bộ nội dung comment trong blockquote (`>`), vì GitHub render thành một khối xám khó đọc.
+- Không lạm dụng emoji hoặc heading kiểu báo cáo AI. Ưu tiên giọng review tự nhiên: nói thẳng vấn đề, đưa case, đối chiếu Review Record rồi chốt hướng sửa; chỉ dùng `<details>` khi cần thu gọn bằng chứng dài.
 - Chỉ ghi finding đã được xác minh. Giữ chi tiết điều tra ở nội bộ; trong comment chỉ giữ bằng chứng đủ để tác giả hiểu và sửa.
 - Nếu không có finding, file chỉ cần `General review summary` với `Approve` và một câu kết luận.
 - Tin nhắn trả user tối đa 2 câu: kết luận ngắn và link file.
@@ -89,6 +98,13 @@ Review không chỉ là kiểm tra code có chạy hay không. Phải xác nhậ
 - Luôn viết nội dung comment copy-paste theo mẫu đầu ra; không tự đăng comment lên GitHub nếu user chưa yêu cầu.
 - Testcase so sánh phải có cùng tiền điều kiện nghiệp vụ. Ví dụ flow cần `M0001_M0003` thì case chưa có quốc gia không chứng minh được hành vi của case đã có quốc gia.
 - Testcase dùng làm finding phải là câu người dùng có khả năng nhập trong luồng xin visa, tư vấn hồ sơ, tài chính, lịch hẹn hoặc giấy tờ thực tế. Giữ đủ chủ thể, mục đích và ngữ cảnh để expected có thể suy ra từ contract metadata; không lấy một câu bất kỳ chỉ vì nó va vào substring/regex.
+- Với finding regex/guard/extractor bị bắt rộng hoặc bỏ sót, comment PR bắt buộc phải có đủ:
+  1. Kết luận ngắn nêu phạm vi đang rộng/hẹp sai ở đâu.
+  2. Ít nhất hai câu chat tự nhiên trong ngữ cảnh visa chứng minh nhánh sai, ghi rõ `actual → expected`.
+  3. Ít nhất một positive/present-mirror gần nhất cần bắt đúng hoặc phải được bảo toàn.
+  4. Hướng sửa theo cấu trúc/anchor/ngữ cảnh nghiệp vụ; không chỉ đề nghị thêm denylist từ khóa.
+  5. Trạng thái Review Record: các case trên đã có trong corpus hay chưa; nếu chưa có phải nói rõ Review Record không cover và yêu cầu bổ sung fixture rồi chạy audit lại.
+- Không viết comment trừu tượng kiểu “regex đang rộng, cần thu hẹp” mà thiếu input visa cụ thể. Ưu tiên format ngắn, mỗi case một dòng để reviewer có thể copy-paste và chạy lại trực tiếp.
 - Trước khi báo false positive của regex/keyword, viết lại reproduction thành câu chat tự nhiên trong nghiệp vụ visa rồi chạy lại trên public extractor hoặc end-to-end. Nếu lỗi chỉ tồn tại với chuỗi nhân tạo, câu ngoài miền visa, token lặp hoặc cách ghép từ để ép matcher, không dùng nó làm blocker correctness; hạ thành ghi chú robustness khi có tác động vận hành đã chứng minh, hoặc loại finding.
 - Phân biệt rõ `kiểm tra implementation` với `kiểm tra nghiệp vụ`: có thể dùng chuỗi tối giản để hiểu vì sao regex match, nhưng comment PR phải dùng reproduction nghiệp vụ thực tế. Ví dụ không dùng `Đại sứ quán bảo vệ quyền lợi công dân` làm blocker O9002; ưu tiên case như `Mình đang làm ở Bộ Ngoại giao, muốn xin visa Anh du lịch thì cần giấy tờ gì?` để chứng minh tên cơ quan bị hiểu nhầm thành nguồn tham khảo.
 

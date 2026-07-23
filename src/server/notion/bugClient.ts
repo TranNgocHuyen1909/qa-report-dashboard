@@ -57,6 +57,19 @@ function mapPage(page: NotionPage): BugRecord {
     createdTime: page.created_time,
     lastEditedTime: page.last_edited_time,
     bugId: uid(p["BUG ID"]),
+    isPausedFix:
+      chk(p["Tạm dừng fix"]) ||
+      chk(p["Tạm dừng Fix"]) ||
+      chk(p["Tạm dừng"]) ||
+      chk(p["Pause fix"]) ||
+      sel(p["Tạm dừng fix"]) === "Có" ||
+      sel(p["Tạm dừng fix"]) === "Yes" ||
+      sel(p["Tạm dừng fix"]) === "True" ||
+      sel(p["Tạm dừng Fix"]) === "Có" ||
+      sel(p["Tạm dừng"]) === "Có" ||
+      stat(p["Tạm dừng fix"]) === "Tạm dừng" ||
+      stat(p["Tạm dừng Fix"]) === "Tạm dừng" ||
+      stat(p["Status"]) === "Tạm dừng",
   };
 }
 

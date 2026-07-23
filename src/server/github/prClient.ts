@@ -36,32 +36,63 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
       submittedAt: r.submitted_at ?? "",
     }));
 
-    // Comments
+    // Comments (inline diff comments)
     const comRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pr}/comments`, { headers, signal: AbortSignal.timeout(4000) });
     const comData: any[] = comRes.ok ? await comRes.json() as any[] : [];
-    const allAuthors = [...revData.map((r: any) => r.user?.login ?? ""), ...comData.map((c: any) => c.user?.login ?? "")].filter(Boolean);
-    const prCommentsByAuthor = allAuthors.filter(a => a === prAuthor).length;
-    const prCommentsByTruong = allAuthors.filter(a => a.toLowerCase() === "truongtc" || a.toLowerCase() === "dract").length;
-    const prCommentsByHuyen = allAuthors.filter(a => a.toLowerCase() === "tranngochuyen1909" || a.toLowerCase() === "huyentn").length;
 
-    // Extract timestamps of Huyen's review activities
-    const huyenActivityDates: string[] = [];
-    revData.forEach((r: any) => {
-      const a = (r.user?.login ?? "").toLowerCase();
-      if ((a === "tranngochuyen1909" || a === "huyentn") && r.submitted_at) {
-        huyenActivityDates.push(r.submitted_at);
-      }
-    });
-    comData.forEach((c: any) => {
-      const a = (c.user?.login ?? "").toLowerCase();
-      if ((a === "tranngochuyen1909" || a === "huyentn") && c.created_at) {
-        huyenActivityDates.push(c.created_at);
-      }
-    });
-    huyenActivityDates.sort();
+    // Issue comments (general PR thread comments)
+    const issueComRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/issues/${pr}/comments`, { headers, signal: AbortSignal.timeout(4000) });
+    const issueComData: any[] = issueComRes.ok ? await issueComRes.json() as any[] : [];
 
-    const huyenLastCommentAt = huyenActivityDates.length > 0 ? huyenActivityDates[huyenActivityDates.length - 1] : undefined;
-    const huyenReviewRounds = huyenActivityDates.length;
+    const isHuyen = (login: string) => {
+      const l = (login ?? "").toLowerCase();
+      return l === "tranngochuyen1909" || l === "huyentn";
+    };
+
+    const isTruong = (login: string) => {
+      const l = (login ?? "").toLowerCase();
+      return l === "truongtc" || l === "dract";
+    };
+
+    // Calculate actual comments by author
+    const prCommentsByAuthor = [...comData, ...issueComData].filter(c => (c.user?.login ?? "") === prAuthor).length;
+    const prCommentsByTruong = [...comData, ...issueComData].filter(c => isTruong(c.user?.login ?? "")).length;
+    const prCommentsByHuyen = [...comData, ...issueComData].filter(c => isHuyen(c.user?.login ?? "")).length;
+
+    // Collect activity timestamps for Huyen
+    const huyenReviews = revData.filter(r => isHuyen(r.user?.login ?? ""));
+    const huyenInlineComments = comData.filter(c => isHuyen(c.user?.login ?? ""));
+    const huyenIssueComments = issueComData.filter(c => isHuyen(c.user?.login ?? ""));
+
+    // Number of review rounds = Number of distinct GitHub Review submissions by Huyen
+    // If no formal review submission exists but comments exist, fallback to distinct comment sessions (> 1 hour apart)
+    let huyenReviewRounds = huyenReviews.length;
+    if (huyenReviewRounds === 0) {
+      const commentTimestamps = [
+        ...huyenInlineComments.map(c => c.created_at ? new Date(c.created_at).getTime() : 0),
+        ...huyenIssueComments.map(c => c.created_at ? new Date(c.created_at).getTime() : 0),
+      ].filter(t => t > 0).sort((a, b) => a - b);
+
+      let sessions = 0;
+      let lastTime = 0;
+      for (const ts of commentTimestamps) {
+        if (ts - lastTime > 60 * 60 * 1000) {
+          sessions++;
+          lastTime = ts;
+        }
+      }
+      huyenReviewRounds = sessions;
+    }
+
+    const huyenTimestamps: number[] = [
+      ...huyenReviews.map(r => r.submitted_at ? new Date(r.submitted_at).getTime() : 0),
+      ...huyenInlineComments.map(c => c.created_at ? new Date(c.created_at).getTime() : 0),
+      ...huyenIssueComments.map(c => c.created_at ? new Date(c.created_at).getTime() : 0),
+    ].filter(t => t > 0).sort((a, b) => a - b);
+
+    const huyenLastCommentAt = huyenTimestamps.length > 0
+      ? new Date(huyenTimestamps[huyenTimestamps.length - 1]).toISOString()
+      : undefined;
 
     let status: BugRecord["ghReviewStatus"] = "No review";
     if (reviews.some(r => r.state === "CHANGES_REQUESTED")) status = "Changes Requested";

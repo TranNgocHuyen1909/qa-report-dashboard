@@ -1,10 +1,5 @@
-import { useMemo, useState } from "react";
-import type {
-  DashboardView,
-  BugRecord,
-  PeriodInfo,
-  Person,
-} from "../../shared/types";
+import React, { useMemo, useState, useEffect, Fragment } from "react";
+import type { DashboardView, BugRecord, Person } from "../../shared/types";
 
 // Helper to extract date key YYYY-MM-DD
 function dateKey(v: string | undefined): string | undefined {
@@ -34,7 +29,84 @@ export function ReviewStats({
 }) {
   const [subTab, setSubTab] = useState<"all" | "truong" | "huyen">("all");
   const [selectedDevFilter, setSelectedDevFilter] = useState<string>("all");
-  const [huyenCommentFilter, setHuyenCommentFilter] = useState<"all" | "comments" | "nocomments">("all");
+  const [huyenCommentFilter, setHuyenCommentFilter] = useState<
+    | "all"
+    | "comments"
+    | "nocomments"
+    | "multiround"
+    | "dev_replied"
+    | "pending_reply"
+  >("all");
+  const [selectedLocFilter, setSelectedLocFilter] = useState<string>("all");
+  const [detailSubTab, setDetailSubTab] = useState<
+    "pending" | "reviewed" | "sidebyside"
+  >("pending");
+  const [pauseFilter, setPauseFilter] = useState<"all" | "active" | "paused">(
+    "all",
+  );
+
+  const detailsTableRef = React.useRef<HTMLDivElement>(null);
+
+  const scrollToDetails = () => {
+    setTimeout(() => {
+      if (detailsTableRef.current) {
+        detailsTableRef.current.scrollIntoView({
+          behavior: "smooth",
+          block: "start",
+        });
+      }
+    }, 50);
+  };
+
+  // Pagination states
+  const [pageReviewed, setPageReviewed] = useState<number>(1);
+  const [pagePending, setPagePending] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
+
+  // Reset pagination when any filter changes
+  useEffect(() => {
+    setPageReviewed(1);
+    setPagePending(1);
+  }, [
+    selectedDevFilter,
+    huyenCommentFilter,
+    selectedLocFilter,
+    pauseFilter,
+    detailSubTab,
+  ]);
+
+  // Extract all unique bug locations for filter
+  const availableLocations = useMemo(() => {
+    const locSet = new Set<string>();
+    view.bugs.forEach((b) => {
+      (b.location ?? []).forEach((l) => locSet.add(l));
+    });
+    return Array.from(locSet).sort();
+  }, [view.bugs]);
+
+  // Notion Location tag color map (High contrast for max readability)
+  const getLocationTagStyle = (loc: string) => {
+    const l = loc.toLowerCase();
+    if (l.includes("metadata")) {
+      return { bg: "#e0e7ff", color: "#3730a3", border: "1px solid #c7d2fe" };
+    }
+    if (l.includes("flow")) {
+      return { bg: "#ccfbf1", color: "#115e59", border: "1px solid #99f6e4" };
+    }
+    if (l.includes("doc")) {
+      return { bg: "#ffe4e6", color: "#9f1239", border: "1px solid #fecdd3" };
+    }
+    if (l.includes("ui") || l.includes("ux")) {
+      return { bg: "#d1fae5", color: "#065f46", border: "1px solid #a7f3d0" };
+    }
+    if (l.includes("prompt")) {
+      return { bg: "#f1f5f9", color: "#334155", border: "1px solid #cbd5e1" };
+    }
+    if (l.includes("performance") || l.includes("tool")) {
+      return { bg: "#f3e8ff", color: "#6b21a8", border: "1px solid #e9d5ff" };
+    }
+    return { bg: "#f3f4f6", color: "#374151", border: "1px solid #e5e7eb" };
+  };
 
   // Find active period details from topbar filters
   const activePeriod = useMemo(() => {
@@ -50,7 +122,9 @@ export function ReviewStats({
     return view.personnel.filter(
       (p) =>
         p.role !== "benchmark" &&
-        (!p.startDate || p.startDate <= (activePeriod?.endDate ?? "")),
+        (!p.startDate ||
+          !activePeriod?.endDate ||
+          p.startDate <= activePeriod.endDate),
     );
   }, [view.personnel, activePeriod]);
 
@@ -60,16 +134,19 @@ export function ReviewStats({
       (p) =>
         p.role !== "benchmark" &&
         p.role !== "lead" &&
-        (!p.startDate || p.startDate <= (activePeriod?.endDate ?? "")),
+        (!p.startDate ||
+          !activePeriod?.endDate ||
+          p.startDate <= activePeriod.endDate),
     );
   }, [view.personnel, activePeriod]);
 
   // Helper to match a bug to a person
   const bugBelongsToPerson = (bug: BugRecord, person: Person) => {
     if (bug.pullRequestUrl && bug.prAuthor) {
+      const prAuthorLower = bug.prAuthor.toLowerCase();
       if (
         person.githubUsername &&
-        bug.prAuthor.toLowerCase() === person.githubUsername.toLowerCase()
+        prAuthorLower === person.githubUsername.toLowerCase()
       )
         return true;
       if (
@@ -77,13 +154,19 @@ export function ReviewStats({
           (p) =>
             p.code !== person.code &&
             p.githubUsername &&
-            p.githubUsername.toLowerCase() === bug.prAuthor.toLowerCase(),
+            p.githubUsername.toLowerCase() === prAuthorLower,
         )
       )
         return false;
     }
     const notionIds = person.notionIds || [];
     return (bug.fixedByIds ?? []).some((id) => notionIds.includes(id));
+  };
+
+  // Helper to get dev code by bug
+  const getDevNameByBug = (bug: BugRecord) => {
+    const matched = all4People.find((p) => bugBelongsToPerson(bug, p));
+    return matched ? matched.code : "—";
   };
 
   const isNoRepro = (b: BugRecord) => {
@@ -95,7 +178,7 @@ export function ReviewStats({
     const st = (b.status ?? "").toLowerCase();
     const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
     return (
-      [
+      ([
         "closed",
         "deployed",
         "resolved",
@@ -106,34 +189,77 @@ export function ReviewStats({
         "change requested",
         "changes requested",
       ].includes(st) ||
-      st.includes("wait") ||
-      st.includes("ready") ||
-      st.includes("change") ||
-      ghLbls.length > 0
-    ) && !isNoRepro(b);
+        st.includes("wait") ||
+        st.includes("ready") ||
+        st.includes("change") ||
+        ghLbls.length > 0) &&
+      !isNoRepro(b)
+    );
   };
 
   const renderLabelBadge = (bug: BugRecord) => {
+    if (isBugPausedFix(bug)) {
+      return (
+        <span
+          className="tag"
+          style={{
+            background: "#fff7ed",
+            color: "#c2410c",
+            border: "1px solid #ffedd5",
+            fontSize: "10px",
+            fontWeight: "600",
+            padding: "2px 8px",
+            borderRadius: "4px",
+          }}
+        >
+          Tạm dừng fix
+        </span>
+      );
+    }
     // 1. Render GitHub PR Labels if available
     if (bug.ghLabels && bug.ghLabels.length > 0) {
       return (
-        <div style={{ display: "flex", flexDirection: "column", gap: "2px", alignItems: "center" }}>
+        <div
+          style={{
+            display: "flex",
+            flexDirection: "column",
+            gap: "3px",
+            alignItems: "center",
+          }}
+        >
           {bug.ghLabels.map((lbl, idx) => {
             const lLower = lbl.toLowerCase();
-            let bg = "rgba(107, 114, 128, 0.15)";
-            let color = "var(--text-2)";
+            let bg = "#f3f4f6";
+            let color = "#374151";
+            let border = "1px solid #e5e7eb";
+
             if (lLower.includes("wait")) {
-              bg = "rgba(185, 28, 28, 0.25)";
-              color = "#f87171";
+              bg = "#dcfce7";
+              color = "#166534";
+              border = "1px solid #bbf7d0";
             } else if (lLower.includes("ready")) {
-              bg = "rgba(161, 98, 7, 0.25)";
-              color = "#facc15";
+              bg = "#e0f2fe";
+              color = "#0369a1";
+              border = "1px solid #bae6fd";
             } else if (lLower.includes("change")) {
-              bg = "rgba(239, 68, 68, 0.25)";
-              color = "#ef4444";
+              bg = "#fee2e2";
+              color = "#991b1b";
+              border = "1px solid #fca5a5";
             }
             return (
-              <span key={idx} className="tag" style={{ background: bg, color, fontSize: "10px", fontWeight: "bold" }}>
+              <span
+                key={idx}
+                className="tag"
+                style={{
+                  background: bg,
+                  color,
+                  border,
+                  fontSize: "10px",
+                  fontWeight: "600",
+                  padding: "2px 8px",
+                  borderRadius: "4px",
+                }}
+              >
                 {lbl}
               </span>
             );
@@ -146,55 +272,143 @@ export function ReviewStats({
     const status = (bug.status ?? "").toLowerCase();
     if (status === "resolved") {
       return (
-        <span className="tag tag-yellow" style={{ fontSize: "10px", fontWeight: "bold" }}>
-          ⚡ Resolved (chờ Huyền review)
+        <span
+          className="tag"
+          style={{
+            background: "#dbeafe",
+            color: "#1e40af",
+            border: "1px solid #bfdbfe",
+            fontSize: "10px",
+            fontWeight: "600",
+            padding: "2px 8px",
+            borderRadius: "4px",
+          }}
+        >
+          Resolved
         </span>
       );
     }
     if (status === "wait for development" || status.includes("wait")) {
       return (
-        <span className="tag tag-green" style={{ fontSize: "10px", fontWeight: "bold" }}>
-          ⏳ wait for dev (Huyền review xong)
+        <span
+          className="tag"
+          style={{
+            background: "#dcfce7",
+            color: "#166534",
+            border: "1px solid #bbf7d0",
+            fontSize: "10px",
+            fontWeight: "600",
+            padding: "2px 8px",
+            borderRadius: "4px",
+          }}
+        >
+          Wait for dev
         </span>
       );
     }
     if (status === "change requested" || status.includes("change")) {
       return (
-        <span className="tag tag-red" style={{ fontSize: "10px", fontWeight: "bold" }}>
-          🔴 change requested (Anh T review ra lỗi)
+        <span
+          className="tag"
+          style={{
+            background: "#fee2e2",
+            color: "#991b1b",
+            border: "1px solid #fca5a5",
+            fontSize: "10px",
+            fontWeight: "600",
+            padding: "2px 8px",
+            borderRadius: "4px",
+          }}
+        >
+          Changes requested
         </span>
       );
     }
     if (status === "ready for review" || status.includes("ready")) {
       return (
-        <span className="tag tag-blue" style={{ fontSize: "10px", fontWeight: "bold" }}>
-          🔵 ready for review (Dev sửa xong lỗi Anh T)
+        <span
+          className="tag"
+          style={{
+            background: "#dbeafe",
+            color: "#1e40af",
+            border: "1px solid #bfdbfe",
+            fontSize: "10px",
+            fontWeight: "600",
+            padding: "2px 8px",
+            borderRadius: "4px",
+          }}
+        >
+          Ready for review
         </span>
       );
     }
-    if (status === "deployed") {
+    if (status === "deployed" || status.includes("deploy")) {
       return (
-        <span className="tag" style={{ background: "rgba(168,85,247,0.2)", color: "#a855f7", fontSize: "10px", fontWeight: "bold" }}>
-          🚀 Deployed (Anh T merge PR)
+        <span
+          className="tag"
+          style={{
+            background: "#f3e8ff",
+            color: "#6b21a8",
+            border: "1px solid #e9d5ff",
+            fontSize: "10px",
+            fontWeight: "600",
+            padding: "2px 8px",
+            borderRadius: "4px",
+          }}
+        >
+          Deployed
         </span>
       );
     }
     if (status === "closed") {
       return (
-        <span className="tag tag-green" style={{ fontSize: "10px", fontWeight: "bold" }}>
-          🟢 Closed (Notion)
+        <span
+          className="tag"
+          style={{
+            background: "#dcfce7",
+            color: "#166534",
+            border: "1px solid #bbf7d0",
+            fontSize: "10px",
+            fontWeight: "600",
+            padding: "2px 8px",
+            borderRadius: "4px",
+          }}
+        >
+          Closed
         </span>
       );
     }
     if (status === "reopened" || status.includes("reopen")) {
       return (
-        <span className="tag tag-red" style={{ fontSize: "10px", fontWeight: "bold" }}>
-          🔴 Reopened (Notion)
+        <span
+          className="tag"
+          style={{
+            background: "#fee2e2",
+            color: "#991b1b",
+            border: "1px solid #fca5a5",
+            fontSize: "10px",
+            fontWeight: "bold",
+            padding: "2px 6px",
+            borderRadius: "4px",
+          }}
+        >
+          🔴 Reopened
         </span>
       );
     }
     return (
-      <span className="tag tag-gray" style={{ fontSize: "10px", fontWeight: "bold" }}>
+      <span
+        className="tag"
+        style={{
+          background: "#f3f4f6",
+          color: "#374151",
+          border: "1px solid #e5e7eb",
+          fontSize: "10px",
+          fontWeight: "bold",
+          padding: "2px 6px",
+          borderRadius: "4px",
+        }}
+      >
         {bug.status || "Chưa có Status"}
       </span>
     );
@@ -275,16 +489,23 @@ export function ReviewStats({
 
   // PRs requiring >1 review round (Multi-turn recheck by TranNgocHuyen1909)
   const huyenMultiRoundBugs = useMemo(() => {
-    return huyenReviewedBugs.filter(
-      (b) => (b.prCommentsByHuyen ?? 0) > 1 || (b.huyenReviewRounds ?? 0) > 1
-    );
+    return huyenReviewedBugs.filter((b) => (b.huyenReviewRounds ?? 0) > 1);
   }, [huyenReviewedBugs]);
 
-  // Filter bugs waiting for Huyen review (If NOT yet reviewed by Huyen, definitely WAITING for Huyen review)
+  // Filter bugs waiting for Huyen review (Only bugs where dev HAS fixed it e.g. status 'Resolved' or ready labels, and NOT New, In Progress, Cancel, Closed, or Merged)
   const pendingHuyenReviewBugs = useMemo(() => {
     return view.bugs.filter((b) => {
-      if ((b.status ?? "").toLowerCase() === "cancel") return false;
-      if (isReviewedByHuyen(b)) return false;
+      const st = (b.status ?? "").toLowerCase();
+      const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
+      const isClosedOrMerged =
+        st.includes("close") ||
+        st.includes("merge") ||
+        ghLbls.some((l) => l.includes("close") || l.includes("merge"));
+
+      if (isClosedOrMerged) return false; // Vứt đi nếu Notion status hay PR status là Close / Merged (Anh Trường đã review/merge trước)
+      if (st === "cancel" || st === "new" || st === "in progress") return false;
+      if (!isFixed(b)) return false; // Exclude unfixed bugs
+      if (isReviewedByHuyen(b)) return false; // Exclude already reviewed bugs
 
       const rDate =
         dateKey(b.prCreatedAt) ??
@@ -333,14 +554,21 @@ export function ReviewStats({
 
   // Compute breakdown for developers under Huyen
   const devReviewStats = useMemo(() => {
-    return dev3People.map(dev => {
-      const devBugs = huyenReviewedBugs.filter(b => bugBelongsToPerson(b, dev));
-      const fixedCount = periodFixedBugs.filter(b => bugBelongsToPerson(b, dev)).length;
+    return dev3People.map((dev) => {
+      const devBugs = huyenReviewedBugs.filter((b) =>
+        bugBelongsToPerson(b, dev),
+      );
+      const fixedCount = periodFixedBugs.filter((b) =>
+        bugBelongsToPerson(b, dev),
+      ).length;
       const reviewedCount = devBugs.length;
       const withCommentCount = devBugs.filter(isHuyenBugWithComment).length;
       const noCommentCount = devBugs.length - withCommentCount;
-      const pendingCount = pendingHuyenReviewBugs.filter(b => bugBelongsToPerson(b, dev)).length;
-      const reviewRate = fixedCount > 0 ? (reviewedCount / fixedCount) * 100 : 0;
+      const pendingCount = pendingHuyenReviewBugs.filter((b) =>
+        bugBelongsToPerson(b, dev),
+      ).length;
+      const reviewRate =
+        fixedCount > 0 ? (reviewedCount / fixedCount) * 100 : 0;
       return {
         dev,
         fixedCount,
@@ -348,40 +576,243 @@ export function ReviewStats({
         withCommentCount,
         noCommentCount,
         pendingCount,
-        reviewRate
+        reviewRate,
       };
     });
   }, [dev3People, periodFixedBugs, huyenReviewedBugs, pendingHuyenReviewBugs]);
 
-  // Filter Huyen reviewed bugs by selected developer and comment filter
+  const isDevRepliedBug = (b: BugRecord) => {
+    if (!isHuyenBugWithComment(b)) return false;
+    const stLower = (b.status ?? "").toLowerCase();
+
+    // Nếu đã chuyển sang wait for dev / closed / deployed thì bước re-review đổi label đã hoàn tất
+    if (
+      stLower === "wait for development" ||
+      stLower.includes("wait") ||
+      stLower === "closed" ||
+      stLower === "deployed"
+    ) {
+      return false;
+    }
+
+    const hasDevComment =
+      (b.prCommentsByAuthor ?? 0) > 0 || (b.huyenReviewRounds ?? 0) > 1;
+    const isResolvedByDev = stLower === "resolved" || stLower.includes("ready");
+
+    return hasDevComment || isResolvedByDev;
+  };
+
+  const huyenDevRepliedBugs = useMemo(() => {
+    return huyenReviewedBugs.filter(isDevRepliedBug);
+  }, [huyenReviewedBugs]);
+
+  const huyenPendingReplyBugs = useMemo(() => {
+    return huyenReviewedBugs.filter(
+      (b) => isHuyenBugWithComment(b) && !isDevRepliedBug(b),
+    );
+  }, [huyenReviewedBugs]);
+
+  // Filter Huyen reviewed bugs by selected developer, location, and comment filter
   const displayedReviewed = useMemo(() => {
-    return huyenReviewedBugs.filter(b => {
+    return huyenReviewedBugs.filter((b) => {
       if (selectedDevFilter !== "all") {
-        const dev = dev3People.find(p => p.code === selectedDevFilter);
+        const dev = dev3People.find((p) => p.code === selectedDevFilter);
         if (!dev || !bugBelongsToPerson(b, dev)) return false;
+      }
+      if (selectedLocFilter !== "all") {
+        if (!(b.location ?? []).includes(selectedLocFilter)) return false;
       }
       if (huyenCommentFilter === "comments") return isHuyenBugWithComment(b);
       if (huyenCommentFilter === "nocomments") return !isHuyenBugWithComment(b);
+      if (huyenCommentFilter === "multiround")
+        return (b.huyenReviewRounds ?? 0) > 1;
+      if (huyenCommentFilter === "dev_replied") return isDevRepliedBug(b);
+      if (huyenCommentFilter === "pending_reply")
+        return isHuyenBugWithComment(b) && !isDevRepliedBug(b);
       return true;
     });
-  }, [huyenReviewedBugs, selectedDevFilter, huyenCommentFilter, dev3People]);
+  }, [
+    huyenReviewedBugs,
+    selectedDevFilter,
+    selectedLocFilter,
+    huyenCommentFilter,
+    dev3People,
+  ]);
 
-  // Filter Huyen pending bugs by selected developer
-  const displayedPending = useMemo(() => {
-    return pendingHuyenReviewBugs.filter(b => {
-      if (selectedDevFilter === "all") return true;
-      const dev = dev3People.find(p => p.code === selectedDevFilter);
-      return dev ? bugBelongsToPerson(b, dev) : false;
-    });
-  }, [pendingHuyenReviewBugs, selectedDevFilter, dev3People]);
+  // Helper to check if bug fix is paused (Tạm dừng fix)
+  const isBugPausedFix = (b: BugRecord) => {
+    if (b.isPausedFix === true) return true;
+    const st = (b.status ?? "").toLowerCase();
+    const note = (b.note ?? "").toLowerCase();
+    const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
 
-  // Combined stats
-  const getDevNameByBug = (bug: BugRecord) => {
-    const matched = all4People.find((p) => bugBelongsToPerson(bug, p));
-    return matched ? matched.code : "—";
+    return (
+      st.includes("tạm dừng") ||
+      st.includes("pause") ||
+      st.includes("on hold") ||
+      st.includes("hold") ||
+      ghLbls.some(
+        (l) =>
+          l.includes("pause") || l.includes("hold") || l.includes("tạm dừng"),
+      ) ||
+      note.includes("tạm dừng fix") ||
+      note.includes("tạm dừng")
+    );
   };
 
+  // Filter Huyen pending bugs by selected developer, location, and pause status
+  const displayedPending = useMemo(() => {
+    return pendingHuyenReviewBugs.filter((b) => {
+      if (selectedDevFilter !== "all") {
+        const dev = dev3People.find((p) => p.code === selectedDevFilter);
+        if (!dev || !bugBelongsToPerson(b, dev)) return false;
+      }
+      if (selectedLocFilter !== "all") {
+        if (!(b.location ?? []).includes(selectedLocFilter)) return false;
+      }
+      if (pauseFilter === "active" && isBugPausedFix(b)) return false;
+      if (pauseFilter === "paused" && !isBugPausedFix(b)) return false;
+      return true;
+    });
+  }, [
+    pendingHuyenReviewBugs,
+    selectedDevFilter,
+    selectedLocFilter,
+    pauseFilter,
+    dev3People,
+  ]);
 
+  // Count pending bugs by pause status
+  const pendingActiveCount = useMemo(() => {
+    return pendingHuyenReviewBugs.filter((b) => !isBugPausedFix(b)).length;
+  }, [pendingHuyenReviewBugs]);
+
+  const pendingPausedCount = useMemo(() => {
+    return pendingHuyenReviewBugs.filter((b) => isBugPausedFix(b)).length;
+  }, [pendingHuyenReviewBugs]);
+
+  // Paged Reviewed Bugs
+  const reviewedFilteredNoHuyen = useMemo(() => {
+    return displayedReviewed.filter((b) => getDevNameByBug(b) !== "HuyenTN");
+  }, [displayedReviewed]);
+
+  const totalPagesReviewed =
+    Math.ceil(reviewedFilteredNoHuyen.length / pageSize) || 1;
+
+  const pagedReviewedBugs = useMemo(() => {
+    const start = (pageReviewed - 1) * pageSize;
+    return reviewedFilteredNoHuyen.slice(start, start + pageSize);
+  }, [reviewedFilteredNoHuyen, pageReviewed, pageSize]);
+
+  // Paged Pending Bugs
+  const pendingFilteredNoHuyen = useMemo(() => {
+    return displayedPending.filter((b) => getDevNameByBug(b) !== "HuyenTN");
+  }, [displayedPending]);
+
+  const totalPagesPending =
+    Math.ceil(pendingFilteredNoHuyen.length / pageSize) || 1;
+
+  const pagedPendingBugs = useMemo(() => {
+    const start = (pagePending - 1) * pageSize;
+    return pendingFilteredNoHuyen.slice(start, start + pageSize);
+  }, [pendingFilteredNoHuyen, pagePending, pageSize]);
+
+  // Helper to render pagination footer bar
+  const renderPaginationFooter = (
+    currentPage: number,
+    totalPages: number,
+    totalItems: number,
+    onPageChange: (p: number) => void,
+  ) => {
+    if (totalItems === 0) return null;
+
+    const startItem = (currentPage - 1) * pageSize + 1;
+    const endItem = Math.min(currentPage * pageSize, totalItems);
+
+    return (
+      <div
+        style={{
+          display: "flex",
+          justifyContent: "space-between",
+          alignItems: "center",
+          padding: "8px 12px",
+          background: "var(--surface-3)",
+          borderTop: "1px solid var(--border-3)",
+          fontSize: "11px",
+          color: "var(--text-2)",
+          borderRadius: "0 0 6px 6px",
+        }}
+      >
+        <div>
+          Hiển thị{" "}
+          <strong>
+            {startItem}-{endItem}
+          </strong>{" "}
+          / <strong>{totalItems}</strong> bug
+        </div>
+
+        <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
+          <button
+            className="ctrl"
+            disabled={currentPage === 1}
+            onClick={() => onPageChange(currentPage - 1)}
+            style={{
+              fontSize: "11px",
+              padding: "3px 8px",
+              opacity: currentPage === 1 ? 0.5 : 1,
+              cursor: currentPage === 1 ? "default" : "pointer",
+            }}
+          >
+            ◄ Trước
+          </button>
+
+          {Array.from({ length: totalPages }, (_, i) => i + 1)
+            .filter(
+              (p) =>
+                p === 1 || p === totalPages || Math.abs(p - currentPage) <= 1,
+            )
+            .map((p, i, arr) => {
+              const prev = arr[i - 1];
+              const showEllipsis = prev && p - prev > 1;
+
+              return (
+                <React.Fragment key={p}>
+                  {showEllipsis && (
+                    <span style={{ padding: "0 2px" }}>...</span>
+                  )}
+                  <button
+                    className={`ctrl ${currentPage === p ? "ctrl-primary" : ""}`}
+                    onClick={() => onPageChange(p)}
+                    style={{
+                      fontSize: "11px",
+                      padding: "3px 8px",
+                      minWidth: "26px",
+                      fontWeight: currentPage === p ? "bold" : "normal",
+                    }}
+                  >
+                    {p}
+                  </button>
+                </React.Fragment>
+              );
+            })}
+
+          <button
+            className="ctrl"
+            disabled={currentPage >= totalPages}
+            onClick={() => onPageChange(currentPage + 1)}
+            style={{
+              fontSize: "11px",
+              padding: "3px 8px",
+              opacity: currentPage >= totalPages ? 0.5 : 1,
+              cursor: currentPage >= totalPages ? "default" : "pointer",
+            }}
+          >
+            Sau ►
+          </button>
+        </div>
+      </div>
+    );
+  };
 
   return (
     <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
@@ -395,12 +826,12 @@ export function ReviewStats({
       >
         <div>
           <h1 className="section-title">
-            🔍 Hoạt động Review &amp; Trạng thái PR (
+            Hoạt động Review &amp; Trạng thái PR (
             {activePeriod?.label ?? "Tất cả kỳ"})
           </h1>
           <p style={{ fontSize: "12px", color: "var(--text-3)", margin: 0 }}>
-            Quản trị luồng QA: Hoàng, Hồ, Huy → <strong>Huyền review</strong>{" "}
-            (ready for review → wait for development) →{" "}
+            Quản trị luồng QA: HoangGV, HoNX, HuyDH →{" "}
+            <strong>Huyền review</strong> (rỗng label → wait for development) →{" "}
             <strong>Anh Trường review</strong> (wait for development →
             close/change requested).
           </p>
@@ -431,7 +862,7 @@ export function ReviewStats({
               setSelectedDevFilter("all");
             }}
           >
-            🌐 Tất cả (Tổng quan)
+            Tất cả
           </button>
           <button
             className={`ctrl ${subTab === "truong" ? "ctrl-primary" : ""}`}
@@ -447,7 +878,7 @@ export function ReviewStats({
               setSelectedDevFilter("all");
             }}
           >
-            🛡️ Anh Trường Review
+            Anh Trường Review
           </button>
           <button
             className={`ctrl ${subTab === "huyen" ? "ctrl-primary" : ""}`}
@@ -463,7 +894,7 @@ export function ReviewStats({
               setSelectedDevFilter("all");
             }}
           >
-            🔍 Huyền Review
+            Huyền Review
           </button>
         </div>
       </div>
@@ -665,7 +1096,7 @@ export function ReviewStats({
                     style={{ fontSize: "11px", padding: "3px 8px" }}
                     onClick={() => setSelectedDevFilter(p.code)}
                   >
-                    {p.displayName}
+                    {p.code}
                   </button>
                 ))}
               </div>
@@ -784,18 +1215,37 @@ export function ReviewStats({
                           {/* Huyen Review Status */}
                           <td style={{ padding: "10px" }}>
                             {isHuyenReviewed ? (
-                              <div style={{ display: "flex", flexDirection: "column", gap: "2px", alignItems: "flex-start" }}>
-                                <span className="tag tag-green" style={{ fontSize: "10px" }}>
+                              <div
+                                style={{
+                                  display: "flex",
+                                  flexDirection: "column",
+                                  gap: "2px",
+                                  alignItems: "flex-start",
+                                }}
+                              >
+                                <span
+                                  className="tag tag-green"
+                                  style={{ fontSize: "10px" }}
+                                >
                                   ✔️ Đã duyệt (Lead)
                                 </span>
                                 {(bug.prCommentsByHuyen ?? 0) > 0 && (
-                                  <span className="tag tag-yellow" style={{ fontSize: "10px", fontWeight: "bold" }}>
+                                  <span
+                                    className="tag tag-yellow"
+                                    style={{
+                                      fontSize: "10px",
+                                      fontWeight: "bold",
+                                    }}
+                                  >
                                     💬 {bug.prCommentsByHuyen} comment(s)
                                   </span>
                                 )}
                               </div>
                             ) : (
-                              <span className="tag tag-yellow" style={{ fontSize: "10px" }}>
+                              <span
+                                className="tag tag-yellow"
+                                style={{ fontSize: "10px" }}
+                              >
                                 ⏳ Chờ Huyen review
                               </span>
                             )}
@@ -1373,9 +1823,29 @@ export function ReviewStats({
                   gap: "8px",
                 }}
               >
-                <span>⏳ PR Đang Chờ Anh Trường Duyệt Vòng 2 ({truongPendingBugs.length})</span>
-                <span style={{ fontSize: "11px", fontWeight: "normal", color: "var(--text-2)", background: "var(--surface-3)", padding: "3px 8px", borderRadius: "6px", border: "1px solid var(--border)" }}>
-                  📌 Chỉ bao gồm nhãn <strong style={{ color: "var(--green)" }}>wait for development</strong> &amp; <strong style={{ color: "var(--blue)" }}>ready for review</strong>
+                <span>
+                  ⏳ PR Đang Chờ Anh Trường Duyệt Vòng 2 (
+                  {truongPendingBugs.length})
+                </span>
+                <span
+                  style={{
+                    fontSize: "11px",
+                    fontWeight: "normal",
+                    color: "var(--text-2)",
+                    background: "var(--surface-3)",
+                    padding: "3px 8px",
+                    borderRadius: "6px",
+                    border: "1px solid var(--border)",
+                  }}
+                >
+                  📌 Chỉ bao gồm nhãn{" "}
+                  <strong style={{ color: "var(--green)" }}>
+                    wait for development
+                  </strong>{" "}
+                  &amp;{" "}
+                  <strong style={{ color: "var(--blue)" }}>
+                    ready for review
+                  </strong>
                 </span>
               </div>
               <div
@@ -1396,7 +1866,8 @@ export function ReviewStats({
                       fontSize: "12px",
                     }}
                   >
-                    🎉 Tuyệt vời! Không có PR nào đang chờ review (nhãn wait for development / ready for review).
+                    🎉 Tuyệt vời! Không có PR nào đang chờ review (nhãn wait for
+                    development / ready for review).
                   </div>
                 ) : (
                   <table
@@ -1528,12 +1999,12 @@ export function ReviewStats({
       {/* ──────────────────────────────────────────────────────── */}
       {subTab === "huyen" && (
         <>
-          {/* KPI Cards (Split into 4 key metrics: Total, With Comment, No Comment, Pending) */}
+          {/* KPI Cards (Split into 5 key metrics) */}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(auto-fit, minmax(200px, 1fr))",
-              gap: "16px",
+              gridTemplateColumns: "repeat(5, 1fr)",
+              gap: "12px",
             }}
           >
             <div
@@ -1542,8 +2013,15 @@ export function ReviewStats({
                 display: "flex",
                 flexDirection: "column",
                 gap: "6px",
-                borderLeft: "4px solid #a855f7",
+                borderTop: "4px solid #a855f7",
+                cursor: "pointer",
               }}
+              onClick={() => {
+                setDetailSubTab("reviewed");
+                setHuyenCommentFilter("all");
+                scrollToDetails();
+              }}
+              title="Click để xem danh sách bug đã review"
             >
               <div
                 style={{
@@ -1552,7 +2030,7 @@ export function ReviewStats({
                   fontWeight: "bold",
                 }}
               >
-                TỔNG BUG ĐÃ REVIEW
+                TỔNG ĐÃ REVIEW
               </div>
               <div
                 style={{
@@ -1564,15 +2042,13 @@ export function ReviewStats({
                 {huyenReviewedBugs.length}
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
-                Trên tổng số{" "}
-                <strong>
-                  {
-                    periodFixedBugs.filter(
-                      (b) => getDevNameByBug(b) !== "HuyenTN",
-                    ).length
-                  }
-                </strong>{" "}
-                bug dev đã sửa trong kỳ
+                Trên{" "}
+                {
+                  periodFixedBugs.filter(
+                    (b) => getDevNameByBug(b) !== "HuyenTN",
+                  ).length
+                }{" "}
+                bug dev đã sửa
               </div>
             </div>
 
@@ -1582,9 +2058,16 @@ export function ReviewStats({
                 display: "flex",
                 flexDirection: "column",
                 gap: "6px",
-                borderLeft: "4px solid #ef4444",
-                background: "rgba(239,68,68,0.04)",
+                borderTop: "4px solid #ef4444",
+                background: "rgba(239,68,68,0.02)",
+                cursor: "pointer",
               }}
+              onClick={() => {
+                setDetailSubTab("reviewed");
+                setHuyenCommentFilter("comments");
+                scrollToDetails();
+              }}
+              title="Click để xem danh sách bug có comment"
             >
               <div
                 style={{
@@ -1593,7 +2076,7 @@ export function ReviewStats({
                   fontWeight: "bold",
                 }}
               >
-                💬 REVIEW CÓ COMMENT (RA LỖI)
+                REVIEW CÓ COMMENT
               </div>
               <div
                 style={{
@@ -1605,7 +2088,12 @@ export function ReviewStats({
                 {huyenReviewedWithComments.length}
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
-                Dev bắt buộc reply comment &amp; Resolve conversation
+                Tỷ lệ có comment:{" "}
+                <strong>
+                  {huyenReviewedBugs.length > 0
+                    ? `${((huyenReviewedWithComments.length / huyenReviewedBugs.length) * 100).toFixed(0)}%`
+                    : "0%"}
+                </strong>
               </div>
             </div>
 
@@ -1615,9 +2103,16 @@ export function ReviewStats({
                 display: "flex",
                 flexDirection: "column",
                 gap: "6px",
-                borderLeft: "4px solid #f59e0b",
-                background: "rgba(245,158,11,0.04)",
+                borderTop: "4px solid #f59e0b",
+                background: "rgba(245,158,11,0.02)",
+                cursor: "pointer",
               }}
+              onClick={() => {
+                setDetailSubTab("reviewed");
+                setHuyenCommentFilter("multiround");
+                scrollToDetails();
+              }}
+              title="Click để xem danh sách bug re-check >1 lần"
             >
               <div
                 style={{
@@ -1626,7 +2121,7 @@ export function ReviewStats({
                   fontWeight: "bold",
                 }}
               >
-                🔁 RE-CHECK LẶP LẠI (&gt;1 VÒNG)
+                RE-CHECK LẶP LẠI
               </div>
               <div
                 style={{
@@ -1638,7 +2133,12 @@ export function ReviewStats({
                 {huyenMultiRoundBugs.length}
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
-                PR phải review &amp; comment lại nhiều lần
+                Tỷ lệ re-check:{" "}
+                <strong>
+                  {huyenReviewedBugs.length > 0
+                    ? `${((huyenMultiRoundBugs.length / huyenReviewedBugs.length) * 100).toFixed(0)}%`
+                    : "0%"}
+                </strong>
               </div>
             </div>
 
@@ -1648,9 +2148,16 @@ export function ReviewStats({
                 display: "flex",
                 flexDirection: "column",
                 gap: "6px",
-                borderLeft: "4px solid #10b981",
-                background: "rgba(16,185,129,0.04)",
+                borderTop: "4px solid #10b981",
+                background: "rgba(16,185,129,0.02)",
+                cursor: "pointer",
               }}
+              onClick={() => {
+                setDetailSubTab("reviewed");
+                setHuyenCommentFilter("nocomments");
+                scrollToDetails();
+              }}
+              title="Click để xem danh sách bug test pass"
             >
               <div
                 style={{
@@ -1659,7 +2166,7 @@ export function ReviewStats({
                   fontWeight: "bold",
                 }}
               >
-                ✨ REVIEW KHÔNG COMMENT (PASS NGAY)
+                REVIEW KHÔNG COMMENT
               </div>
               <div
                 style={{
@@ -1671,7 +2178,12 @@ export function ReviewStats({
                 {huyenReviewedNoComments.length}
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
-                Test đạt 100% không phát hiện thêm lỗi
+                Tỷ lệ Pass ngay:{" "}
+                <strong>
+                  {huyenReviewedBugs.length > 0
+                    ? `${((huyenReviewedNoComments.length / huyenReviewedBugs.length) * 100).toFixed(0)}%`
+                    : "0%"}
+                </strong>
               </div>
             </div>
 
@@ -1681,8 +2193,14 @@ export function ReviewStats({
                 display: "flex",
                 flexDirection: "column",
                 gap: "6px",
-                borderLeft: "4px solid var(--yellow)",
+                borderTop: "4px solid #64748b",
+                cursor: "pointer",
               }}
+              onClick={() => {
+                setDetailSubTab("pending");
+                scrollToDetails();
+              }}
+              title="Click để xem danh sách bug đang chờ review"
             >
               <div
                 style={{
@@ -1691,19 +2209,19 @@ export function ReviewStats({
                   fontWeight: "bold",
                 }}
               >
-                ⏳ BUG CHỜ REVIEW
+                BUG CHỜ REVIEW
               </div>
               <div
                 style={{
                   fontSize: "28px",
                   fontWeight: "bold",
-                  color: "var(--yellow)",
+                  color: "#64748b",
                 }}
               >
                 {pendingHuyenReviewBugs.length}
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
-                Các bug đã Resolved từ dev nhưng chưa gán reviewer
+                Đang chờ gán reviewer
               </div>
             </div>
           </div>
@@ -1727,21 +2245,55 @@ export function ReviewStats({
                   color: "var(--text)",
                 }}
               >
-                📊 Phân Phối Bug Đã Review Theo Nhân Sự &amp; Loại Kết Quả (Lead: HuyenTN)
+                Phân Phối Bug Đã Review Theo Nhân Sự
               </div>
               {/* Legend Bar */}
-              <div style={{ display: "flex", gap: "12px", fontSize: "11px", color: "var(--text-2)" }}>
-                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: "10px", height: "10px", borderRadius: "2px", background: "linear-gradient(90deg, #10b981 0%, #059669 100%)" }}></span>
-                  🟢 Pass ngay (Không comment)
+              <div
+                style={{
+                  display: "flex",
+                  gap: "12px",
+                  fontSize: "11px",
+                  color: "var(--text-2)",
+                }}
+              >
+                <span
+                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "2px",
+                      background: "#10b981",
+                    }}
+                  ></span>
+                  Pass
                 </span>
-                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: "10px", height: "10px", borderRadius: "2px", background: "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)" }}></span>
-                  🔴 Ra lỗi (Có comment)
+                <span
+                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "2px",
+                      background: "#ef4444",
+                    }}
+                  ></span>
+                  Có comment
                 </span>
-                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
-                  <span style={{ width: "10px", height: "10px", borderRadius: "2px", background: "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)" }}></span>
-                  🟡 Chờ review
+                <span
+                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "2px",
+                      background: "#f59e0b",
+                    }}
+                  ></span>
+                  Chờ review
                 </span>
               </div>
             </div>
@@ -1751,7 +2303,9 @@ export function ReviewStats({
             >
               {devReviewStats.map((row) => {
                 const maxVal = Math.max(
-                  ...devReviewStats.map((r) => r.reviewedCount + r.pendingCount),
+                  ...devReviewStats.map(
+                    (r) => r.reviewedCount + r.pendingCount,
+                  ),
                   1,
                 );
                 const noCommentWidth = (row.noCommentCount / maxVal) * 100;
@@ -1796,8 +2350,7 @@ export function ReviewStats({
                           style={{
                             width: `${noCommentWidth}%`,
                             height: "100%",
-                            background:
-                              "linear-gradient(90deg, #10b981 0%, #059669 100%)",
+                            background: "#10b981",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -1806,7 +2359,7 @@ export function ReviewStats({
                             fontWeight: "bold",
                             transition: "width 0.4s ease-out",
                           }}
-                          title={`${row.noCommentCount} bug review pass ngay (không comment)`}
+                          title={`${row.noCommentCount} bug pass`}
                         >
                           {noCommentWidth > 6 && `${row.noCommentCount} Pass`}
                         </div>
@@ -1818,8 +2371,7 @@ export function ReviewStats({
                           style={{
                             width: `${withCommentWidth}%`,
                             height: "100%",
-                            background:
-                              "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)",
+                            background: "#ef4444",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -1828,9 +2380,10 @@ export function ReviewStats({
                             fontWeight: "bold",
                             transition: "width 0.4s ease-out",
                           }}
-                          title={`${row.withCommentCount} bug review ra lỗi (có comment)`}
+                          title={`${row.withCommentCount} bug có comment`}
                         >
-                          {withCommentWidth > 6 && `${row.withCommentCount} Lỗi`}
+                          {withCommentWidth > 6 &&
+                            `${row.withCommentCount} Lỗi`}
                         </div>
                       )}
 
@@ -1840,8 +2393,7 @@ export function ReviewStats({
                           style={{
                             width: `${pendingWidth}%`,
                             height: "100%",
-                            background:
-                              "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)",
+                            background: "#f59e0b",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -1866,11 +2418,16 @@ export function ReviewStats({
                         gap: "6px",
                       }}
                     >
-                      <span style={{ fontWeight: "bold", color: "var(--text-1)" }}>
+                      <span
+                        style={{ fontWeight: "bold", color: "var(--text-1)" }}
+                      >
                         {row.reviewedCount} Đã review
                       </span>
-                      <span style={{ color: "var(--text-3)", fontSize: "11px" }}>
-                        (🟢 {row.noCommentCount} pass | 🔴 {row.withCommentCount} lỗi | ⏳ {row.pendingCount} chờ)
+                      <span
+                        style={{ color: "var(--text-3)", fontSize: "11px" }}
+                      >
+                        (🟢 {row.noCommentCount} pass | 🔴{" "}
+                        {row.withCommentCount} lỗi | ⏳ {row.pendingCount} chờ)
                       </span>
                     </div>
                   </div>
@@ -1880,33 +2437,261 @@ export function ReviewStats({
 
             {/* Detailed Dev Review Breakdown Table */}
             <div style={{ marginTop: "20px", overflowX: "auto" }}>
-              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+              <table
+                style={{
+                  width: "100%",
+                  borderCollapse: "collapse",
+                  fontSize: "12px",
+                }}
+              >
                 <thead>
-                  <tr style={{ background: "var(--surface-3)", borderBottom: "1px solid var(--border-2)", color: "var(--text-2)" }}>
-                    <th style={{ padding: "8px 12px", textAlign: "left" }}>Tác giả (Dev)</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>Tổng Đã Review</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>🟢 Pass Ngay (Không comment)</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>🔴 Review Ra Lỗi (Có comment)</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>🔁 Re-check (&gt;1 Vòng)</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>⏳ Đang Chờ Review</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>Tỷ Lệ Phụ Trách</th>
+                  <tr
+                    style={{
+                      background: "var(--surface-3)",
+                      borderBottom: "1px solid var(--border-2)",
+                      color: "var(--text-2)",
+                    }}
+                  >
+                    <th style={{ padding: "8px 12px", textAlign: "left" }}>
+                      Tác giả
+                    </th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>
+                      Tổng Đã Review
+                    </th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>
+                      Pass Ngay
+                    </th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>
+                      Review Có Comment
+                    </th>
+                    <th
+                      style={{ padding: "8px 12px", textAlign: "center" }}
+                      title="Tỷ lệ bug bị QC Lead comment ra lỗi trên tổng số bug đã review CỦA CHÍNH DEV NÀY"
+                    >
+                      Tỷ Lệ Lỗi (Cá Nhân)
+                    </th>
+                    <th
+                      style={{ padding: "8px 12px", textAlign: "center" }}
+                      title="Tỷ lệ % lỗi của Dev này đóng góp trên TỔNG SỐ BUG RA LỖI CỦA CẢ TEAM"
+                    >
+                      Đóng Góp Lỗi (Cả Team)
+                    </th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>
+                      Re-check
+                    </th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>
+                      Đang Chờ Review
+                    </th>
+                    <th
+                      style={{ padding: "8px 12px", textAlign: "center" }}
+                      title="Tỷ lệ % bug của Dev này mà QC Lead đã hoàn thành review"
+                    >
+                      Tiến Độ Review
+                    </th>
                   </tr>
                 </thead>
                 <tbody>
                   {devReviewStats.map((row, idx) => {
-                    const devBugs = huyenReviewedBugs.filter((b) => bugBelongsToPerson(b, row.dev));
-                    const multiRoundCount = devBugs.filter((b) => (b.prCommentsByHuyen ?? 0) > 1 || (b.huyenReviewRounds ?? 0) > 1).length;
-                    const errRate = row.reviewedCount > 0 ? ((row.withCommentCount / row.reviewedCount) * 100).toFixed(0) : "0";
+                    const devBugs = huyenReviewedBugs.filter((b) =>
+                      bugBelongsToPerson(b, row.dev),
+                    );
+                    const multiRoundCount = devBugs.filter(
+                      (b) =>
+                        (b.prCommentsByHuyen ?? 0) > 1 ||
+                        (b.huyenReviewRounds ?? 0) > 1,
+                    ).length;
+                    const errRatePersonal =
+                      row.reviewedCount > 0
+                        ? (
+                            (row.withCommentCount / row.reviewedCount) *
+                            100
+                          ).toFixed(0)
+                        : "0";
+                    const totalTeamWithComments =
+                      huyenReviewedWithComments.length;
+                    const errRateTeamShare =
+                      totalTeamWithComments > 0
+                        ? (
+                            (row.withCommentCount / totalTeamWithComments) *
+                            100
+                          ).toFixed(0)
+                        : "0";
 
                     return (
-                      <tr key={idx} style={{ borderBottom: "1px solid var(--border-3)", background: idx % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent" }}>
-                        <td style={{ padding: "8px 12px", fontWeight: "bold" }}>{row.dev.displayName} ({row.dev.code})</td>
-                        <td style={{ padding: "8px 12px", textAlign: "center", fontWeight: "bold", color: "#a855f7" }}>{row.reviewedCount} bug</td>
-                        <td style={{ padding: "8px 12px", textAlign: "center", color: "#10b981", fontWeight: "bold" }}>{row.noCommentCount} bug</td>
-                        <td style={{ padding: "8px 12px", textAlign: "center", color: "#ef4444", fontWeight: "bold" }}>{row.withCommentCount} bug ({errRate}% tổng review)</td>
-                        <td style={{ padding: "8px 12px", textAlign: "center", color: "#f59e0b", fontWeight: "bold" }}>{multiRoundCount} PR</td>
-                        <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--yellow)" }}>{row.pendingCount} bug</td>
-                        <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--text-2)" }}>{row.reviewRate.toFixed(0)}% ({row.reviewedCount}/{row.fixedCount})</td>
+                      <tr
+                        key={idx}
+                        style={{
+                          borderBottom: "1px solid var(--border-3)",
+                          background:
+                            idx % 2 === 0
+                              ? "rgba(255,255,255,0.01)"
+                              : "transparent",
+                        }}
+                      >
+                        {/* Dev Code - Click to filter by Dev */}
+                        <td
+                          style={{
+                            padding: "8px 12px",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            color: "var(--accent)",
+                            textDecoration: "underline",
+                          }}
+                          onClick={() => {
+                            setSelectedDevFilter(row.dev.code);
+                            setDetailSubTab("reviewed");
+                            setHuyenCommentFilter("all");
+                            scrollToDetails();
+                          }}
+                          title={`Click để lọc tất cả bug của ${row.dev.code}`}
+                        >
+                          {row.dev.code}
+                        </td>
+                        {/* Tổng đã review */}
+                        <td
+                          style={{
+                            padding: "8px 12px",
+                            textAlign: "center",
+                            fontWeight: "600",
+                            color: "var(--text-1)",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => {
+                            setSelectedDevFilter(row.dev.code);
+                            setDetailSubTab("reviewed");
+                            setHuyenCommentFilter("all");
+                            scrollToDetails();
+                          }}
+                          title={`Click để xem danh sách đã review của ${row.dev.code}`}
+                        >
+                          {row.reviewedCount} bug
+                        </td>
+                        {/* Pass ngay */}
+                        <td
+                          style={{
+                            padding: "8px 12px",
+                            textAlign: "center",
+                            color: "#10b981",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => {
+                            setSelectedDevFilter(row.dev.code);
+                            setDetailSubTab("reviewed");
+                            setHuyenCommentFilter("nocomments");
+                            scrollToDetails();
+                          }}
+                          title={`Click để xem bug Pass của ${row.dev.code}`}
+                        >
+                          {row.noCommentCount} bug
+                        </td>
+                        {/* Review có comment */}
+                        <td
+                          style={{
+                            padding: "8px 12px",
+                            textAlign: "center",
+                            color: row.withCommentCount > 0 ? "#ef4444" : "var(--text-2)",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => {
+                            setSelectedDevFilter(row.dev.code);
+                            setDetailSubTab("reviewed");
+                            setHuyenCommentFilter("dev_replied");
+                            scrollToDetails();
+                          }}
+                          title={`Click để xem bug có comment của ${row.dev.code}`}
+                        >
+                          {row.withCommentCount} bug
+                        </td>
+                        {/* 1. Tỷ Lệ Lỗi (Cá Nhân) - Highlighting high error rates */}
+                        <td
+                          style={{
+                            padding: "8px 12px",
+                            textAlign: "center",
+                            fontWeight: "700",
+                            color:
+                              Number(errRatePersonal) > 30
+                                ? "#ef4444"
+                                : Number(errRatePersonal) > 15
+                                ? "#f59e0b"
+                                : "#10b981",
+                          }}
+                          title={
+                            Number(errRatePersonal) > 30
+                              ? "⚠️ Tỷ lệ lỗi cá nhân cao (>30%)"
+                              : "Tỷ lệ lỗi cá nhân"
+                          }
+                        >
+                          {errRatePersonal}%
+                        </td>
+                        {/* 2. Đóng Góp Lỗi (Cả Team) - Highlighting major team contributors */}
+                        <td
+                          style={{
+                            padding: "8px 12px",
+                            textAlign: "center",
+                            fontWeight: "700",
+                            color:
+                              Number(errRateTeamShare) > 40
+                                ? "#dc2626"
+                                : "var(--text-1)",
+                          }}
+                          title={
+                            Number(errRateTeamShare) > 40
+                              ? "🚨 Chiếm trên 40% tổng lỗi của cả team!"
+                              : "Tỷ lệ đóng góp lỗi cả team"
+                          }
+                        >
+                          {errRateTeamShare}%
+                        </td>
+                        {/* Re-check */}
+                        <td
+                          style={{
+                            padding: "8px 12px",
+                            textAlign: "center",
+                            color: "var(--text-2)",
+                            fontWeight: "500",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => {
+                            setSelectedDevFilter(row.dev.code);
+                            setDetailSubTab("reviewed");
+                            setHuyenCommentFilter("dev_replied");
+                            scrollToDetails();
+                          }}
+                          title={`Click để xem bug re-check của ${row.dev.code}`}
+                        >
+                          {multiRoundCount} PR
+                        </td>
+                        {/* Đang chờ review */}
+                        <td
+                          style={{
+                            padding: "8px 12px",
+                            textAlign: "center",
+                            color: row.pendingCount > 0 ? "#f59e0b" : "var(--text-2)",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => {
+                            setSelectedDevFilter(row.dev.code);
+                            setDetailSubTab("pending");
+                            scrollToDetails();
+                          }}
+                          title={`Click để xem danh sách đang chờ review của ${row.dev.code}`}
+                        >
+                          {row.pendingCount} bug
+                        </td>
+                        {/* Tiến độ review */}
+                        <td
+                          style={{
+                            padding: "8px 12px",
+                            textAlign: "center",
+                            color: "var(--text-2)",
+                            fontWeight: "600",
+                          }}
+                        >
+                          {row.reviewRate.toFixed(0)}%
+                        </td>
                       </tr>
                     );
                   })}
@@ -1915,394 +2700,838 @@ export function ReviewStats({
             </div>
           </div>
 
-          {/* Details Tables for Huyen */}
-          <div className="card">
+          {/* Minimalist & Clean Details Tables for Huyen */}
+          <div
+            ref={detailsTableRef}
+            className="card"
+            style={{
+              padding: "18px",
+              borderRadius: "10px",
+              background: "var(--surface-1)",
+              border: "1px solid var(--border)",
+            }}
+          >
+            {/* Top View Mode Selector: Pending vs Reviewed vs Side-by-Side */}
             <div
               style={{
                 display: "flex",
                 justifyContent: "space-between",
                 alignItems: "center",
-                marginBottom: "16px",
                 flexWrap: "wrap",
                 gap: "12px",
+                marginBottom: "14px",
               }}
             >
               <div
                 style={{
-                  fontWeight: 700,
-                  fontSize: "14px",
-                  color: "var(--text)",
+                  display: "flex",
+                  gap: "6px",
+                  background: "var(--surface-2)",
+                  padding: "3px",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border-3)",
                 }}
               >
-                📋 Chi Tiết Lỗi Theo Trạng Thái Review (Lead: HuyenTN)
-              </div>
-              <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
-                {/* Phễu lọc Có comment / Không comment */}
-                <div style={{ display: "flex", gap: "3px", background: "var(--surface-3)", padding: "3px", borderRadius: "8px", border: "1px solid var(--border)" }}>
-                  <button
-                    className={`ctrl ${huyenCommentFilter === "all" ? "ctrl-primary" : ""}`}
-                    style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "6px" }}
-                    onClick={() => setHuyenCommentFilter("all")}
-                  >
-                    🌐 Tất cả ({huyenReviewedBugs.length})
-                  </button>
-                  <button
-                    className={`ctrl ${huyenCommentFilter === "comments" ? "ctrl-primary" : ""}`}
-                    style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "6px" }}
-                    onClick={() => setHuyenCommentFilter("comments")}
-                  >
-                    💬 Có comment / Ra lỗi ({huyenReviewedWithComments.length})
-                  </button>
-                  <button
-                    className={`ctrl ${huyenCommentFilter === "nocomments" ? "ctrl-primary" : ""}`}
-                    style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "6px" }}
-                    onClick={() => setHuyenCommentFilter("nocomments")}
-                  >
-                    ✨ Pass ngay ({huyenReviewedNoComments.length})
-                  </button>
-                </div>
-
-                {/* Filter theo Dev */}
-                <div style={{ display: "flex", gap: "4px" }}>
-                  <button
-                    className={`ctrl ${selectedDevFilter === "all" ? "ctrl-primary" : ""}`}
-                    style={{ fontSize: "11px", padding: "4px 8px" }}
-                    onClick={() => setSelectedDevFilter("all")}
-                  >
-                    Tất cả Dev
-                  </button>
-                  {dev3People.map((d) => (
-                    <button
-                      key={d.code}
-                      className={`ctrl ${selectedDevFilter === d.code ? "ctrl-primary" : ""}`}
-                      style={{ fontSize: "11px", padding: "4px 8px" }}
-                      onClick={() => setSelectedDevFilter(d.code)}
-                    >
-                      {d.code}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            </div>
-
-            <div
-              style={{
-                display: "grid",
-                gridTemplateColumns: "1fr 1fr",
-                gap: "20px",
-              }}
-            >
-              {/* Left Column: Reviewed */}
-              <div>
-                <div
+                <button
+                  className={`ctrl ${detailSubTab === "pending" ? "ctrl-primary" : ""}`}
                   style={{
-                    fontWeight: "bold",
-                    fontSize: "13px",
-                    color: "var(--green)",
-                    marginBottom: "8px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <span>✔️</span> Đã Review Thành Công (
-                  {
-                    displayedReviewed.filter(
-                      (b) => getDevNameByBug(b) !== "HuyenTN",
-                    ).length
-                  }
-                  )
-                </div>
-
-                <div
-                  style={{
-                    maxHeight: "300px",
-                    overflowY: "auto",
-                    border: "1px solid var(--border-2)",
+                    fontSize: "12px",
+                    padding: "6px 14px",
                     borderRadius: "6px",
-                    background: "var(--surface-2)",
+                    fontWeight: "600",
                   }}
+                  onClick={() => setDetailSubTab("pending")}
                 >
-                  {displayedReviewed.filter(
-                    (b) => getDevNameByBug(b) !== "HuyenTN",
-                  ).length === 0 ? (
-                    <div
-                      style={{
-                        padding: "16px",
-                        color: "var(--text-3)",
-                        textAlign: "center",
-                        fontSize: "12px",
-                      }}
-                    >
-                      Không có bug nào đã review.
-                    </div>
-                  ) : (
-                    <table
-                      style={{
-                        width: "100%",
-                        borderCollapse: "collapse",
-                        fontSize: "12px",
-                      }}
-                    >
-                      <thead>
-                        <tr
-                          style={{
-                            background: "var(--surface-3)",
-                            borderBottom: "1px solid var(--border-2)",
-                            color: "var(--text-2)",
-                          }}
-                        >
-                          <th
-                            style={{
-                              padding: "8px",
-                              textAlign: "left",
-                              width: "80px",
-                            }}
-                          >
-                            BUG ID
-                          </th>
-                          <th
-                            style={{
-                              padding: "8px",
-                              textAlign: "left",
-                              width: "70px",
-                            }}
-                          >
-                            Dev
-                          </th>
-                          <th style={{ padding: "8px", textAlign: "left" }}>
-                            Tiêu đề lỗi
-                          </th>
-                          <th
-                            style={{
-                              padding: "8px",
-                              textAlign: "center",
-                              width: "80px",
-                            }}
-                          >
-                            Trạng thái
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {displayedReviewed
-                          .filter((b) => getDevNameByBug(b) !== "HuyenTN")
-                          .map((b, idx) => (
-                            <tr
-                              key={idx}
-                              style={{
-                                borderBottom: "1px solid var(--border-3)",
-                                background: "var(--surface-1)",
-                              }}
-                            >
-                              <td
-                                style={{ padding: "8px", fontWeight: "bold" }}
-                              >
-                                <a
-                                  href={b.url}
-                                  target="_blank"
-                                  rel="noreferrer"
-                                  style={{
-                                    color: "var(--accent)",
-                                    textDecoration: "underline",
-                                  }}
-                                >
-                                  {b.bugId || b.id}
-                                </a>
-                              </td>
-                              <td
-                                style={{
-                                  padding: "8px",
-                                  fontWeight: "600",
-                                  color: "var(--text-2)",
-                                }}
-                              >
-                                {getDevNameByBug(b)}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "8px",
-                                  color: "var(--text-1)",
-                                }}
-                              >
-                                {b.title}
-                              </td>
-                              <td
-                                style={{ padding: "8px", textAlign: "center" }}
-                              >
-                                {isHuyenBugWithComment(b) ? (
-                                  <span
-                                    className="tag tag-red"
-                                    style={{ fontSize: "10px", padding: "2px 6px" }}
-                                    title="Huyền review phát hiện lỗi / có comment thảo luận"
-                                  >
-                                    💬 Có comment
-                                  </span>
-                                ) : (
-                                  <span
-                                    className="tag tag-green"
-                                    style={{ fontSize: "10px", padding: "2px 6px" }}
-                                    title="Huyền test đạt ngay 100%, không phát hiện lỗi"
-                                  >
-                                    ✨ Pass ngay
-                                  </span>
-                                )}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  )}
-                </div>
-              </div>
-
-              {/* Right Column: Pending */}
-              <div>
-                <div
-                  style={{
-                    fontWeight: "bold",
-                    fontSize: "13px",
-                    color: "var(--yellow)",
-                    marginBottom: "8px",
-                    display: "flex",
-                    alignItems: "center",
-                    gap: "6px",
-                  }}
-                >
-                  <span>⏳</span> Đang Chờ Huyền Review (Vòng 1 - QC Lead) (
+                  Đang Chờ Review (
                   {
                     displayedPending.filter(
                       (b) => getDevNameByBug(b) !== "HuyenTN",
                     ).length
                   }
                   )
-                </div>
-
-                <div
+                </button>
+                <button
+                  className={`ctrl ${detailSubTab === "reviewed" ? "ctrl-primary" : ""}`}
                   style={{
-                    maxHeight: "300px",
-                    overflowY: "auto",
-                    border: "1px solid var(--border-2)",
+                    fontSize: "12px",
+                    padding: "6px 14px",
                     borderRadius: "6px",
-                    background: "var(--surface-2)",
+                    fontWeight: "600",
+                  }}
+                  onClick={() => setDetailSubTab("reviewed")}
+                >
+                  Đã Review Thành Công (
+                  {
+                    displayedReviewed.filter(
+                      (b) => getDevNameByBug(b) !== "HuyenTN",
+                    ).length
+                  }
+                  )
+                </button>
+                <button
+                  className={`ctrl ${detailSubTab === "sidebyside" ? "ctrl-primary" : ""}`}
+                  style={{
+                    fontSize: "12px",
+                    padding: "6px 14px",
+                    borderRadius: "6px",
+                    fontWeight: "600",
+                  }}
+                  onClick={() => setDetailSubTab("sidebyside")}
+                >
+                  Xem Song Song
+                </button>
+              </div>
+            </div>
+
+            {/* Clean Minimalist Filter Bar */}
+            <div
+              style={{
+                display: "flex",
+                flexWrap: "wrap",
+                gap: "10px",
+                alignItems: "center",
+                marginBottom: "16px",
+                paddingBottom: "14px",
+                borderBottom: "1px solid var(--border-3)",
+              }}
+            >
+              {/* 1. Review Status / Comment Filter (shown in reviewed tab) */}
+              {detailSubTab === "reviewed" && (
+                <select
+                  className="ctrl"
+                  value={huyenCommentFilter}
+                  onChange={(e) => setHuyenCommentFilter(e.target.value as any)}
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    height: "38px",
+                    padding: "0 14px",
+                    background: "var(--surface)",
+                    color: "var(--text)",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
+                    cursor: "pointer",
+                    outline: "none",
                   }}
                 >
-                  {displayedPending.filter(
-                    (b) => getDevNameByBug(b) !== "HuyenTN",
-                  ).length === 0 ? (
+                  <option value="all">
+                    Tất cả trạng thái review ({huyenReviewedBugs.length})
+                  </option>
+                  <option value="dev_replied">
+                    Dev đã reply ({huyenDevRepliedBugs.length})
+                  </option>
+                  <option value="pending_reply">
+                    Chờ Dev reply ({huyenPendingReplyBugs.length})
+                  </option>
+                  <option value="nocomments">
+                    Pass ({huyenReviewedNoComments.length})
+                  </option>
+                </select>
+              )}
+
+              {/* 2. Dev Filter */}
+              <select
+                className="ctrl"
+                value={selectedDevFilter}
+                onChange={(e) => setSelectedDevFilter(e.target.value)}
+                style={{
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  height: "38px",
+                  padding: "0 14px",
+                  background: "var(--surface)",
+                  color: "var(--text)",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                <option value="all">Tất cả Dev</option>
+                {dev3People.map((d) => (
+                  <option key={d.code} value={d.code}>
+                    {d.code}
+                  </option>
+                ))}
+              </select>
+
+              {/* 3. Location Filter */}
+              <select
+                className="ctrl"
+                value={selectedLocFilter}
+                onChange={(e) => setSelectedLocFilter(e.target.value)}
+                style={{
+                  fontSize: "13px",
+                  fontWeight: "600",
+                  height: "38px",
+                  padding: "0 14px",
+                  background: "var(--surface)",
+                  color: "var(--text)",
+                  borderRadius: "8px",
+                  border: "1px solid var(--border)",
+                  boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
+                  cursor: "pointer",
+                  outline: "none",
+                }}
+              >
+                <option value="all">
+                  Tất cả Vị trí ({availableLocations.length})
+                </option>
+                {availableLocations.map((loc) => (
+                  <option key={loc} value={loc}>
+                    {loc}
+                  </option>
+                ))}
+              </select>
+
+              {/* 4. Tạm dừng fix Filter (shown in pending tab) */}
+              {detailSubTab === "pending" && (
+                <select
+                  className="ctrl"
+                  value={pauseFilter}
+                  onChange={(e) => setPauseFilter(e.target.value as any)}
+                  style={{
+                    fontSize: "13px",
+                    fontWeight: "600",
+                    height: "38px",
+                    padding: "0 14px",
+                    background: "var(--surface)",
+                    color: "var(--text)",
+                    borderRadius: "8px",
+                    border: "1px solid var(--border)",
+                    boxShadow: "0 1px 3px rgba(0, 0, 0, 0.08)",
+                    cursor: "pointer",
+                    outline: "none",
+                  }}
+                >
+                  <option value="all">
+                    Tất cả Fix ({pendingHuyenReviewBugs.length})
+                  </option>
+                  <option value="active">
+                    Tạm dừng fix = False ({pendingActiveCount})
+                  </option>
+                  <option value="paused">
+                    Tạm dừng fix = True ({pendingPausedCount})
+                  </option>
+                </select>
+              )}
+            </div>
+
+            {/* Render Tables according to detailSubTab */}
+            <div
+              style={{
+                display: "grid",
+                gridTemplateColumns:
+                  detailSubTab === "sidebyside" ? "1fr 1fr" : "1fr",
+                gap: detailSubTab === "sidebyside" ? "24px" : "0px",
+              }}
+            >
+              {/* Reviewed Table (Render if detailSubTab is 'reviewed' or 'sidebyside') */}
+              {(detailSubTab === "reviewed" ||
+                detailSubTab === "sidebyside") && (
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {detailSubTab === "sidebyside" && (
                     <div
                       style={{
-                        padding: "16px",
-                        color: "var(--text-3)",
-                        textAlign: "center",
+                        fontWeight: 700,
                         fontSize: "12px",
+                        color: "var(--text-1)",
+                        marginBottom: "8px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
                       }}
                     >
-                      ✔️ Tuyệt vời! Không có bug nào đang chờ review.
+                      <span style={{ color: "#10b981" }}>✔️</span> Đã Review
+                      Thành Công (
+                      {
+                        displayedReviewed.filter(
+                          (b) => getDevNameByBug(b) !== "HuyenTN",
+                        ).length
+                      }
+                      )
                     </div>
-                  ) : (
-                    <table
+                  )}
+
+                  <div
+                    style={{
+                      border: "1px solid var(--border-3)",
+                      borderRadius: "8px",
+                      background: "var(--surface-2)",
+                      display: "flex",
+                      flexDirection: "column",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
                       style={{
-                        width: "100%",
-                        borderCollapse: "collapse",
-                        fontSize: "12px",
+                        overflowX: "auto",
+                        flex: 1,
                       }}
                     >
-                      <thead>
-                        <tr
+                      {displayedReviewed.filter(
+                        (b) => getDevNameByBug(b) !== "HuyenTN",
+                      ).length === 0 ? (
+                        <div
                           style={{
-                            background: "var(--surface-3)",
-                            borderBottom: "1px solid var(--border-2)",
-                            color: "var(--text-2)",
+                            padding: "20px",
+                            color: "var(--text-3)",
+                            textAlign: "center",
+                            fontSize: "12px",
                           }}
                         >
-                          <th
-                            style={{
-                              padding: "8px",
-                              textAlign: "left",
-                              width: "80px",
-                            }}
-                          >
-                            BUG ID
-                          </th>
-                          <th
-                            style={{
-                              padding: "8px",
-                              textAlign: "left",
-                              width: "70px",
-                            }}
-                          >
-                            Dev
-                          </th>
-                          <th style={{ padding: "8px", textAlign: "left" }}>
-                            Tiêu đề lỗi
-                          </th>
-                          <th
-                            style={{
-                              padding: "8px",
-                              textAlign: "center",
-                              width: "140px",
-                            }}
-                          >
-                            Trạng Thái Label
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {displayedPending
-                          .filter((b) => getDevNameByBug(b) !== "HuyenTN")
-                          .map((b, idx) => (
+                          Không có bug nào đã review.
+                        </div>
+                      ) : (
+                        <table
+                          style={{
+                            width: "100%",
+                            borderCollapse: "collapse",
+                            fontSize: "12px",
+                          }}
+                        >
+                          <thead>
                             <tr
-                              key={idx}
                               style={{
+                                background: "var(--surface-3)",
+                                color: "var(--text-2)",
+                                textTransform: "uppercase",
+                                fontSize: "11px",
                                 borderBottom: "1px solid var(--border-3)",
-                                background: "var(--surface-1)",
                               }}
                             >
-                              <td
-                                style={{ padding: "8px", fontWeight: "bold" }}
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  width: "45px",
+                                }}
                               >
-                                <a
-                                  href={b.url}
-                                  target="_blank"
-                                  rel="noreferrer"
+                                STT
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "left",
+                                  width:
+                                    detailSubTab === "sidebyside"
+                                      ? "95px"
+                                      : "110px",
+                                }}
+                              >
+                                BUG ID
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "left",
+                                  width:
+                                    detailSubTab === "sidebyside"
+                                      ? "75px"
+                                      : "90px",
+                                }}
+                              >
+                                Dev
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "left",
+                                }}
+                              >
+                                Tiêu đề lỗi
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "left",
+                                  width:
+                                    detailSubTab === "sidebyside"
+                                      ? "95px"
+                                      : "140px",
+                                }}
+                              >
+                                Vị trí
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  width:
+                                    detailSubTab === "sidebyside"
+                                      ? "80px"
+                                      : "110px",
+                                }}
+                              >
+                                Kết quả
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  width:
+                                    detailSubTab === "sidebyside"
+                                      ? "100px"
+                                      : "140px",
+                                }}
+                              >
+                                Trạng thái PR
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pagedReviewedBugs.map((b, idx) => (
+                              <tr
+                                key={idx}
+                                style={{
+                                  borderBottom: "1px solid var(--border-3)",
+                                  background:
+                                    idx % 2 === 0
+                                      ? "rgba(255,255,255,0.01)"
+                                      : "transparent",
+                                }}
+                              >
+                                <td
                                   style={{
-                                    color: "var(--accent)",
-                                    textDecoration: "underline",
+                                    padding: "10px 12px",
+                                    textAlign: "center",
+                                    fontWeight: "600",
+                                    color: "var(--text-3)",
+                                    fontSize: "11px",
+                                    whiteSpace: "nowrap",
                                   }}
                                 >
-                                  {b.bugId || b.id}
-                                </a>
-                              </td>
-                              <td
-                                style={{
-                                  padding: "8px",
-                                  fontWeight: "600",
-                                  color: "var(--text-2)",
-                                }}
-                              >
-                                {getDevNameByBug(b)}
-                              </td>
-                              <td
-                                style={{
-                                  padding: "8px",
-                                  color: "var(--text-1)",
-                                }}
-                              >
-                                {b.title}
-                              </td>
-                              <td
-                                style={{ padding: "8px", textAlign: "center" }}
-                              >
-                                {renderLabelBadge(b)}
-                              </td>
-                            </tr>
-                          ))}
-                      </tbody>
-                    </table>
-                  )}
+                                  {(pageReviewed - 1) * pageSize + idx + 1}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 12px",
+                                    fontWeight: "bold",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  <a
+                                    href={b.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                      color: "var(--accent)",
+                                      textDecoration: "underline",
+                                    }}
+                                  >
+                                    {b.bugId || b.id}
+                                  </a>
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 12px",
+                                    fontWeight: "600",
+                                    color: "var(--text-2)",
+                                  }}
+                                >
+                                  {getDevNameByBug(b)}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 12px",
+                                    color: "var(--text-1)",
+                                    lineHeight: "1.5",
+                                  }}
+                                >
+                                  {b.title}
+                                </td>
+                                <td style={{ padding: "10px 12px" }}>
+                                  {Array.isArray(b.location) &&
+                                  b.location.length > 0 ? (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        gap: "4px",
+                                      }}
+                                    >
+                                      {b.location.map((loc, i) => {
+                                        const st = getLocationTagStyle(loc);
+                                        return (
+                                          <span
+                                            key={i}
+                                            className="tag"
+                                            style={{
+                                              background: st.bg,
+                                              color: st.color,
+                                              border: st.border,
+                                              fontSize: "10px",
+                                              padding: "2px 6px",
+                                              borderRadius: "4px",
+                                              fontWeight: 600,
+                                            }}
+                                          >
+                                            {loc}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <span
+                                      style={{
+                                        fontSize: "11px",
+                                        color: "var(--text-3)",
+                                      }}
+                                    >
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 12px",
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  {isHuyenBugWithComment(b) ? (
+                                    isDevRepliedBug(b) ? (
+                                      <span
+                                        className="tag"
+                                        style={{
+                                          background: "#e0f2fe",
+                                          color: "#0369a1",
+                                          border: "1px solid #bae6fd",
+                                          fontSize: "10px",
+                                          fontWeight: "600",
+                                          padding: "3px 8px",
+                                          borderRadius: "4px",
+                                        }}
+                                        title="Dev đã comment trả lời dưới comment review - Sẵn sàng cho Huyền Re-check & Switch Label"
+                                      >
+                                        Dev đã phản hồi
+                                      </span>
+                                    ) : (
+                                      <span
+                                        className="tag"
+                                        style={{
+                                          background: "#ffe4e6",
+                                          color: "#9f1239",
+                                          border: "1px solid #fecdd3",
+                                          fontSize: "10px",
+                                          fontWeight: "600",
+                                          padding: "3px 8px",
+                                          borderRadius: "4px",
+                                        }}
+                                        title="Huyền đã comment ra lỗi - Đang chờ Dev comment phản hồi / sửa"
+                                      >
+                                        Chờ Dev phản hồi
+                                      </span>
+                                    )
+                                  ) : (
+                                    <span
+                                      className="tag"
+                                      style={{
+                                        background: "#dcfce7",
+                                        color: "#166534",
+                                        border: "1px solid #bbf7d0",
+                                        fontSize: "10px",
+                                        fontWeight: "600",
+                                        padding: "3px 8px",
+                                        borderRadius: "4px",
+                                      }}
+                                      title="Huyền test đạt 100%, không comment"
+                                    >
+                                      Pass
+                                    </span>
+                                  )}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 12px",
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  {renderLabelBadge(b)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                    {renderPaginationFooter(
+                      pageReviewed,
+                      totalPagesReviewed,
+                      reviewedFilteredNoHuyen.length,
+                      setPageReviewed,
+                    )}
+                  </div>
                 </div>
-              </div>
+              )}
+
+              {/* Pending Table (Render if detailSubTab is 'pending' or 'sidebyside') */}
+              {(detailSubTab === "pending" ||
+                detailSubTab === "sidebyside") && (
+                <div style={{ display: "flex", flexDirection: "column" }}>
+                  {detailSubTab === "sidebyside" && (
+                    <div
+                      style={{
+                        fontWeight: 700,
+                        fontSize: "12px",
+                        color: "var(--text-1)",
+                        marginBottom: "8px",
+                        display: "flex",
+                        alignItems: "center",
+                        gap: "6px",
+                      }}
+                    >
+                      <span style={{ color: "#f59e0b" }}>⏳</span> Đang Chờ
+                      Huyền Review (Vòng 1 - QC Lead) (
+                      {
+                        displayedPending.filter(
+                          (b) => getDevNameByBug(b) !== "HuyenTN",
+                        ).length
+                      }
+                      )
+                    </div>
+                  )}
+
+                  <div
+                    style={{
+                      border: "1px solid var(--border-3)",
+                      borderRadius: "8px",
+                      background: "var(--surface-2)",
+                      display: "flex",
+                      flexDirection: "column",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div
+                      style={{
+                        overflowX: "auto",
+                        flex: 1,
+                      }}
+                    >
+                      {displayedPending.filter(
+                        (b) => getDevNameByBug(b) !== "HuyenTN",
+                      ).length === 0 ? (
+                        <div
+                          style={{
+                            padding: "20px",
+                            color: "var(--text-3)",
+                            textAlign: "center",
+                            fontSize: "12px",
+                          }}
+                        >
+                          Không có bug nào đang chờ review.
+                        </div>
+                      ) : (
+                        <table
+                          style={{
+                            width: "100%",
+                            borderCollapse: "collapse",
+                            fontSize: "12px",
+                          }}
+                        >
+                          <thead>
+                            <tr
+                              style={{
+                                background: "var(--surface-3)",
+                                color: "var(--text-2)",
+                                textTransform: "uppercase",
+                                fontSize: "11px",
+                                borderBottom: "1px solid var(--border-3)",
+                              }}
+                            >
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  width: "45px",
+                                }}
+                              >
+                                STT
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "left",
+                                  width:
+                                    detailSubTab === "sidebyside"
+                                      ? "95px"
+                                      : "110px",
+                                }}
+                              >
+                                BUG ID
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "left",
+                                  width:
+                                    detailSubTab === "sidebyside"
+                                      ? "75px"
+                                      : "90px",
+                                }}
+                              >
+                                Dev
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "left",
+                                }}
+                              >
+                                Tiêu đề lỗi
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "left",
+                                  width:
+                                    detailSubTab === "sidebyside"
+                                      ? "95px"
+                                      : "140px",
+                                }}
+                              >
+                                Vị trí
+                              </th>
+                              <th
+                                style={{
+                                  padding: "10px 12px",
+                                  textAlign: "center",
+                                  width:
+                                    detailSubTab === "sidebyside"
+                                      ? "110px"
+                                      : "160px",
+                                }}
+                              >
+                                Trạng thái PR
+                              </th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pagedPendingBugs.map((b, idx) => (
+                              <tr
+                                key={idx}
+                                style={{
+                                  borderBottom: "1px solid var(--border-3)",
+                                  background:
+                                    idx % 2 === 0
+                                      ? "rgba(255,255,255,0.01)"
+                                      : "transparent",
+                                }}
+                              >
+                                <td
+                                  style={{
+                                    padding: "10px 12px",
+                                    textAlign: "center",
+                                    fontWeight: "600",
+                                    color: "var(--text-3)",
+                                    fontSize: "11px",
+                                  }}
+                                >
+                                  {(pagePending - 1) * pageSize + idx + 1}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 12px",
+                                    fontWeight: "bold",
+                                    whiteSpace: "nowrap",
+                                  }}
+                                >
+                                  <a
+                                    href={b.url}
+                                    target="_blank"
+                                    rel="noreferrer"
+                                    style={{
+                                      color: "var(--accent)",
+                                      textDecoration: "underline",
+                                    }}
+                                  >
+                                    {b.bugId || b.id}
+                                  </a>
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 12px",
+                                    fontWeight: "600",
+                                    color: "var(--text-2)",
+                                  }}
+                                >
+                                  {getDevNameByBug(b)}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 12px",
+                                    color: "var(--text-1)",
+                                    lineHeight: "1.5",
+                                  }}
+                                >
+                                  {b.title}
+                                </td>
+                                <td style={{ padding: "10px 12px" }}>
+                                  {Array.isArray(b.location) &&
+                                  b.location.length > 0 ? (
+                                    <div
+                                      style={{
+                                        display: "flex",
+                                        flexWrap: "wrap",
+                                        gap: "4px",
+                                      }}
+                                    >
+                                      {b.location.map((loc, i) => {
+                                        const st = getLocationTagStyle(loc);
+                                        return (
+                                          <span
+                                            key={i}
+                                            className="tag"
+                                            style={{
+                                              background: st.bg,
+                                              color: st.color,
+                                              border: st.border,
+                                              fontSize: "10px",
+                                              padding: "2px 6px",
+                                              borderRadius: "4px",
+                                              fontWeight: 600,
+                                            }}
+                                          >
+                                            {loc}
+                                          </span>
+                                        );
+                                      })}
+                                    </div>
+                                  ) : (
+                                    <span
+                                      style={{
+                                        fontSize: "11px",
+                                        color: "var(--text-3)",
+                                      }}
+                                    >
+                                      —
+                                    </span>
+                                  )}
+                                </td>
+                                <td
+                                  style={{
+                                    padding: "10px 12px",
+                                    textAlign: "center",
+                                  }}
+                                >
+                                  {renderLabelBadge(b)}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      )}
+                    </div>
+                    {renderPaginationFooter(
+                      pagePending,
+                      totalPagesPending,
+                      pendingFilteredNoHuyen.length,
+                      setPagePending,
+                    )}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </>

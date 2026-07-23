@@ -40,6 +40,7 @@ export interface BugRecord {
   createdTime?: string;
   lastEditedTime?: string;
   bugId?: string;
+  isPausedFix?: boolean;
   // GitHub enrichment
   ghReviewStatus?:
     | "Approved"

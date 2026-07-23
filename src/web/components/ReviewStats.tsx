@@ -199,18 +199,25 @@ export function ReviewStats({
     );
   };
 
-  // Check if bug was reviewed by HuyenTN (Notion Reviewers = Huyen, Notion Status = wait for development/deployed/closed, OR GitHub comments by TranNgocHuyen1909)
+  // Check if bug was reviewed by HuyenTN:
+  // 1. Review có comment: Có comment của TranNgocHuyen1909 trên GitHub PR
+  // 2. Review không comment (Pass 100%): Đã gắn Label PR 'wait for deployment' / 'wait for dev' trên GitHub HOẶC Notion Status
+  // 3. Notion Reviewers field có chứa ID của Huyền
   const isReviewedByHuyen = (b: BugRecord) => {
     const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
     const status = (b.status ?? "").toLowerCase();
     const huyenComments = b.prCommentsByHuyen ?? 0;
+    const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
+    const isWaitLabelOnPR = ghLbls.some((l) => l.includes("wait"));
+
     return (
+      huyenComments > 0 ||
+      isWaitLabelOnPR ||
       (b.reviewerIds ?? []).includes(huyenNotionId) ||
       status === "wait for development" ||
       status.includes("wait") ||
       status === "deployed" ||
-      status === "closed" ||
-      huyenComments > 0
+      status === "closed"
     );
   };
 
@@ -278,14 +285,17 @@ export function ReviewStats({
     );
   }, [huyenReviewedBugs]);
 
-  // Filter bugs waiting for Huyen review
+  // Filter bugs waiting for Huyen review (If NOT yet reviewed by Huyen, definitely WAITING for Huyen review)
   const pendingHuyenReviewBugs = useMemo(() => {
     if (!activePeriod) return [];
     return view.bugs.filter((b) => {
-      if ((b.status ?? "").toLowerCase() !== "resolved") return false;
+      if ((b.status ?? "").toLowerCase() === "cancel") return false;
       if (isReviewedByHuyen(b)) return false;
 
-      const rDate = dateKey(b.lastEditedTime) ?? dateKey(b.createdTime);
+      const rDate =
+        dateKey(b.prCreatedAt) ??
+        dateKey(b.lastEditedTime) ??
+        dateKey(b.createdTime);
       return (
         rDate &&
         dateInRange(rDate, activePeriod.startDate, activePeriod.endDate)

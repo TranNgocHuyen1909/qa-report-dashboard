@@ -199,22 +199,18 @@ export function ReviewStats({
     );
   };
 
-  // Check if bug has HuyenTN in Notion Reviewers field or status was changed to wait for development/deployed/closed
+  // Check if bug was reviewed by HuyenTN (Notion Reviewers = Huyen, Notion Status = wait for development/deployed/closed, OR GitHub comments by TranNgocHuyen1909)
   const isReviewedByHuyen = (b: BugRecord) => {
     const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
-    const devNotionIds = [
-      "395d872b-594c-8146-9bdf-0002b1d6b9f8",
-      "0fbca242-f4da-46c8-a07c-dd0d03b8a4a7",
-      "39dd872b-594c-819f-98ac-0002083b0d13",
-    ];
     const status = (b.status ?? "").toLowerCase();
+    const huyenComments = b.prCommentsByHuyen ?? 0;
     return (
       (b.reviewerIds ?? []).includes(huyenNotionId) ||
-      (b.reviewerIds ?? []).some((rid) => devNotionIds.includes(rid)) ||
       status === "wait for development" ||
       status.includes("wait") ||
       status === "deployed" ||
-      status === "closed"
+      status === "closed" ||
+      huyenComments > 0
     );
   };
 
@@ -256,15 +252,12 @@ export function ReviewStats({
     });
   }, [view.bugs, activePeriod]);
 
+  // Check if Huyen commented on this PR on GitHub (user TranNgocHuyen1909) OR left a note on Notion
+  // NOTE: Counting rule: 1 PR with 1 or 10 comments by TranNgocHuyen1909 is counted as 1 PR (1 Bug) in summary stats!
   const isHuyenBugWithComment = (b: BugRecord) => {
-    const status = (b.ghReviewStatus ?? "").toLowerCase();
-    return (
-      status === "changes requested" ||
-      status === "commented" ||
-      (b.ghReviewCount ?? 0) > 0 ||
-      (b.prCommentsByTruong ?? 0) > 0 ||
-      ((b.note ?? "").trim().length > 0 && !isNoRepro(b))
-    );
+    const huyenComments = b.prCommentsByHuyen ?? 0;
+    const hasNotionNote = (b.note ?? "").trim().length > 0 && !isNoRepro(b);
+    return huyenComments > 0 || hasNotionNote;
   };
 
   const huyenReviewedWithComments = useMemo(() => {
@@ -780,17 +773,18 @@ export function ReviewStats({
                           {/* Huyen Review Status */}
                           <td style={{ padding: "10px" }}>
                             {isHuyenReviewed ? (
-                              <span
-                                className="tag tag-green"
-                                style={{ fontSize: "10px" }}
-                              >
-                                ✔️ Đã duyệt (Lead)
-                              </span>
+                              <div style={{ display: "flex", flexDirection: "column", gap: "2px", alignItems: "flex-start" }}>
+                                <span className="tag tag-green" style={{ fontSize: "10px" }}>
+                                  ✔️ Đã duyệt (Lead)
+                                </span>
+                                {(bug.prCommentsByHuyen ?? 0) > 0 && (
+                                  <span className="tag tag-yellow" style={{ fontSize: "10px", fontWeight: "bold" }}>
+                                    💬 {bug.prCommentsByHuyen} comment(s)
+                                  </span>
+                                )}
+                              </div>
                             ) : (
-                              <span
-                                className="tag tag-yellow"
-                                style={{ fontSize: "10px" }}
-                              >
+                              <span className="tag tag-yellow" style={{ fontSize: "10px" }}>
                                 ⏳ Chờ Huyen review
                               </span>
                             )}

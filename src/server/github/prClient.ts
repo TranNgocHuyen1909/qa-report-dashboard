@@ -42,13 +42,14 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
     const allAuthors = [...revData.map((r: any) => r.user?.login ?? ""), ...comData.map((c: any) => c.user?.login ?? "")].filter(Boolean);
     const prCommentsByAuthor = allAuthors.filter(a => a === prAuthor).length;
     const prCommentsByTruong = allAuthors.filter(a => a.toLowerCase() === "truongtc" || a.toLowerCase() === "dract").length;
+    const prCommentsByHuyen = allAuthors.filter(a => a.toLowerCase() === "tranngochuyen1909" || a.toLowerCase() === "huyentn").length;
 
     let status: BugRecord["ghReviewStatus"] = "No review";
     if (reviews.some(r => r.state === "CHANGES_REQUESTED")) status = "Changes Requested";
     else if (reviews.some(r => r.state === "APPROVED")) status = "Approved";
     else if (reviews.some(r => r.state === "COMMENTED")) status = "Commented";
 
-    return { ...bug, ghReviewStatus: status, ghReviewCount: reviews.length, ghReviews: reviews, prAuthor, prCreatedAt, prCommentsByAuthor, prCommentsByTruong, ghLabels };
+    return { ...bug, ghReviewStatus: status, ghReviewCount: reviews.length, ghReviews: reviews, prAuthor, prCreatedAt, prCommentsByAuthor, prCommentsByTruong, prCommentsByHuyen, ghLabels };
   } catch {
     return { ...bug, ghReviewStatus: "Error" as const, ghReviewCount: 0, ghReviews: [] };
   }

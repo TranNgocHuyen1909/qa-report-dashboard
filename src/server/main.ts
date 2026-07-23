@@ -1,5 +1,7 @@
 import * as fs from "node:fs";
 import * as path from "node:path";
+import { fileURLToPath } from "node:url";
+import express from "express";
 import { loadConfig } from "./config";
 import { createApi } from "./api";
 import { NotionBugClient } from "./notion/bugClient";
@@ -97,8 +99,31 @@ const app = createApi({
   githubToken: config.githubToken,
 });
 
+// Serve Vite build from dist/ (cPanel single-app: UI + /api on same origin)
+const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const indexHtml = path.join(webRoot, "index.html");
+if (fs.existsSync(indexHtml)) {
+  app.use((req, res, next) => {
+    if (req.path.startsWith("/server")) {
+      res.status(404).end();
+      return;
+    }
+    next();
+  });
+  app.use(express.static(webRoot));
+  app.use((req, res, next) => {
+    if (req.method !== "GET" && req.method !== "HEAD") return next();
+    if (req.path.startsWith("/api")) return next();
+    res.sendFile(indexHtml, (err) => {
+      if (err) next(err);
+    });
+  });
+} else {
+  console.warn(`Web UI not found at ${indexHtml}; serving API only`);
+}
+
 app.listen(config.port, "0.0.0.0", () => {
-  console.log(`QA Report API running on http://0.0.0.0:${config.port}`);
+  console.log(`QA Report running on http://0.0.0.0:${config.port}`);
   // Auto-refresh on start if cache is empty
   if (cachedBugs.length === 0) {
     refreshBugs().catch(e => console.error("Initial refresh failed:", e));

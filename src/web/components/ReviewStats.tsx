@@ -304,10 +304,12 @@ export function ReviewStats({
     });
   }, [periodFixedBugs]);
 
-  // PRs waiting for Tech Lead Truong (checking GitHub PR labels 'wait for deployment', 'ready for re-review', 'changes requested' AND Notion Status)
+  // PRs waiting for Tech Lead Truong (checking ALL active bugs in view.bugs with PRs having labels 'wait for deployment/dev', 'ready for re-review/review')
   const truongPendingBugs = useMemo(() => {
-    return periodFixedBugs.filter((b) => {
+    return view.bugs.filter((b) => {
+      if ((b.status ?? "").toLowerCase() === "cancel") return false;
       if (!b.pullRequestUrl) return false;
+
       const st = (b.status ?? "").toLowerCase();
       const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
 
@@ -323,7 +325,7 @@ export function ReviewStats({
 
       return isWait || isReady;
     });
-  }, [periodFixedBugs]);
+  }, [view.bugs]);
 
   // Compute breakdown for developers under Huyen
   const devReviewStats = useMemo(() => {

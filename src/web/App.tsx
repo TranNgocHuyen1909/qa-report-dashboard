@@ -62,7 +62,7 @@ export function App() {
   const [personCode, setPersonCode] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [timeLeft, setTimeLeft] = useState(300); // 300 seconds = 5 minutes
+  const [timeLeft, setTimeLeft] = useState(1800); // 1800 seconds = 30 minutes
 
   const [theme, setTheme] = useState<"dark" | "light">(() => {
     return (localStorage.getItem("theme") as "dark" | "light") || "dark";
@@ -155,7 +155,7 @@ export function App() {
             .then(() => fetchDashboard(periodType, periodKey, personCode))
             .then(data => setView(data))
             .catch(err => console.error("Auto-sync failed:", err));
-          return 300;
+          return 1800;
         }
         return prev - 1;
       });
@@ -169,7 +169,7 @@ export function App() {
       await refreshData();
       const data = await fetchDashboard(periodType, periodKey, personCode);
       setView(data);
-      setTimeLeft(300);
+      setTimeLeft(1800);
     } catch (e) {
       console.error(e);
       alert("Lỗi khi đồng bộ dữ liệu Notion");

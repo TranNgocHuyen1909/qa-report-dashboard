@@ -20,6 +20,6 @@ export function loadConfig(): AppConfig {
     notionBugDataSourceId: env.NOTION_BUG_DATA_SOURCE_ID?.trim() || undefined,
     githubToken: env.GITHUB_TOKEN?.trim() || undefined,
     checklistPath: env.CHECKLIST_PATH?.trim() || ".cache/checklist.json",
-    refreshIntervalSeconds: Number(env.REFRESH_INTERVAL_SECONDS) || 300,
+    refreshIntervalSeconds: Number(env.REFRESH_INTERVAL_SECONDS) || 1800,
   };
 }

@@ -163,7 +163,7 @@ function scheduleDailyGrab() {
 }
 scheduleDailyGrab();
 
-// Periodic refresh (default 10 min)
+// Periodic refresh (default 30 min)
 setInterval(() => {
   refreshBugs().catch(e => console.error("Periodic refresh failed:", e));
-}, Math.max(config.refreshIntervalSeconds, 600) * 1000);
+}, Math.max(config.refreshIntervalSeconds, 1800) * 1000);

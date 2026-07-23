@@ -1712,13 +1712,38 @@ export function ReviewStats({
           <div className="card">
             <div
               style={{
-                fontWeight: 700,
-                fontSize: "14px",
+                display: "flex",
+                justifyContent: "space-between",
+                alignItems: "center",
                 marginBottom: "16px",
-                color: "var(--text)",
+                flexWrap: "wrap",
+                gap: "8px",
               }}
             >
-              📊 Phân Phối Bug Đã Review theo Nhân Sự (Lead Reviewer: HuyenTN)
+              <div
+                style={{
+                  fontWeight: 700,
+                  fontSize: "14px",
+                  color: "var(--text)",
+                }}
+              >
+                📊 Phân Phối Bug Đã Review Theo Nhân Sự &amp; Loại Kết Quả (Lead: HuyenTN)
+              </div>
+              {/* Legend Bar */}
+              <div style={{ display: "flex", gap: "12px", fontSize: "11px", color: "var(--text-2)" }}>
+                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span style={{ width: "10px", height: "10px", borderRadius: "2px", background: "linear-gradient(90deg, #10b981 0%, #059669 100%)" }}></span>
+                  🟢 Pass ngay (Không comment)
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span style={{ width: "10px", height: "10px", borderRadius: "2px", background: "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)" }}></span>
+                  🔴 Ra lỗi (Có comment)
+                </span>
+                <span style={{ display: "flex", alignItems: "center", gap: "4px" }}>
+                  <span style={{ width: "10px", height: "10px", borderRadius: "2px", background: "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)" }}></span>
+                  🟡 Chờ review
+                </span>
+              </div>
             </div>
 
             <div
@@ -1726,10 +1751,11 @@ export function ReviewStats({
             >
               {devReviewStats.map((row) => {
                 const maxVal = Math.max(
-                  ...devReviewStats.map((r) => r.fixedCount),
+                  ...devReviewStats.map((r) => r.reviewedCount + r.pendingCount),
                   1,
                 );
-                const reviewedWidth = (row.reviewedCount / maxVal) * 100;
+                const noCommentWidth = (row.noCommentCount / maxVal) * 100;
+                const withCommentWidth = (row.withCommentCount / maxVal) * 100;
                 const pendingWidth = (row.pendingCount / maxVal) * 100;
 
                 return (
@@ -1764,67 +1790,128 @@ export function ReviewStats({
                         overflow: "hidden",
                       }}
                     >
-                      <div
-                        style={{
-                          width: `${reviewedWidth}%`,
-                          height: "100%",
-                          background:
-                            "linear-gradient(90deg, #10b981 0%, #059669 100%)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#fff",
-                          fontSize: "11px",
-                          fontWeight: "bold",
-                          transition: "width 0.4s ease-out",
-                        }}
-                        title={`${row.reviewedCount} bug đã review`}
-                      >
-                        {row.reviewedCount > 0 &&
-                          `${row.reviewedCount} Đã Review`}
-                      </div>
+                      {/* Segment 1: Pass Ngay (Green) */}
+                      {row.noCommentCount > 0 && (
+                        <div
+                          style={{
+                            width: `${noCommentWidth}%`,
+                            height: "100%",
+                            background:
+                              "linear-gradient(90deg, #10b981 0%, #059669 100%)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#fff",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            transition: "width 0.4s ease-out",
+                          }}
+                          title={`${row.noCommentCount} bug review pass ngay (không comment)`}
+                        >
+                          {noCommentWidth > 6 && `${row.noCommentCount} Pass`}
+                        </div>
+                      )}
 
-                      <div
-                        style={{
-                          width: `${pendingWidth}%`,
-                          height: "100%",
-                          background:
-                            "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)",
-                          display: "flex",
-                          alignItems: "center",
-                          justifyContent: "center",
-                          color: "#fff",
-                          fontSize: "11px",
-                          fontWeight: "bold",
-                          transition: "width 0.4s ease-out",
-                        }}
-                        title={`${row.pendingCount} bug chờ review`}
-                      >
-                        {row.pendingCount > 0 && `${row.pendingCount} Chờ`}
-                      </div>
+                      {/* Segment 2: Ra Lỗi (Red) */}
+                      {row.withCommentCount > 0 && (
+                        <div
+                          style={{
+                            width: `${withCommentWidth}%`,
+                            height: "100%",
+                            background:
+                              "linear-gradient(90deg, #ef4444 0%, #dc2626 100%)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#fff",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            transition: "width 0.4s ease-out",
+                          }}
+                          title={`${row.withCommentCount} bug review ra lỗi (có comment)`}
+                        >
+                          {withCommentWidth > 6 && `${row.withCommentCount} Lỗi`}
+                        </div>
+                      )}
+
+                      {/* Segment 3: Chờ Review (Yellow) */}
+                      {row.pendingCount > 0 && (
+                        <div
+                          style={{
+                            width: `${pendingWidth}%`,
+                            height: "100%",
+                            background:
+                              "linear-gradient(90deg, #f59e0b 0%, #d97706 100%)",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#fff",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            transition: "width 0.4s ease-out",
+                          }}
+                          title={`${row.pendingCount} bug đang chờ review`}
+                        >
+                          {pendingWidth > 6 && `${row.pendingCount} Chờ`}
+                        </div>
+                      )}
                     </div>
 
                     <div
                       style={{
-                        width: "160px",
+                        width: "280px",
                         fontSize: "12px",
                         display: "flex",
                         alignItems: "center",
-                        gap: "4px",
+                        gap: "6px",
                       }}
                     >
-                      <span
-                        style={{ fontWeight: "bold", color: "var(--cyan)" }}
-                      >
-                        {row.reviewedCount} / {row.fixedCount}
+                      <span style={{ fontWeight: "bold", color: "var(--text-1)" }}>
+                        {row.reviewedCount} Đã review
                       </span>
-                      <span style={{ color: "var(--text-3)" }}>
-                        bug ({row.reviewRate.toFixed(0)}% đã review)
+                      <span style={{ color: "var(--text-3)", fontSize: "11px" }}>
+                        (🟢 {row.noCommentCount} pass | 🔴 {row.withCommentCount} lỗi | ⏳ {row.pendingCount} chờ)
                       </span>
                     </div>
                   </div>
                 );
               })}
+            </div>
+
+            {/* Detailed Dev Review Breakdown Table */}
+            <div style={{ marginTop: "20px", overflowX: "auto" }}>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
+                <thead>
+                  <tr style={{ background: "var(--surface-3)", borderBottom: "1px solid var(--border-2)", color: "var(--text-2)" }}>
+                    <th style={{ padding: "8px 12px", textAlign: "left" }}>Tác giả (Dev)</th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>Tổng Đã Review</th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>🟢 Pass Ngay (Không comment)</th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>🔴 Review Ra Lỗi (Có comment)</th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>🔁 Re-check (&gt;1 Vòng)</th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>⏳ Đang Chờ Review</th>
+                    <th style={{ padding: "8px 12px", textAlign: "center" }}>Tỷ Lệ Phụ Trách</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {devReviewStats.map((row, idx) => {
+                    const devBugs = huyenReviewedBugs.filter((b) => bugBelongsToPerson(b, row.dev));
+                    const multiRoundCount = devBugs.filter((b) => (b.prCommentsByHuyen ?? 0) > 1 || (b.huyenReviewRounds ?? 0) > 1).length;
+                    const errRate = row.reviewedCount > 0 ? ((row.withCommentCount / row.reviewedCount) * 100).toFixed(0) : "0";
+
+                    return (
+                      <tr key={idx} style={{ borderBottom: "1px solid var(--border-3)", background: idx % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent" }}>
+                        <td style={{ padding: "8px 12px", fontWeight: "bold" }}>{row.dev.displayName} ({row.dev.code})</td>
+                        <td style={{ padding: "8px 12px", textAlign: "center", fontWeight: "bold", color: "#a855f7" }}>{row.reviewedCount} bug</td>
+                        <td style={{ padding: "8px 12px", textAlign: "center", color: "#10b981", fontWeight: "bold" }}>{row.noCommentCount} bug</td>
+                        <td style={{ padding: "8px 12px", textAlign: "center", color: "#ef4444", fontWeight: "bold" }}>{row.withCommentCount} bug ({errRate}% tổng review)</td>
+                        <td style={{ padding: "8px 12px", textAlign: "center", color: "#f59e0b", fontWeight: "bold" }}>{multiRoundCount} PR</td>
+                        <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--yellow)" }}>{row.pendingCount} bug</td>
+                        <td style={{ padding: "8px 12px", textAlign: "center", color: "var(--text-2)" }}>{row.reviewRate.toFixed(0)}% ({row.reviewedCount}/{row.fixedCount})</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
             </div>
           </div>
 

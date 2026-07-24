@@ -11,7 +11,7 @@ export interface AppConfig {
 }
 
 export function loadConfig(): AppConfig {
-  dotenv.config({ quiet: true });
+  dotenv.config({ quiet: true, override: true });
   const env = process.env;
   return {
     port: Number(env.PORT) || 8788,

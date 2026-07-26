@@ -40,6 +40,13 @@ async function deploy() {
     await client.ensureDir(FTP_REMOTE_DIR);
     await client.uploadFromDir(localDistPath, FTP_REMOTE_DIR);
 
+    // Đồng bộ file .env lên server root để backend Node.js đọc được GITHUB_TOKEN & NOTION_TOKEN
+    const localEnvPath = path.resolve(process.cwd(), ".env");
+    if (fs.existsSync(localEnvPath)) {
+      console.log("🔑 Đang đồng bộ file .env chứa GITHUB_TOKEN & NOTION_TOKEN lên server...");
+      await client.uploadFile(localEnvPath, path.join(FTP_REMOTE_DIR, ".env"));
+    }
+
     console.log("🎉 DEPLOY THÀNH CÔNG 100%!");
     console.log(`🌐 Kiểm tra trang web tại: https://${FTP_USER}:${encodeURIComponent(FTP_PASSWORD)}@${FTP_HOST}/`);
   } catch (err) {

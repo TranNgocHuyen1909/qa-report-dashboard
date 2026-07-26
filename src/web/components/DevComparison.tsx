@@ -265,6 +265,18 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         ? manDaysOverrides[dev.code]
         : (pMetric ? pMetric.manDays : 0);
 
+      const reCommitBugsList = solvedWithPrBugs.filter(
+        b => (b.ghCommitsCount ?? 1) > 1 || (b.prCommentsByHuyen ?? 0) > 1 || (b.huyenReviewRounds ?? 0) > 1
+      ).map(b => ({
+        bugId: b.bugId || b.id,
+        title: b.title,
+        url: b.url,
+        prUrl: b.pullRequestUrl,
+        commitsCount: b.ghCommitsCount ?? 1,
+      }));
+      const reCommitCount = reCommitBugsList.length;
+      const reCommitRate = solvedWithPr > 0 ? (reCommitCount / solvedWithPr) * 100 : 0;
+
       const reopenRate = (closedCount + resolvedCount) > 0 
         ? (reopenedCount / (closedCount + resolvedCount)) * 100 
         : 0;
@@ -323,6 +335,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         reopenedCount,
         reopenedList,
         reopenRate,
+        reCommitCount,
+        reCommitRate,
+        reCommitBugsList,
         manDays,
         bugsPerDay,
         bugsReviewed: reviewsCount,
@@ -567,6 +582,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đã sửa xong nhưng chưa được review hoặc merge (Resolved) trong kỳ">Resolved</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đóng trực tiếp không qua PR (Ví dụ: Không tái hiện, Trùng lặp, Không phải lỗi, v.v.)">Không tái hiện</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong:&#10;(Số bug Reopen / Tổng số bug đã sửa xong (Closed + Resolved)) * 100%&#10;Mục tiêu: < 15%">Tỷ lệ Reopen</th>
+                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Tỷ lệ & số PR mà Dev phải push thêm commit (2, 3... commits) sau khi đã Resolved/tạo PR ban đầu">Sửa Bổ Sung</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Năng suất sửa lỗi trung bình mỗi ngày công: (Đã Close + Resolved) / MD">Bug/Ngày</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Đối với Lead (HuyenTN): Tổng số task đã trực tiếp review trong kỳ.&#10;Đối với Dev: Số task của dev đã được Lead review trong kỳ.">Lead Review</th>
@@ -626,6 +642,18 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       onClick={() => row.reopenedCount > 0 && setSelectedReopenedBugs(row.reopenedList)}
                     >
                       {row.reopenedCount > 0 ? `${row.reopenRate.toFixed(1)}% (${row.reopenedCount})` : "0.0%"}
+                    </td>
+                    <td 
+                      className="td-num has-tooltip" 
+                      style={{ 
+                        color: row.reCommitCount > 0 ? "var(--yellow)" : "var(--text-2)", 
+                        cursor: row.reCommitCount > 0 ? "pointer" : "default",
+                        textDecoration: row.reCommitCount > 0 ? "underline dashed" : "none"
+                      }}
+                      data-tooltip={row.reCommitCount > 0 ? row.reCommitBugsList.map((b: any) => `[${b.bugId}] ${b.title} (${b.commitsCount} commits)`).join('\n') : "0 PR sửa bổ sung"}
+                      onClick={() => row.reCommitCount > 0 && setSelectedPrBugs(row.reCommitBugsList)}
+                    >
+                      {row.reCommitCount > 0 ? `${row.reCommitRate.toFixed(1)}% (${row.reCommitCount})` : "0.0%"}
                     </td>
                     <td className="td-num" style={{ verticalAlign: "middle", padding: "8px 10px" }}>
                       <input 

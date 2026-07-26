@@ -90,12 +90,15 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     return (bug.fixedByIds ?? []).some(id => notionIds.includes(id));
   };
 
-  // Helper to get bug fixed date (PR date or last edited date)
+  // Helper to get bug fixed date (confirmed date, last edit, or PR creation date)
   const bugFixedDate = (b: BugRecord) => {
-    if (b.pullRequestUrl && b.prCreatedAt) {
-      return dateKey(b.prCreatedAt);
-    }
-    return dateKey(b.lastEditedTime) ?? dateKey(b.confirmedDate);
+    return (
+      dateKey(b.confirmedDate) ??
+      dateKey(b.huyenLastCommentAt) ??
+      dateKey(b.lastEditedTime) ??
+      dateKey(b.prCreatedAt) ??
+      dateKey(b.createdTime)
+    );
   };
 
   const isNoRepro = (b: BugRecord) => {

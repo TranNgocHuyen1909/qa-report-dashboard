@@ -90,14 +90,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     return (bug.fixedByIds ?? []).some(id => notionIds.includes(id));
   };
 
-  // Helper to check if a bug has activity in the given period (confirmed date, PR created, review, or comment)
-  const bugInPeriod = (b: BugRecord, start: string, end: string) => {
-    if (dateInRange(dateKey(b.confirmedDate), start, end)) return true;
-    if (dateInRange(dateKey(b.prCreatedAt), start, end)) return true;
-    if (dateInRange(dateKey(b.huyenLastCommentAt), start, end)) return true;
-    if (dateInRange(dateKey(b.reopenedDate), start, end)) return true;
-    if (b.ghReviews?.some(r => dateInRange(dateKey(r.submittedAt), start, end))) return true;
-    return false;
+  // Helper to get bug fixed date (confirmed date, PR creation date, or created time)
+  const bugFixedDate = (b: BugRecord) => {
+    return dateKey(b.confirmedDate) ?? dateKey(b.prCreatedAt) ?? dateKey(b.createdTime);
   };
 
   const isNoRepro = (b: BugRecord) => {
@@ -144,7 +139,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         );
 
         const completedBugs = locBugs.filter(b => 
-          isFixed(b) && bugInPeriod(b, activePeriod.startDate, activePeriod.endDate)
+          isFixed(b) && dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
         );
 
         const total = assignedBugs.length;
@@ -153,7 +148,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
         const noRepro = locBugs.filter(b => 
           isNoRepro(b) && 
-          bugInPeriod(b, activePeriod.startDate, activePeriod.endDate)
+          dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
         ).length;
 
         const solvedWithPr = completedBugs.filter(b => !!b.pullRequestUrl);
@@ -243,7 +238,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       const devBugs = view.bugs.filter(b => bugBelongsToDev(b, dev) && (b.status ?? "").toLowerCase() !== "cancel");
       const completedBugs = devBugs.filter(b => 
         isFixed(b) && 
-        bugInPeriod(b, activePeriod.startDate, activePeriod.endDate)
+        dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
       );
       const solvedWithPrBugs = completedBugs.filter(b => !!b.pullRequestUrl);
       const solvedWithPr = solvedWithPrBugs.length;
@@ -396,7 +391,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       const devBugs = view.bugs.filter(b => bugBelongsToDev(b, dev) && (b.status ?? "").toLowerCase() !== "cancel");
       const completedBugs = devBugs.filter(b => 
         isFixed(b) && 
-        bugInPeriod(b, activePeriod.startDate, activePeriod.endDate)
+        dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
       );
       const solvedWithPrBugs = completedBugs.filter(b => !!b.pullRequestUrl);
       const totalComments = solvedWithPrBugs.reduce((sum, b) => sum + (b.prCommentsByTruong ?? 0), 0);

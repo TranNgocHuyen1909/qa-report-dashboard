@@ -29,6 +29,21 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
       return { ...bug, ghReviewStatus: "Error" as const, ghReviewCount: 0, ghReviews: [] };
     }
 
+    // Commits list to get last commit date
+    let prLastCommitAt = prCreatedAt;
+    if (ghCommitsCount > 0) {
+      try {
+        const commitRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pr}/commits?per_page=100`, { headers, signal: AbortSignal.timeout(3000) });
+        if (commitRes.ok) {
+          const commitsList = await commitRes.json() as any[];
+          if (Array.isArray(commitsList) && commitsList.length > 0) {
+            const lastC = commitsList[commitsList.length - 1];
+            prLastCommitAt = lastC.commit?.committer?.date || lastC.commit?.author?.date || prCreatedAt;
+          }
+        }
+      } catch {}
+    }
+
     // Reviews
     const revRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pr}/reviews`, { headers, signal: AbortSignal.timeout(4000) });
     const revData: any[] = revRes.ok ? await revRes.json() as any[] : [];
@@ -109,6 +124,7 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
       ghCommitsCount,
       prAuthor,
       prCreatedAt,
+      prLastCommitAt,
       prCommentsByAuthor,
       prCommentsByTruong,
       prCommentsByHuyen,

@@ -90,9 +90,14 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     return (bug.fixedByIds ?? []).some(id => notionIds.includes(id));
   };
 
-  // Helper to get bug fixed date (confirmed date, PR creation date, or created time)
+  // Helper to get bug fixed date (last PR commit date, confirmed date, PR date, or created time)
   const bugFixedDate = (b: BugRecord) => {
-    return dateKey(b.confirmedDate) ?? dateKey(b.prCreatedAt) ?? dateKey(b.createdTime);
+    return (
+      dateKey(b.prLastCommitAt) ??
+      dateKey(b.confirmedDate) ??
+      dateKey(b.prCreatedAt) ??
+      dateKey(b.createdTime)
+    );
   };
 
   const isNoRepro = (b: BugRecord) => {

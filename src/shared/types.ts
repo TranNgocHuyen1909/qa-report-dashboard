@@ -54,6 +54,7 @@ export interface BugRecord {
   ghReviews?: Array<{ author: string; state: string; submittedAt: string }>;
   prAuthor?: string;
   prCreatedAt?: string;
+  prLastCommitAt?: string;
   prCommentsByAuthor?: number;
   prCommentsByTruong?: number;
   prCommentsByHuyen?: number;

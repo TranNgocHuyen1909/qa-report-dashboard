@@ -90,15 +90,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     return (bug.fixedByIds ?? []).some(id => notionIds.includes(id));
   };
 
-  // Helper to get bug fixed date (confirmed date, last edit, or PR creation date)
+  // Helper to get bug fixed date (PR date or confirmed date)
   const bugFixedDate = (b: BugRecord) => {
-    return (
-      dateKey(b.confirmedDate) ??
-      dateKey(b.huyenLastCommentAt) ??
-      dateKey(b.lastEditedTime) ??
-      dateKey(b.prCreatedAt) ??
-      dateKey(b.createdTime)
-    );
+    if (b.pullRequestUrl && b.prCreatedAt) {
+      return dateKey(b.prCreatedAt);
+    }
+    return dateKey(b.confirmedDate) ?? dateKey(b.createdTime);
   };
 
   const isNoRepro = (b: BugRecord) => {
@@ -162,7 +159,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
         const reopenedBugsList = locBugs.filter(b => 
           ((b.status ?? "").toLowerCase() === "reopened" || b.reopenedDate) &&
-          dateInRange(dateKey(b.reopenedDate) ?? dateKey(b.lastEditedTime), activePeriod.startDate, activePeriod.endDate)
+          dateInRange(dateKey(b.reopenedDate) ?? dateKey(b.confirmedDate) ?? dateKey(b.createdTime), activePeriod.startDate, activePeriod.endDate)
         );
 
         const reopenRate = completedBugs.length > 0 ? (reopenedBugsList.length / completedBugs.length) * 100 : 0;

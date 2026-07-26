@@ -1,3 +1,6 @@
+import { ReviewMetricCards } from "./review/ReviewMetricCards";
+import { DevBreakdownTable } from "./review/DevBreakdownTable";
+import { ReviewBugsTable } from "./review/ReviewBugsTable";
 import React, { useMemo, useState, useEffect, Fragment } from "react";
 import type { DashboardView, BugRecord, Person } from "../../shared/types";
 
@@ -2464,271 +2467,19 @@ export function ReviewStats({
             </div>
 
             {/* Detailed Dev Review Breakdown Table */}
-            <div style={{ marginTop: "20px", overflowX: "auto" }}>
-              <table
-                style={{
-                  width: "100%",
-                  borderCollapse: "collapse",
-                  fontSize: "12px",
-                }}
-              >
-                <thead>
-                  <tr
-                    style={{
-                      background: "var(--surface-3)",
-                      borderBottom: "1px solid var(--border-2)",
-                      color: "var(--text-2)",
-                    }}
-                  >
-                    <th style={{ padding: "8px 12px", textAlign: "left" }} title="Tên lập trình viên phụ trách">
-                      Tác giả
-                    </th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }} title="Tổng số bug có PR của Dev này mà QC Lead đã hoàn thành review">
-                      Tổng Đã Review
-                    </th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }} title="Số bug của Dev này test Pass 100% không cần comment lỗi">
-                      Pass Ngay
-                    </th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }} title="Số bug của Dev này bị QC Lead comment ra lỗi trên GitHub PR">
-                      Review Có Comment
-                    </th>
-                    <th
-                      style={{ padding: "8px 12px", textAlign: "center" }}
-                      title={`[Công thức Tỷ Lệ Lỗi Cá Nhân]\n• Phép tính = (Số bug có comment / Tổng số bug đã review của chính Dev này) × 100%\n• Đánh giá: >30% (Đỏ - Cao) | >15%-30% (Vàng) | ≤15% (Xanh)`}
-                    >
-                      Tỷ Lệ Lỗi (Cá Nhân)
-                    </th>
-                    <th
-                      style={{ padding: "8px 12px", textAlign: "center" }}
-                      title={`[Công thức Đóng Góp Lỗi Cả Team]\n• Phép tính = (Số bug có comment của Dev này / TỔNG BUG CÓ COMMENT CỦA CẢ TEAM) × 100%\n• Đánh giá mức độ đóng góp lỗi vào tổng lỗi team`}
-                    >
-                      Đóng Góp Lỗi (Cả Team)
-                    </th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }} title="Số PR của Dev này phải re-check / comment từ 2 lần trở lên">
-                      Re-check
-                    </th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }} title="Số bug của Dev này đã sửa/có PR nhưng chưa được QC Lead review (Tất cả thời gian)">
-                      Đang Chờ Review
-                    </th>
-                    <th
-                      style={{ padding: "8px 12px", textAlign: "center" }}
-                      title={`[Công thức Tiến Độ Review]\n• Phép tính = (Số bug đã review của Dev này / Tổng số bug Dev này đã sửa trong kỳ) × 100%`}
-                    >
-                      Tiến Độ Review
-                    </th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {devReviewStats.map((row, idx) => {
-                    const devBugs = huyenReviewedBugs.filter((b) =>
-                      bugBelongsToPerson(b, row.dev),
-                    );
-                    const multiRoundCount = devBugs.filter(
-                      (b) =>
-                        (b.prCommentsByHuyen ?? 0) > 1 ||
-                        (b.huyenReviewRounds ?? 0) > 1,
-                    ).length;
-                    const errRatePersonal =
-                      row.reviewedCount > 0
-                        ? (
-                            (row.withCommentCount / row.reviewedCount) *
-                            100
-                          ).toFixed(0)
-                        : "0";
-                    const totalTeamWithComments =
-                      huyenReviewedWithComments.length;
-                    const errRateTeamShare =
-                      totalTeamWithComments > 0
-                        ? (
-                            (row.withCommentCount / totalTeamWithComments) *
-                            100
-                          ).toFixed(0)
-                        : "0";
-
-                    return (
-                      <tr
-                        key={idx}
-                        style={{
-                          borderBottom: "1px solid var(--border-3)",
-                          background:
-                            idx % 2 === 0
-                              ? "rgba(255,255,255,0.01)"
-                              : "transparent",
-                        }}
-                      >
-                        {/* Dev Code - Click to filter by Dev */}
-                        <td
-                          style={{
-                            padding: "8px 12px",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                            color: "var(--accent)",
-                            textDecoration: "underline",
-                          }}
-                          onClick={() => {
-                            setSelectedDevFilter(row.dev.code);
-                            setDetailSubTab("reviewed");
-                            setHuyenCommentFilter("all");
-                            scrollToDetails();
-                          }}
-                          title={`Click để lọc tất cả bug của ${row.dev.code}`}
-                        >
-                          {row.dev.code}
-                        </td>
-                        {/* Tổng đã review */}
-                        <td
-                          style={{
-                            padding: "8px 12px",
-                            textAlign: "center",
-                            fontWeight: "600",
-                            color: "var(--text-1)",
-                            cursor: "pointer",
-                          }}
-                          onClick={() => {
-                            setSelectedDevFilter(row.dev.code);
-                            setDetailSubTab("reviewed");
-                            setHuyenCommentFilter("all");
-                            scrollToDetails();
-                          }}
-                          title={`Click để xem danh sách đã review của ${row.dev.code}`}
-                        >
-                          {row.reviewedCount} bug
-                        </td>
-                        {/* Pass ngay */}
-                        <td
-                          style={{
-                            padding: "8px 12px",
-                            textAlign: "center",
-                            color: "#10b981",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                          }}
-                          onClick={() => {
-                            setSelectedDevFilter(row.dev.code);
-                            setDetailSubTab("reviewed");
-                            setHuyenCommentFilter("nocomments");
-                            scrollToDetails();
-                          }}
-                          title={`Click để xem bug Pass của ${row.dev.code}`}
-                        >
-                          {row.noCommentCount} bug
-                        </td>
-                        {/* Review có comment */}
-                        <td
-                          style={{
-                            padding: "8px 12px",
-                            textAlign: "center",
-                            color: row.withCommentCount > 0 ? "#ef4444" : "var(--text-2)",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                          }}
-                          onClick={() => {
-                            setSelectedDevFilter(row.dev.code);
-                            setDetailSubTab("reviewed");
-                            setHuyenCommentFilter("comments");
-                            scrollToDetails();
-                          }}
-                          title={`Click để xem bug có comment của ${row.dev.code}`}
-                        >
-                          {row.withCommentCount} bug
-                        </td>
-                        {/* 1. Tỷ Lệ Lỗi (Cá Nhân) - Highlighting high error rates */}
-                        <td
-                          style={{
-                            padding: "8px 12px",
-                            textAlign: "center",
-                            fontWeight: "700",
-                            color:
-                              Number(errRatePersonal) > 30
-                                ? "#ef4444"
-                                : Number(errRatePersonal) > 15
-                                ? "#f59e0b"
-                                : "#10b981",
-                          }}
-                          title={
-                            Number(errRatePersonal) > 30
-                              ? "⚠️ Tỷ lệ lỗi cá nhân cao (>30%)"
-                              : "Tỷ lệ lỗi cá nhân"
-                          }
-                        >
-                          {errRatePersonal}%
-                        </td>
-                        {/* 2. Đóng Góp Lỗi (Cả Team) - Highlighting major team contributors */}
-                        <td
-                          style={{
-                            padding: "8px 12px",
-                            textAlign: "center",
-                            fontWeight: "700",
-                            color:
-                              Number(errRateTeamShare) > 40
-                                ? "#dc2626"
-                                : "var(--text-1)",
-                          }}
-                          title={
-                            Number(errRateTeamShare) > 40
-                              ? "🚨 Chiếm trên 40% tổng lỗi của cả team!"
-                              : "Tỷ lệ đóng góp lỗi cả team"
-                          }
-                        >
-                          {errRateTeamShare}%
-                        </td>
-                        {/* Re-check */}
-                        <td
-                          style={{
-                            padding: "8px 12px",
-                            textAlign: "center",
-                            color: "var(--text-2)",
-                            fontWeight: "500",
-                            cursor: "pointer",
-                          }}
-                          onClick={() => {
-                            setSelectedDevFilter(row.dev.code);
-                            setDetailSubTab("reviewed");
-                            setHuyenCommentFilter("multiround");
-                            scrollToDetails();
-                          }}
-                          title={`Click để xem bug re-check của ${row.dev.code}`}
-                        >
-                          {multiRoundCount} PR
-                        </td>
-                        {/* Đang chờ review */}
-                        <td
-                          style={{
-                            padding: "8px 12px",
-                            textAlign: "center",
-                            color: row.pendingCount > 0 ? "#f59e0b" : "var(--text-2)",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                          }}
-                          onClick={() => {
-                            setSelectedDevFilter(row.dev.code);
-                            setDetailSubTab("pending");
-                            scrollToDetails();
-                          }}
-                          title={`Click để xem danh sách đang chờ review của ${row.dev.code}`}
-                        >
-                          {row.pendingCount} bug
-                        </td>
-                        {/* Tiến độ review */}
-                        <td
-                          style={{
-                            padding: "8px 12px",
-                            textAlign: "center",
-                            color: "var(--text-2)",
-                            fontWeight: "600",
-                          }}
-                        >
-                          {row.reviewRate.toFixed(0)}%
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
+            <DevBreakdownTable
+              devReviewStats={devReviewStats}
+              huyenReviewedBugs={huyenReviewedBugs}
+              huyenReviewedWithComments={huyenReviewedWithComments}
+              bugBelongsToPerson={bugBelongsToPerson}
+              onSelectDevFilter={(devCode) => setSelectedDevFilter(devCode)}
+              onSelectSubTab={(tab) => setDetailSubTab(tab)}
+              onSelectCommentFilter={(filter) => setHuyenCommentFilter(filter)}
+              scrollToDetails={scrollToDetails}
+            />
           </div>
 
-          {/* Minimalist & Clean Details Tables for Huyen */}
+          {/* Minimalist & Clean Details Tables for Huyen */}{/* Minimalist & Clean Details Tables for Huyen */}
           <div
             ref={detailsTableRef}
             className="card"
@@ -2970,32 +2721,9 @@ export function ReviewStats({
                 gap: "0px",
               }}
             >
-              {/* Reviewed Table (Render if detailSubTab is 'reviewed' or 'sidebyside') */}
+              {/* Reviewed Table */}
               {detailSubTab === "reviewed" && (
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                  {false && (
-                    <div
-                      style={{
-                        fontWeight: 700,
-                        fontSize: "12px",
-                        color: "var(--text-1)",
-                        marginBottom: "8px",
-                        display: "flex",
-                        alignItems: "center",
-                        gap: "6px",
-                      }}
-                    >
-                      <span style={{ color: "#10b981" }}>✔️</span> Đã Review
-                      Thành Công (
-                      {
-                        displayedReviewed.filter(
-                          (b) => getDevNameByBug(b) !== "HuyenTN",
-                        ).length
-                      }
-                      )
-                    </div>
-                  )}
-
                   <div
                     style={{
                       border: "1px solid var(--border-3)",
@@ -3006,375 +2734,142 @@ export function ReviewStats({
                       overflow: "hidden",
                     }}
                   >
-                    <div
-                      style={{
-                        overflowX: "auto",
-                        flex: 1,
-                      }}
-                    >
-                      {displayedReviewed.filter(
-                        (b) => getDevNameByBug(b) !== "HuyenTN",
-                      ).length === 0 ? (
-                        <div
-                          style={{
-                            padding: "20px",
-                            color: "var(--text-3)",
-                            textAlign: "center",
-                            fontSize: "12px",
-                          }}
-                        >
-                          Không có bug nào đã review.
-                        </div>
-                      ) : (
-                        <table
-                          style={{
-                            width: "100%",
-                            borderCollapse: "collapse",
-                            fontSize: "12px",
-                          }}
-                        >
-                          <thead>
-                            <tr
-                              style={{
-                                background: "var(--surface-3)",
-                                color: "var(--text-2)",
-                                textTransform: "uppercase",
-                                fontSize: "11px",
-                                borderBottom: "1px solid var(--border-3)",
-                              }}
-                            >
-                              <th
+                    <div style={{ overflowX: "auto", flex: 1 }}>
+                      <ReviewBugsTable
+                        tableType="reviewed"
+                        bugs={displayedReviewed}
+                        pagedBugs={pagedReviewedBugs}
+                        page={pageReviewed}
+                        totalPages={totalPagesReviewed}
+                        totalCount={reviewedFilteredNoHuyen.length}
+                        pageSize={pageSize}
+                        setPage={setPageReviewed}
+                        selectedDevFilter={selectedDevFilter}
+                        setSelectedDevFilter={setSelectedDevFilter}
+                        selectedLocFilter={selectedLocFilter}
+                        setSelectedLocFilter={setSelectedLocFilter}
+                        huyenCommentFilter={huyenCommentFilter}
+                        setHuyenCommentFilter={setHuyenCommentFilter}
+                        selectedPrFilter={selectedPrFilter}
+                        setSelectedPrFilter={setSelectedPrFilter}
+                        activeHeaderMenu={activeHeaderMenu}
+                        setActiveHeaderMenu={setActiveHeaderMenu}
+                        dev3People={dev3People}
+                        availableLocations={availableLocations}
+                        huyenReviewedBugs={huyenReviewedBugs}
+                        huyenDevRepliedBugs={huyenDevRepliedBugs}
+                        huyenPendingReplyBugs={huyenPendingReplyBugs}
+                        huyenReviewedNoComments={huyenReviewedNoComments}
+                        getDevNameByBug={getDevNameByBug}
+                        getLocationTagStyle={getLocationTagStyle}
+                        extractAllPrUrls={extractAllPrUrls}
+                        renderLabelBadge={renderLabelBadge}
+                        renderResultBadge={(b) => {
+                          const stLower = (b.status ?? "").toLowerCase();
+                          const isClosedOrDeployed =
+                            stLower === "closed" ||
+                            stLower === "deployed" ||
+                            stLower.includes("close") ||
+                            stLower.includes("deploy");
+
+                          if (isNoRepro(b)) {
+                            return (
+                              <span
+                                className="tag"
                                 style={{
-                                  padding: "10px 12px",
-                                  textAlign: "center",
-                                  width: "45px",
+                                  background: "#f1f5f9",
+                                  color: "#334155",
+                                  border: "1px solid #cbd5e1",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
                                 }}
+                                title="Lỗi không thể tái hiện / không phải lỗi"
                               >
-                                STT
-                              </th>
-                              <th
+                                Không tái hiện
+                              </span>
+                            );
+                          }
+
+                          if (isClosedOrDeployed) {
+                            return (
+                              <span
+                                className="tag"
                                 style={{
-                                  padding: "10px 12px",
-                                  textAlign: "left",
-                                  width:
-                                    false
-                                      ? "95px"
-                                      : "110px",
+                                  background: "#dcfce7",
+                                  color: "#15803d",
+                                  border: "1px solid #86efac",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
                                 }}
+                                title="Bug đã hoàn thành & closed/deployed"
                               >
-                                BUG ID
-                              </th>
-                              <th
-                                style={{
-                                  padding: "10px 12px",
-                                  textAlign: "center",
-                                  width:
-                                    false
-                                      ? "90px"
-                                      : "115px",
-                                }}
-                              >
-                                LINK PR
-                              </th>
-                              {renderFilterableHeader("dev", "Dev", "90px", "left")}
-                              <th style={{ padding: "10px 12px", textAlign: "left" }}>
-                                Tiêu đề lỗi
-                              </th>
-                              {renderFilterableHeader("loc", "Vị trí", "140px", "left")}
-                              {renderFilterableHeader("result", "Kết quả", "110px", "center")}
-                              {renderFilterableHeader("pr", "Trạng thái PR", "140px", "center")}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {pagedReviewedBugs.map((b, idx) => (
-                              <tr
-                                key={idx}
-                                style={{
-                                  borderBottom: "1px solid var(--border-3)",
-                                  background:
-                                    idx % 2 === 0
-                                      ? "rgba(255,255,255,0.01)"
-                                      : "transparent",
-                                }}
-                              >
-                                <td
+                                Pass
+                              </span>
+                            );
+                          }
+
+                          if (isHuyenBugWithComment(b)) {
+                            if (isDevRepliedBug(b)) {
+                              return (
+                                <span
+                                  className="tag"
                                   style={{
-                                    padding: "10px 12px",
-                                    textAlign: "center",
-                                    fontWeight: "600",
-                                    color: "var(--text-3)",
+                                    background: "#e0f2fe",
+                                    color: "#0369a1",
+                                    border: "1px solid #7dd3fc",
                                     fontSize: "11px",
-                                    whiteSpace: "nowrap",
+                                    fontWeight: "700",
+                                    padding: "3px 8px",
+                                    borderRadius: "4px",
                                   }}
+                                  title="Dev đã comment trả lời dưới comment review"
                                 >
-                                  {(pageReviewed - 1) * pageSize + idx + 1}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    fontWeight: "bold",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  <a
-                                    href={b.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    style={{
-                                      color: "var(--accent)",
-                                      textDecoration: "underline",
-                                    }}
-                                  >
-                                    {b.bugId || b.id}
-                                  </a>
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    textAlign: "center",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  {(() => {
-                                    const prs = extractAllPrUrls(b.pullRequestUrl);
-                                    if (prs.length === 0) {
-                                      return (
-                                        <span style={{ color: "var(--text-3)", fontSize: "11px" }}>
-                                          —
-                                        </span>
-                                      );
-                                    }
-                                    return (
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          flexWrap: "wrap",
-                                          gap: "4px",
-                                          justifyContent: "center",
-                                          alignItems: "center",
-                                        }}
-                                      >
-                                        {prs.map((p, i) => (
-                                          <a
-                                            key={i}
-                                            href={p.url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            style={{
-                                              display: "inline-flex",
-                                              alignItems: "center",
-                                              gap: "4px",
-                                              background: "#eff6ff",
-                                              color: "#2563eb",
-                                              border: "1px solid #bfdbfe",
-                                              padding: "3px 8px",
-                                              borderRadius: "5px",
-                                              fontSize: "11px",
-                                              fontWeight: "700",
-                                              textDecoration: "none",
-                                            }}
-                                            title={`Mở trực tiếp Pull Request trên GitHub: ${p.url}`}
-                                          >
-                                            <svg
-                                              width="12"
-                                              height="12"
-                                              viewBox="0 0 16 16"
-                                              fill="currentColor"
-                                            >
-                                              <path d="M5 3.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm0 2.122a2.25 2.25 0 10-1.5 0v5.256a2.25 2.25 0 101.5 0V5.372zM4.25 12a.75.75 0 100 1.5.75.75 0 000-1.5zm8-7a.75.75 0 100-1.5.75.75 0 000 1.5zm-1.5 5.372v-1.622a2.25 2.25 0 00-2.25-2.25h-1.5v1.5h1.5a.75.75 0 01.75.75v1.622a2.25 2.25 0 101.5 0zm.75 2.128a.75.75 0 100-1.5.75.75 0 000 1.5z" />
-                                            </svg>
-                                            {p.prNum ? `${p.repoLabel} #${p.prNum} ↗` : `${p.repoLabel} ↗`}
-                                          </a>
-                                        ))}
-                                      </div>
-                                    );
-                                  })()}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    fontWeight: "600",
-                                    color: "var(--text-2)",
-                                  }}
-                                >
-                                  {getDevNameByBug(b)}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    color: "var(--text-1)",
-                                    lineHeight: "1.5",
-                                  }}
-                                >
-                                  {b.title}
-                                </td>
-                                <td style={{ padding: "10px 12px" }}>
-                                  {Array.isArray(b.location) &&
-                                  b.location.length > 0 ? (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        flexWrap: "wrap",
-                                        gap: "4px",
-                                      }}
-                                    >
-                                      {b.location.map((loc, i) => {
-                                        const st = getLocationTagStyle(loc);
-                                        return (
-                                          <span
-                                            key={i}
-                                            className="tag"
-                                            style={{
-                                              background: st.bg,
-                                              color: st.color,
-                                              border: st.border,
-                                              fontSize: "10px",
-                                              padding: "2px 6px",
-                                              borderRadius: "4px",
-                                              fontWeight: 600,
-                                            }}
-                                          >
-                                            {loc}
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <span
-                                      style={{
-                                        fontSize: "11px",
-                                        color: "var(--text-3)",
-                                      }}
-                                    >
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    textAlign: "center",
-                                  }}
-                                >
-                                  {(() => {
-                                    const stLower = (b.status ?? "").toLowerCase();
-                                    const isClosedOrDeployed =
-                                      stLower === "closed" ||
-                                      stLower === "deployed" ||
-                                      stLower.includes("close") ||
-                                      stLower.includes("deploy");
+                                  Dev đã phản hồi
+                                </span>
+                              );
+                            }
+                            return (
+                              <span
+                                className="tag"
+                                style={{
+                                  background: "#fee2e2",
+                                  color: "#b91c1c",
+                                  border: "1px solid #fca5a5",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
+                                }}
+                                title="Huyền đã comment ra lỗi - Đang chờ Dev comment phản hồi"
+                              >
+                                Chờ Dev phản hồi
+                              </span>
+                            );
+                          }
 
-                                    if (isNoRepro(b)) {
-                                      return (
-                                        <span
-                                          className="tag"
-                                          style={{
-                                            background: "#f1f5f9",
-                                            color: "#334155",
-                                            border: "1px solid #cbd5e1",
-                                            fontSize: "11px",
-                                            fontWeight: "700",
-                                            padding: "3px 8px",
-                                            borderRadius: "4px",
-                                          }}
-                                          title="Lỗi không thể tái hiện / không phải lỗi"
-                                        >
-                                          Không tái hiện
-                                        </span>
-                                      );
-                                    }
-
-                                    if (isClosedOrDeployed) {
-                                      return (
-                                        <span
-                                          className="tag"
-                                          style={{
-                                            background: "#dcfce7",
-                                            color: "#15803d",
-                                            border: "1px solid #86efac",
-                                            fontSize: "11px",
-                                            fontWeight: "700",
-                                            padding: "3px 8px",
-                                            borderRadius: "4px",
-                                          }}
-                                          title="Bug đã hoàn thành & closed/deployed"
-                                        >
-                                          Pass
-                                        </span>
-                                      );
-                                    }
-
-                                    if (isHuyenBugWithComment(b)) {
-                                      if (isDevRepliedBug(b)) {
-                                        return (
-                                          <span
-                                            className="tag"
-                                            style={{
-                                              background: "#e0f2fe",
-                                              color: "#0369a1",
-                                              border: "1px solid #7dd3fc",
-                                              fontSize: "11px",
-                                              fontWeight: "700",
-                                              padding: "3px 8px",
-                                              borderRadius: "4px",
-                                            }}
-                                            title="Dev đã comment trả lời dưới comment review - Sẵn sàng cho Huyền Re-check & Switch Label"
-                                          >
-                                            Dev đã phản hồi
-                                          </span>
-                                        );
-                                      }
-                                      return (
-                                        <span
-                                          className="tag"
-                                          style={{
-                                            background: "#fee2e2",
-                                            color: "#b91c1c",
-                                            border: "1px solid #fca5a5",
-                                            fontSize: "11px",
-                                            fontWeight: "700",
-                                            padding: "3px 8px",
-                                            borderRadius: "4px",
-                                          }}
-                                          title="Huyền đã comment ra lỗi - Đang chờ Dev comment phản hồi / sửa"
-                                        >
-                                          Chờ Dev phản hồi
-                                        </span>
-                                      );
-                                    }
-
-                                    return (
-                                      <span
-                                        className="tag"
-                                        style={{
-                                          background: "rgba(34, 197, 94, 0.15)",
-                                          color: "#4ade80",
-                                          border: "1px solid rgba(34, 197, 94, 0.3)",
-                                          fontSize: "10px",
-                                          fontWeight: "600",
-                                          padding: "3px 8px",
-                                          borderRadius: "4px",
-                                        }}
-                                        title="Huyền test đạt 100%, không comment"
-                                      >
-                                        Pass
-                                      </span>
-                                    );
-                                  })()}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    textAlign: "center",
-                                  }}
-                                >
-                                  {renderLabelBadge(b)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
+                          return (
+                            <span
+                              className="tag"
+                              style={{
+                                background: "rgba(34, 197, 94, 0.15)",
+                                color: "#4ade80",
+                                border: "1px solid rgba(34, 197, 94, 0.3)",
+                                fontSize: "10px",
+                                fontWeight: "600",
+                                padding: "3px 8px",
+                                borderRadius: "4px",
+                              }}
+                              title="Huyền test đạt 100%, không comment"
+                            >
+                              Pass
+                            </span>
+                          );
+                        }}
+                      />
                     </div>
                     {renderPaginationFooter(
                       pageReviewed,
@@ -3386,11 +2881,9 @@ export function ReviewStats({
                 </div>
               )}
 
-              {/* Pending Table (Render if detailSubTab is 'pending' or 'sidebyside') */}
+              {/* Pending Table */}
               {detailSubTab === "pending" && (
                 <div style={{ display: "flex", flexDirection: "column" }}>
-                  
-
                   <div
                     style={{
                       border: "1px solid var(--border-3)",
@@ -3401,284 +2894,37 @@ export function ReviewStats({
                       overflow: "hidden",
                     }}
                   >
-                    <div
-                      style={{
-                        overflowX: "auto",
-                        flex: 1,
-                      }}
-                    >
-                      {displayedPending.filter(
-                        (b) => getDevNameByBug(b) !== "HuyenTN",
-                      ).length === 0 ? (
-                        <div
-                          style={{
-                            padding: "20px",
-                            color: "var(--text-3)",
-                            textAlign: "center",
-                            fontSize: "12px",
-                          }}
-                        >
-                          Không có bug nào đang chờ review.
-                        </div>
-                      ) : (
-                        <table
-                          style={{
-                            width: "100%",
-                            borderCollapse: "collapse",
-                            fontSize: "12px",
-                          }}
-                        >
-                          <thead>
-                            <tr
-                              style={{
-                                background: "var(--surface-3)",
-                                color: "var(--text-2)",
-                                textTransform: "uppercase",
-                                fontSize: "11px",
-                                borderBottom: "1px solid var(--border-3)",
-                              }}
-                            >
-                              <th
-                                style={{
-                                  padding: "10px 12px",
-                                  textAlign: "center",
-                                  width: "45px",
-                                }}
-                              >
-                                STT
-                              </th>
-                              <th
-                                style={{
-                                  padding: "10px 12px",
-                                  textAlign: "left",
-                                  width:
-                                    false
-                                      ? "95px"
-                                      : "110px",
-                                }}
-                              >
-                                BUG ID
-                              </th>
-                              <th
-                                style={{
-                                  padding: "10px 12px",
-                                  textAlign: "center",
-                                  width:
-                                    false
-                                      ? "90px"
-                                      : "115px",
-                                }}
-                              >
-                                LINK PR
-                              </th>
-                              {renderFilterableHeader("dev", "Dev", "90px", "left")}
-                              <th style={{ padding: "10px 12px", textAlign: "left" }}>
-                                Tiêu đề lỗi
-                              </th>
-                              {renderFilterableHeader("loc", "Vị trí", "140px", "left")}
-                              {renderFilterableHeader("result", "Kết quả", "110px", "center")}
-                              {renderFilterableHeader("pr", "Trạng thái PR", "140px", "center")}
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {pagedPendingBugs.map((b, idx) => (
-                              <tr
-                                key={idx}
-                                style={{
-                                  borderBottom: "1px solid var(--border-3)",
-                                  background:
-                                    idx % 2 === 0
-                                      ? "rgba(255,255,255,0.01)"
-                                      : "transparent",
-                                }}
-                              >
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    textAlign: "center",
-                                    fontWeight: "600",
-                                    color: "var(--text-3)",
-                                    fontSize: "11px",
-                                  }}
-                                >
-                                  {(pagePending - 1) * pageSize + idx + 1}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    fontWeight: "bold",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  <a
-                                    href={b.url}
-                                    target="_blank"
-                                    rel="noreferrer"
-                                    style={{
-                                      color: "var(--accent)",
-                                      textDecoration: "underline",
-                                    }}
-                                  >
-                                    {b.bugId || b.id}
-                                  </a>
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    textAlign: "center",
-                                    whiteSpace: "nowrap",
-                                  }}
-                                >
-                                  {(() => {
-                                    const prs = extractAllPrUrls(b.pullRequestUrl);
-                                    if (prs.length === 0) {
-                                      return (
-                                        <span style={{ color: "var(--text-3)", fontSize: "11px" }}>
-                                          —
-                                        </span>
-                                      );
-                                    }
-                                    return (
-                                      <div
-                                        style={{
-                                          display: "flex",
-                                          flexWrap: "wrap",
-                                          gap: "4px",
-                                          justifyContent: "center",
-                                          alignItems: "center",
-                                        }}
-                                      >
-                                        {prs.map((p, i) => (
-                                          <a
-                                            key={i}
-                                            href={p.url}
-                                            target="_blank"
-                                            rel="noreferrer"
-                                            style={{
-                                              display: "inline-flex",
-                                              alignItems: "center",
-                                              gap: "4px",
-                                              background: "#eff6ff",
-                                              color: "#2563eb",
-                                              border: "1px solid #bfdbfe",
-                                              padding: "3px 8px",
-                                              borderRadius: "5px",
-                                              fontSize: "11px",
-                                              fontWeight: "700",
-                                              textDecoration: "none",
-                                            }}
-                                            title={`Mở trực tiếp Pull Request trên GitHub: ${p.url}`}
-                                          >
-                                            <svg
-                                              width="12"
-                                              height="12"
-                                              viewBox="0 0 16 16"
-                                              fill="currentColor"
-                                            >
-                                              <path d="M5 3.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm0 2.122a2.25 2.25 0 10-1.5 0v5.256a2.25 2.25 0 101.5 0V5.372zM4.25 12a.75.75 0 100 1.5.75.75 0 000-1.5zm8-7a.75.75 0 100-1.5.75.75 0 000 1.5zm-1.5 5.372v-1.622a2.25 2.25 0 00-2.25-2.25h-1.5v1.5h1.5a.75.75 0 01.75.75v1.622a2.25 2.25 0 101.5 0zm.75 2.128a.75.75 0 100-1.5.75.75 0 000 1.5z" />
-                                            </svg>
-                                            {p.prNum ? `${p.repoLabel} #${p.prNum} ↗` : `${p.repoLabel} ↗`}
-                                          </a>
-                                        ))}
-                                      </div>
-                                    );
-                                  })()}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    fontWeight: "600",
-                                    color: "var(--text-2)",
-                                  }}
-                                >
-                                  {getDevNameByBug(b)}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    color: "var(--text-1)",
-                                    lineHeight: "1.5",
-                                  }}
-                                >
-                                  {b.title}
-                                </td>
-                                <td style={{ padding: "10px 12px" }}>
-                                  {Array.isArray(b.location) &&
-                                  b.location.length > 0 ? (
-                                    <div
-                                      style={{
-                                        display: "flex",
-                                        flexWrap: "wrap",
-                                        gap: "4px",
-                                      }}
-                                    >
-                                      {b.location.map((loc, i) => {
-                                        const st = getLocationTagStyle(loc);
-                                        return (
-                                          <span
-                                            key={i}
-                                            className="tag"
-                                            style={{
-                                              background: st.bg,
-                                              color: st.color,
-                                              border: st.border,
-                                              fontSize: "10px",
-                                              padding: "2px 6px",
-                                              borderRadius: "4px",
-                                              fontWeight: 600,
-                                            }}
-                                          >
-                                            {loc}
-                                          </span>
-                                        );
-                                      })}
-                                    </div>
-                                  ) : (
-                                    <span
-                                      style={{
-                                        fontSize: "11px",
-                                        color: "var(--text-3)",
-                                      }}
-                                    >
-                                      —
-                                    </span>
-                                  )}
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    textAlign: "center",
-                                  }}
-                                >
-                                  <span
-                                    className="tag"
-                                    style={{
-                                      background: "#fef3c7",
-                                      color: "#92400e",
-                                      border: "1px solid #fde68a",
-                                      fontSize: "11px",
-                                      fontWeight: "700",
-                                      padding: "3px 8px",
-                                      borderRadius: "5px",
-                                    }}
-                                    title="Bug đang chờ Huyền test & review"
-                                  >
-                                    Chờ review
-                                  </span>
-                                </td>
-                                <td
-                                  style={{
-                                    padding: "10px 12px",
-                                    textAlign: "center",
-                                  }}
-                                >
-                                  {renderLabelBadge(b)}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      )}
+                    <div style={{ overflowX: "auto", flex: 1 }}>
+                      <ReviewBugsTable
+                        tableType="pending"
+                        bugs={displayedPending}
+                        pagedBugs={pagedPendingBugs}
+                        page={pagePending}
+                        totalPages={totalPagesPending}
+                        totalCount={pendingFilteredNoHuyen.length}
+                        pageSize={pageSize}
+                        setPage={setPagePending}
+                        selectedDevFilter={selectedDevFilter}
+                        setSelectedDevFilter={setSelectedDevFilter}
+                        selectedLocFilter={selectedLocFilter}
+                        setSelectedLocFilter={setSelectedLocFilter}
+                        huyenCommentFilter={huyenCommentFilter}
+                        setHuyenCommentFilter={setHuyenCommentFilter}
+                        selectedPrFilter={selectedPrFilter}
+                        setSelectedPrFilter={setSelectedPrFilter}
+                        activeHeaderMenu={activeHeaderMenu}
+                        setActiveHeaderMenu={setActiveHeaderMenu}
+                        dev3People={dev3People}
+                        availableLocations={availableLocations}
+                        huyenReviewedBugs={huyenReviewedBugs}
+                        huyenDevRepliedBugs={huyenDevRepliedBugs}
+                        huyenPendingReplyBugs={huyenPendingReplyBugs}
+                        huyenReviewedNoComments={huyenReviewedNoComments}
+                        getDevNameByBug={getDevNameByBug}
+                        getLocationTagStyle={getLocationTagStyle}
+                        extractAllPrUrls={extractAllPrUrls}
+                        renderLabelBadge={renderLabelBadge}
+                      />
                     </div>
                     {renderPaginationFooter(
                       pagePending,

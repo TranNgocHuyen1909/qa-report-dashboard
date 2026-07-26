@@ -282,6 +282,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         url: b.url,
         prUrl: b.pullRequestUrl,
         commitsCount: b.ghCommitsCount ?? 1,
+        commentsCount: b.prCommentsByTruong ?? 0,
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
       }));
       const reCommitCount = reCommitBugsList.length;
       const reCommitRate = solvedWithPr > 0 ? (reCommitCount / solvedWithPr) * 100 : 0;

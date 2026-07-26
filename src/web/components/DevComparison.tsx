@@ -653,7 +653,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       data-tooltip={row.reCommitCount > 0 ? row.reCommitBugsList.map((b: any) => `[${b.bugId}] ${b.title} (${b.commitsCount} commits)`).join('\n') : "0 PR sửa bổ sung"}
                       onClick={() => row.reCommitCount > 0 && setSelectedPrBugs(row.reCommitBugsList)}
                     >
-                      {row.reCommitCount > 0 ? `${row.reCommitRate.toFixed(1)}% (${row.reCommitCount})` : "0.0%"}
+                      {row.reCommitCount > 0 ? `${row.reCommitCount} PR` : "0 PR"}
                     </td>
                     <td className="td-num" style={{ verticalAlign: "middle", padding: "8px 10px" }}>
                       <input 

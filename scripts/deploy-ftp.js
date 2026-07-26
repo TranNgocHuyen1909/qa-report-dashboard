@@ -5,11 +5,11 @@ import dotenv from "dotenv";
 
 dotenv.config();
 
-const FTP_HOST = process.env.FTP_HOST || "bugreport.anai.io.vn";
-const FTP_USER = process.env.FTP_USER || "anai";
-const FTP_PASSWORD = process.env.FTP_PASSWORD || "Anai12345^&";
+const FTP_HOST = process.env.FTP_HOST || "pbv-epyc-24929.azdigihost.com";
+const FTP_USER = process.env.FTP_USER || "huyen@bugreport.anai.io.vn";
+const FTP_PASSWORD = process.env.FTP_PASSWORD || "";
 const FTP_PORT = parseInt(process.env.FTP_PORT || "21", 10);
-const FTP_REMOTE_DIR = process.env.FTP_REMOTE_DIR || "/dist";
+const FTP_REMOTE_DIR = process.env.FTP_REMOTE_DIR || "/";
 
 async function deploy() {
   const client = new ftp.Client();

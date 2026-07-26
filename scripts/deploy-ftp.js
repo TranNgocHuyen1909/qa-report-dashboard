@@ -44,7 +44,7 @@ async function deploy() {
     const localEnvPath = path.resolve(process.cwd(), ".env");
     if (fs.existsSync(localEnvPath)) {
       console.log("🔑 Đang đồng bộ file .env chứa GITHUB_TOKEN & NOTION_TOKEN lên server...");
-      await client.uploadFile(localEnvPath, ".env");
+      await client.uploadFrom(localEnvPath, ".env");
     }
 
     console.log("🎉 DEPLOY THÀNH CÔNG 100%!");

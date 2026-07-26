@@ -76,6 +76,12 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
             <th style={{ padding: "8px 12px", textAlign: "center" }} title="Số PR của Dev này phải re-check / comment từ 2 lần trở lên">
               Re-check
             </th>
+            <th
+              style={{ padding: "8px 12px", textAlign: "center" }}
+              title={`[Sửa Bổ Sung / Re-commit]\n• Số PR mà Dev phải push thêm commit (2, 3... commits) sau khi đã tạo PR / đợt sửa đầu tiên`}
+            >
+              Sửa Bổ Sung
+            </th>
             <th style={{ padding: "8px 12px", textAlign: "center" }} title="Số bug của Dev này đã sửa/có PR nhưng chưa được QC Lead review (Tất cả thời gian)">
               Đang Chờ Review
             </th>
@@ -255,6 +261,34 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
                   title={`Click để xem bug re-check của ${row.dev.code}`}
                 >
                   {multiRoundCount} PR
+                </td>
+                {/* Sửa Bổ Sung */}
+                <td
+                  style={{
+                    padding: "8px 12px",
+                    textAlign: "center",
+                    color: (() => {
+                      const reCommitBugs = devBugs.filter(
+                        (b) =>
+                          (b.ghCommitsCount ?? 1) > 1 ||
+                          (b.prCommentsByHuyen ?? 0) > 1 ||
+                          (b.huyenReviewRounds ?? 0) > 1,
+                      ).length;
+                      return reCommitBugs > 0 ? "#f59e0b" : "var(--text-2)";
+                    })(),
+                    fontWeight: "600",
+                  }}
+                  title={`Số PR của ${row.dev.code} có > 1 commit bổ sung sau lượt đầu`}
+                >
+                  {(() => {
+                    const reCommitBugs = devBugs.filter(
+                      (b) =>
+                        (b.ghCommitsCount ?? 1) > 1 ||
+                        (b.prCommentsByHuyen ?? 0) > 1 ||
+                        (b.huyenReviewRounds ?? 0) > 1,
+                    ).length;
+                    return `${reCommitBugs} PR`;
+                  })()}
                 </td>
                 {/* Đang chờ review */}
                 <td

@@ -49,6 +49,7 @@ export interface BugRecord {
     | "No review"
     | "Error"
     | "No PR";
+  ghCommitsCount?: number;
   ghReviewCount?: number;
   ghReviews?: Array<{ author: string; state: string; submittedAt: string }>;
   prAuthor?: string;

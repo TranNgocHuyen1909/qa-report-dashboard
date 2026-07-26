@@ -16,10 +16,12 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
     const prRes = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pr}`, { headers, signal: AbortSignal.timeout(4000) });
     let prAuthor = "", prCreatedAt = "";
     let ghLabels: string[] = [];
+    let ghCommitsCount = 1;
     if (prRes.ok) {
       const d = await prRes.json() as any;
       prAuthor = d.user?.login ?? "";
       prCreatedAt = d.created_at ?? "";
+      ghCommitsCount = Number(d.commits) || 1;
       if (Array.isArray(d.labels)) {
         ghLabels = d.labels.map((l: any) => String(l.name ?? "")).filter(Boolean);
       }
@@ -104,6 +106,7 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
       ghReviewStatus: status,
       ghReviewCount: reviews.length,
       ghReviews: reviews,
+      ghCommitsCount,
       prAuthor,
       prCreatedAt,
       prCommentsByAuthor,

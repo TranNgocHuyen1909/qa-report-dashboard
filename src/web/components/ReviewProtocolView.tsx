@@ -34,7 +34,7 @@ export const ReviewProtocolView: React.FC<ReviewProtocolViewProps> = ({
             <span style={{ background: "rgba(236,72,153,0.15)", color: "#ec4899", padding: "4px 10px", borderRadius: "8px", border: "1px solid rgba(236,72,153,0.3)" }}>
               👑 Huyền: GitHub <code>@TranNgocHuyen1909</code>
             </span>
-            <span style={{ background: "rgba(168,85,247,0.15)", color: "#a855f7", padding: "4px 10px", borderRadius: "8px", border: "1px solid rgba(168,85,247,0.3)" }}>
+            <span style={{ background: "rgba(37,99,235,0.15)", color: "#2563eb", padding: "4px 10px", borderRadius: "8px", border: "1px solid rgba(37,99,235,0.3)" }}>
               🛡️ Anh Trường: GitHub <code>@dract</code>
             </span>
           </div>
@@ -101,7 +101,7 @@ export const ReviewProtocolView: React.FC<ReviewProtocolViewProps> = ({
 
           <div style={{ fontSize: "13px", color: "var(--text-1)", lineHeight: "1.6", display: "flex", flexDirection: "column", gap: "10px" }}>
             <div style={{ background: "var(--surface-3)", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #ec4899" }}>
-              👑 <strong>Quản Lý Ô Trách Nhiệm:</strong> Huyền chuyển trường <code>Reviewers</code> trên Notion ➔ <span className="tag" style={{ background: "rgba(168,85,247,0.15)", color: "#a855f7", fontWeight: "bold" }}>Huyền</span> và tiến hành test thực tế môi trường. <i>(2 trường <code>Reviewers</code> và <code>Số giờ review</code> do duy nhất Huyền kiểm soát)</i>.
+              👑 <strong>Quản Lý Ô Trách Nhiệm:</strong> Huyền chuyển trường <code>Reviewers</code> trên Notion ➔ <span className="tag" style={{ background: "rgba(37,99,235,0.15)", color: "#2563eb", fontWeight: "bold" }}>Huyền</span> và tiến hành test thực tế môi trường. <i>(2 trường <code>Reviewers</code> và <code>Số giờ review</code> do duy nhất Huyền kiểm soát)</i>.
             </div>
 
             <div style={{ background: "rgba(16,185,129,0.06)", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #10b981" }}>
@@ -125,7 +125,7 @@ export const ReviewProtocolView: React.FC<ReviewProtocolViewProps> = ({
           style={{
             padding: "20px",
             background: "var(--card-bg)",
-            border: "1px solid rgba(168,85,247,0.3)",
+            border: "1px solid rgba(37,99,235,0.3)",
             borderRadius: "16px",
             boxShadow: "var(--shadow-sm)",
             display: "flex",
@@ -140,8 +140,8 @@ export const ReviewProtocolView: React.FC<ReviewProtocolViewProps> = ({
                   width: "36px",
                   height: "36px",
                   borderRadius: "10px",
-                  background: "rgba(168,85,247,0.15)",
-                  color: "#a855f7",
+                  background: "rgba(37,99,235,0.15)",
+                  color: "#2563eb",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
@@ -155,12 +155,12 @@ export const ReviewProtocolView: React.FC<ReviewProtocolViewProps> = ({
                 <h3 style={{ margin: 0, fontSize: "16px", color: "var(--text-1)" }}>
                   Vòng 2 — Tech Lead Review (Anh Trường)
                 </h3>
-                <span style={{ fontSize: "11px", color: "#a855f7", fontWeight: 600 }}>
+                <span style={{ fontSize: "11px", color: "#2563eb", fontWeight: 600 }}>
                   Review logic PR &amp; Merge Code
                 </span>
               </div>
             </div>
-            <span className="tag" style={{ background: "rgba(168,85,247,0.15)", color: "#a855f7", fontWeight: "bold" }}>
+            <span className="tag" style={{ background: "rgba(37,99,235,0.15)", color: "#2563eb", fontWeight: "bold" }}>
               Status: Wait for dev ➔ Deployed
             </span>
           </div>
@@ -169,7 +169,7 @@ export const ReviewProtocolView: React.FC<ReviewProtocolViewProps> = ({
             <div style={{ background: "rgba(234,179,8,0.08)", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #d97706" }}>
               ⏰ <strong>Lịch Collect &amp; Review Cố Định:</strong> Anh Trường dành <span className="tag tag-yellow" style={{ fontSize: "12px", fontWeight: "bold" }}>⏱️ 1 tiếng đầu buổi chiều mỗi ngày</span> để gom (collect) và review toàn bộ các PR có Label <span className="tag tag-green">wait for development</span> (do Huyền đã duyệt ở Vòng 1).
             </div>
-            <div style={{ background: "var(--surface-3)", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #a855f7" }}>
+            <div style={{ background: "var(--surface-3)", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #2563eb" }}>
               💬 <strong>Anh Trường CHỈ CÓ COMMENT (Khi Cần Sửa Logic):</strong> Anh Trường sẽ <strong>viết comment chỉ rõ chỗ cần sửa</strong> trên PR và <strong>đổi Label Notion ➔</strong> <span className="tag tag-red">change requested</span>.
             </div>
 
@@ -178,7 +178,7 @@ export const ReviewProtocolView: React.FC<ReviewProtocolViewProps> = ({
             </div>
 
             <div style={{ background: "rgba(16,185,129,0.06)", padding: "10px 12px", borderRadius: "8px", borderLeft: "3px solid #10b981" }}>
-              🚀 <strong>Khi Anh Trường Review OK &amp; Merge PR:</strong> Merge PR &amp; deploy server ➔ Chuyển <code>Status</code> Notion ➔ <span className="tag" style={{ background: "rgba(168,85,247,0.2)", color: "#a855f7", fontWeight: "bold" }}>Deployed</span> và <strong>bàn giao cho bên OP (Thương &amp; Linh) test nghiệm thu lại!</strong>
+              🚀 <strong>Khi Anh Trường Review OK &amp; Merge PR:</strong> Merge PR &amp; deploy server ➔ Chuyển <code>Status</code> Notion ➔ <span className="tag" style={{ background: "rgba(37,99,235,0.15)", color: "#2563eb", fontWeight: "bold" }}>Deployed</span> và <strong>bàn giao cho bên OP (Thương &amp; Linh) test nghiệm thu lại!</strong>
             </div>
           </div>
         </div>

@@ -9,7 +9,13 @@ function fmtDate(v: string | undefined): string {
 
 function isNoRepro(b: BugRecord): boolean {
   const note = (b.note ?? "").toLowerCase();
-  const hasNoReproNote = note.includes("không tái hiện") || note.includes("ko tái hiện");
+  const st = (b.status ?? "").toLowerCase();
+  const hasNoReproNote =
+    note.includes("tái hiện") ||
+    note.includes("no repro") ||
+    note.includes("không phải lỗi") ||
+    note.includes("ko phải lỗi") ||
+    st.includes("tái hiện");
   return hasNoReproNote || !b.pullRequestUrl;
 }
 

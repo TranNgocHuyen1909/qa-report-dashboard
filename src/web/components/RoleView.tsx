@@ -17,22 +17,22 @@ export function RoleView() {
           className="card" 
           style={{ 
             padding: "20px", 
-            borderTop: "4px solid #a855f7", 
+            borderTop: "4px solid #2563eb", 
             background: "var(--card-bg)",
             borderRadius: "12px",
             boxShadow: "var(--shadow-md)"
           }}
         >
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px" }}>
-            <div style={{ fontSize: "18px", fontWeight: "800", color: "#c084fc", display: "flex", alignItems: "center", gap: "8px" }}>
+            <div style={{ fontSize: "18px", fontWeight: "800", color: "#3b82f6", display: "flex", alignItems: "center", gap: "8px" }}>
               <span>👑</span> Team Lead (TL)
             </div>
-            <span style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "10px", background: "rgba(168,85,247,0.15)", color: "#c084fc", fontWeight: "bold" }}>
+            <span style={{ fontSize: "11px", padding: "3px 8px", borderRadius: "10px", background: "rgba(37,99,235,0.15)", color: "#3b82f6", fontWeight: "bold" }}>
               Quản lý &amp; Quality Control
             </span>
           </div>
 
-          <div style={{ fontSize: "12px", color: "var(--text-1)", fontStyle: "italic", marginBottom: "14px", padding: "8px 12px", background: "rgba(168,85,247,0.06)", borderLeft: "3px solid #a855f7", borderRadius: "0 6px 6px 0", lineHeight: "1.4" }}>
+          <div style={{ fontSize: "12px", color: "var(--text-1)", fontStyle: "italic", marginBottom: "14px", padding: "8px 12px", background: "rgba(37,99,235,0.06)", borderLeft: "3px solid #2563eb", borderRadius: "0 6px 6px 0", lineHeight: "1.4" }}>
             &quot;Đảm bảo team hoạt động hiệu quả, các bug được xử lý đúng hướng và đạt mục tiêu chung của team.&quot;
           </div>
 

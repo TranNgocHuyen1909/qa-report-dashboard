@@ -100,7 +100,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
   const isNoRepro = (b: BugRecord) => {
     const note = (b.note ?? "").toLowerCase();
-    const hasNoReproNote = note.includes("không tái hiện") || note.includes("ko tái hiện");
+    const st = (b.status ?? "").toLowerCase();
+    const hasNoReproNote = note.includes("tái hiện") || note.includes("no repro") || note.includes("không phải lỗi") || st.includes("tái hiện");
     return hasNoReproNote || !b.pullRequestUrl;
   };
 

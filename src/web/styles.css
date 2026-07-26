@@ -17,8 +17,8 @@
   --text-1: #eef2f8;
   --text-2: #9aa7ba;
   --text-3: #718096;
-  --accent: #4f46e5;
-  --accent-2: #818cf8;
+  --accent: #2563eb;
+  --accent-2: #3b82f6;
   --green: #34d399;
   --green-bg: rgba(52, 211, 153, 0.12);
   --yellow: #fbbf24;
@@ -35,7 +35,7 @@
   --radius-sm: 6px;
   --radius-lg: 12px;
   --shadow: 0 2px 12px rgba(0,0,0,0.4);
-  --glow: 0 0 20px rgba(79, 70, 229, 0.15);
+  --glow: 0 0 20px rgba(37, 99, 235, 0.15);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -327,15 +327,18 @@ body.light {
   color-scheme: light;
   --bg: #f8fafc;
   --surface: #ffffff;
+  --surface-1: #ffffff;
   --surface-2: #f1f5f9;
   --surface-3: #e2e8f0;
   --border: #cbd5e1;
   --border-2: #94a3b8;
+  --border-3: #e2e8f0;
   --text: #0f172a;
+  --text-1: #0f172a;
   --text-2: #334155;
   --text-3: #64748b;
-  --accent: #0f172a;
-  --accent-2: #334155;
+  --accent: #2563eb;
+  --accent-2: #3b82f6;
   --green: #166534;
   --green-bg: rgba(22,163,74,0.06);
   --yellow: #854d0e;
@@ -346,6 +349,7 @@ body.light {
   --blue-bg: rgba(37,99,235,0.06);
   --cyan: #0e7490;
   --purple: #6b21a8;
+  --purple-bg: rgba(107,33,168,0.06);
   --orange: #c2410c;
   --shadow: 0 1px 3px rgba(0,0,0,0.08), 0 1px 2px rgba(0,0,0,0.04);
   --glow: 0 0 10px rgba(0,0,0,0.05);
@@ -353,6 +357,11 @@ body.light {
 
 body.light .topbar {
   background: rgba(255, 255, 255, 0.9);
+}
+
+body.light .tag-gray {
+  background: rgba(0, 0, 0, 0.06);
+  color: var(--text-3);
 }
 
 /* ── Colored Table Headers (testcase-web-dashboard style) ── */
@@ -377,7 +386,7 @@ body.light .topbar {
   color: #ffffff !important;
 }
 .col-rate {
-  background: #412e55 !important;
+  background: #1e3a8a !important;
   color: #ffffff !important;
 }
 
@@ -403,8 +412,8 @@ body.light .col-backlog {
   color: #c2410c !important;
 }
 body.light .col-rate {
-  background: #f3e8ff !important;
-  color: #6b21a8 !important;
+  background: #dbeafe !important;
+  color: #1e40af !important;
 }
 
 /* ── Text Metric Highlights ── */
@@ -425,7 +434,7 @@ body.light .col-rate {
   font-weight: 700;
 }
 .metric-rate {
-  color: #c084fc;
+  color: #60a5fa;
   font-weight: 700;
 }
 
@@ -442,7 +451,7 @@ body.light .metric-backlog {
   color: #c2410c;
 }
 body.light .metric-rate {
-  color: #6b21a8;
+  color: #1e40af;
 }
 
 /* ── Tooltips ── */

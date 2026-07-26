@@ -56,6 +56,7 @@ export interface BugRecord {
   prCommentsByAuthor?: number;
   prCommentsByTruong?: number;
   prCommentsByHuyen?: number;
+  huyenFirstCommentAt?: string;
   huyenLastCommentAt?: string;
   huyenReviewRounds?: number;
   ghLabels?: string[];

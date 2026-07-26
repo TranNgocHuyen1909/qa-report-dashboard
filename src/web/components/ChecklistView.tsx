@@ -129,7 +129,7 @@ const repoChecklistsConfig: Record<string, RepoConfig> = {
   },
   "lisa-ai-agent": {
     title: "lisa-ai-agent (Prompts, Decision Matrix & Graph)",
-    badgeColor: "#a855f7",
+    badgeColor: "#2563eb",
     rules: [
       {
         id: "agent-test-ci",

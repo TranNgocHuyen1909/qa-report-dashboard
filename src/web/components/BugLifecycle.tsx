@@ -58,8 +58,8 @@ export function BugLifecycle({ view }: { view: DashboardView }) {
           {/* STEP 2 */}
           <div style={{ background: "var(--surface-2)", padding: "10px", borderRadius: "8px", border: "1px solid var(--border-3)" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
-              <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#a855f7", color: "#fff", fontWeight: "bold", fontSize: "10px", display: "flex", alignItems: "center", justifyContent: "center" }}>2</span>
-              <span style={{ fontSize: "9px", color: "#c084fc", fontWeight: "bold", background: "rgba(168,85,247,0.15)", padding: "1px 4px", borderRadius: "3px" }}>Analysis</span>
+              <span style={{ width: "20px", height: "20px", borderRadius: "50%", background: "#2563eb", color: "#fff", fontWeight: "bold", fontSize: "10px", display: "flex", alignItems: "center", justifyContent: "center" }}>2</span>
+              <span style={{ fontSize: "9px", color: "#3b82f6", fontWeight: "bold", background: "rgba(37,99,235,0.15)", padding: "1px 4px", borderRadius: "3px" }}>Analysis</span>
             </div>
             <div style={{ fontSize: "11px", fontWeight: "bold", color: "var(--text-1)", marginBottom: "3px" }}>2. Root Cause &amp; TL</div>
             <div style={{ fontSize: "10px", color: "var(--text-2)", lineHeight: "1.4" }}>

@@ -463,7 +463,7 @@ export function PrLessonsView({ view, onUpdate }: { view: DashboardView; onUpdat
                       <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
                         <span style={{ padding: "2px 8px", background: "rgba(59,130,246,0.15)", color: "var(--blue)", borderRadius: "4px", fontSize: "11px", fontWeight: "bold" }}>{item.code}</span>
                         {repoName && (
-                          <span style={{ padding: "2px 8px", background: "rgba(168,85,247,0.15)", color: "#a855f7", borderRadius: "4px", fontSize: "11px", fontWeight: "bold" }}>
+                          <span style={{ padding: "2px 8px", background: "rgba(37,99,235,0.15)", color: "#2563eb", borderRadius: "4px", fontSize: "11px", fontWeight: "bold" }}>
                             {repoName}
                           </span>
                         )}

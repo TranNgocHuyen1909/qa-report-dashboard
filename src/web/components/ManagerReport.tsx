@@ -12,7 +12,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     const note = (b.note ?? "").toLowerCase();
     const title = (b.title ?? "").toLowerCase();
     const status = (b.status ?? "").toLowerCase();
-    const hasNoRepro = note.includes("không tái hiện") || note.includes("ko tái hiện");
+    const hasNoRepro = note.includes("tái hiện") || note.includes("no repro") || note.includes("không phải lỗi");
     const hasDuplicate = note.includes("trùng") || note.includes("duplicate") || title.includes("trùng") || status.includes("duplicate");
     return !hasPR || hasNoRepro || hasDuplicate;
   };

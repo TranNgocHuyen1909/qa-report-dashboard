@@ -256,6 +256,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         url: b.url,
         prUrl: b.pullRequestUrl,
         commentsCount: b.prCommentsByTruong ?? 0,
+        commitsCount: b.ghCommitsCount ?? 1,
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
       }));
       
       const activeMetric = view.teamMetrics.find(m => m.period.key === activePeriod.key);
@@ -850,10 +852,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       {/* PR Tasks & Comments Detail Modal */}
       {selectedPrBugs && (
         <div className="modal-overlay" onClick={() => { setSelectedPrBugs(null); setSelectedDevCode(""); }}>
-          <div className="modal" style={{ width: "750px", padding: "20px", borderRadius: "8px" }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ width: "850px", padding: "20px", borderRadius: "8px" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
-                <span>💬</span> Chi tiết Review Comments trên Task ({selectedDevCode})
+                <span>💬</span> Chi tiết Task có PR trong kỳ {activePeriod?.label} ({selectedDevCode})
               </h3>
               <button 
                 type="button" 
@@ -865,7 +867,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               </button>
             </div>
             
-            <div style={{ maxHeight: "350px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--bg-2)" }}>
+            <div style={{ maxHeight: "380px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--bg-2)" }}>
               {selectedPrBugs.length === 0 ? (
                 <div style={{ padding: "16px", color: "var(--text-3)", textAlign: "center" }}>Không có task nào.</div>
               ) : (
@@ -873,15 +875,17 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                   <thead>
                     <tr style={{ background: "var(--bg-3)", borderBottom: "1px solid var(--border-2)" }}>
                       <th style={{ padding: "10px", textAlign: "left" }}>BUG ID</th>
-                      <th style={{ padding: "10px", textAlign: "left" }}>Tiêu đề lỗi</th>
-                      <th style={{ padding: "10px", textAlign: "left" }}>Link PR</th>
-                      <th style={{ padding: "10px", textAlign: "right" }}>Review Comments</th>
+                      <th style={{ padding: "10px", textAlign: "left" }}>NGÀY TÍNH</th>
+                      <th style={{ padding: "10px", textAlign: "left" }}>TIÊU ĐỀ LỖI</th>
+                      <th style={{ padding: "10px", textAlign: "center" }}>LINK PR</th>
+                      <th style={{ padding: "10px", textAlign: "center" }}>COMMITS</th>
+                      <th style={{ padding: "10px", textAlign: "right" }}>COMMENTS</th>
                     </tr>
                   </thead>
                   <tbody>
                     {selectedPrBugs.map((b, idx) => (
                       <tr key={idx} style={{ borderBottom: "1px solid var(--border-3)", background: "var(--bg-1)" }}>
-                        <td style={{ padding: "10px", fontWeight: "bold" }}>
+                        <td style={{ padding: "10px", fontWeight: "bold", whiteSpace: "nowrap" }}>
                           {b.url ? (
                             <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
                               {b.bugId}
@@ -890,15 +894,32 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                             b.bugId
                           )}
                         </td>
+                        <td style={{ padding: "10px", whiteSpace: "nowrap", color: "var(--text-3)", fontSize: "12px" }}>
+                          {b.date || "—"}
+                        </td>
                         <td style={{ padding: "10px", color: "var(--text-1)" }}>{b.title}</td>
-                        <td style={{ padding: "10px" }}>
+                        <td style={{ padding: "10px", textAlign: "center" }}>
                           {b.prUrl ? (
-                            <a href={b.prUrl} target="_blank" rel="noreferrer" style={{ color: "var(--cyan)", textDecoration: "underline" }}>
+                            <a href={b.prUrl} target="_blank" rel="noreferrer" style={{ color: "var(--cyan)", textDecoration: "underline", fontSize: "12px" }}>
                               GitHub PR 🔗
                             </a>
                           ) : (
                             "—"
                           )}
+                        </td>
+                        <td style={{ padding: "10px", textAlign: "center" }}>
+                          <span 
+                            style={{ 
+                              padding: "2px 6px", 
+                              borderRadius: "4px", 
+                              fontSize: "11px", 
+                              fontWeight: 600,
+                              background: (b.commitsCount ?? 1) > 1 ? "#fef3c7" : "var(--surface-3)",
+                              color: (b.commitsCount ?? 1) > 1 ? "#d97706" : "var(--text-2)"
+                            }}
+                          >
+                            {b.commitsCount ?? 1} commits
+                          </span>
                         </td>
                         <td style={{ padding: "10px", textAlign: "right", fontWeight: "bold", color: b.commentsCount > 3 ? "var(--red)" : b.commentsCount > 0 ? "var(--yellow)" : "var(--green)" }}>
                           {b.commentsCount}
@@ -910,7 +931,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               )}
             </div>
             <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--text-2)", textAlign: "right" }}>
-              * Mật độ comment trung bình = Tổng comments / Tổng số task có PR.
+              * Mật độ comment trung bình = Tổng comments / Tổng số task có PR trong kỳ.
             </div>
           </div>
         </div>

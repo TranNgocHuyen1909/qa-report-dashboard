@@ -111,6 +111,32 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     return ["closed", "deployed", "resolved"].includes((b.status ?? "").toLowerCase()) && !isNoRepro(b);
   };
 
+  const isReviewedByHuyen = (b: BugRecord) => {
+    if (!b.pullRequestUrl) return false;
+    if (isNoRepro(b)) return false;
+    const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
+    const status = (b.status ?? "").toLowerCase();
+    const huyenComments = b.prCommentsByHuyen ?? 0;
+    const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
+    const isWaitLabelOnPR = ghLbls.some((l) => l.includes("wait"));
+    const hasHuyenInReviewers = (b.reviewerIds ?? []).includes(huyenNotionId);
+    return (
+      hasHuyenInReviewers ||
+      huyenComments > 0 ||
+      isWaitLabelOnPR ||
+      status === "wait for development" ||
+      status.includes("wait")
+    );
+  };
+
+  const isReviewedByTruong = (b: BugRecord) => {
+    if (!b.pullRequestUrl) return false;
+    if (isNoRepro(b)) return false;
+    const truongComments = b.prCommentsByTruong ?? 0;
+    const ghReviews = b.ghReviews ?? [];
+    return truongComments > 0 || ghReviews.some(r => r.author.toLowerCase() === "truongtc" || r.author.toLowerCase() === "dract");
+  };
+
   const devStats = useMemo(() => {
     if (!activePeriod) return [];
 
@@ -288,6 +314,37 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       const reCommitCount = reCommitBugsList.length;
       const reCommitRate = solvedWithPr > 0 ? (reCommitCount / solvedWithPr) * 100 : 0;
 
+      const huyenReviewedBugsList = solvedWithPrBugs.filter(b => isReviewedByHuyen(b)).map(b => ({
+        bugId: b.bugId || b.id,
+        title: b.title,
+        url: b.url,
+        prUrl: b.pullRequestUrl,
+        commentsCount: b.prCommentsByHuyen ?? 0,
+        commitsCount: b.ghCommitsCount ?? 1,
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
+      }));
+
+      const truongReviewedBugsList = solvedWithPrBugs.filter(b => isReviewedByTruong(b)).map(b => ({
+        bugId: b.bugId || b.id,
+        title: b.title,
+        url: b.url,
+        prUrl: b.pullRequestUrl,
+        commentsCount: b.prCommentsByTruong ?? 0,
+        commitsCount: b.ghCommitsCount ?? 1,
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
+      }));
+
+      const pendingReviewBugsList = solvedWithPrBugs.filter(b => 
+        !isReviewedByHuyen(b) && !isReviewedByTruong(b) && (b.status ?? "").toLowerCase() === "resolved"
+      ).map(b => ({
+        bugId: b.bugId || b.id,
+        title: b.title,
+        url: b.url,
+        prUrl: b.pullRequestUrl,
+        commitsCount: b.ghCommitsCount ?? 1,
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
+      }));
+
       const reopenRate = (closedCount + resolvedCount) > 0 
         ? (reopenedCount / (closedCount + resolvedCount)) * 100 
         : 0;
@@ -349,6 +406,13 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         reCommitCount,
         reCommitRate,
         reCommitBugsList,
+        huyenReviewedCount: huyenReviewedBugsList.length,
+        truongReviewedCount: truongReviewedBugsList.length,
+        pendingReviewCount: pendingReviewBugsList.length,
+        huyenReviewedBugsList,
+        truongReviewedBugsList,
+        pendingReviewBugsList,
+        solvedWithPr,
         manDays,
         bugsPerDay,
         bugsReviewed: reviewsCount,
@@ -589,14 +653,17 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               <tr>
                 <th style={{ textAlign: "left" }}>Nhân sự</th>
                 <th style={{ textAlign: "left" }} className="has-tooltip" data-tooltip="Vị trí lỗi (component) của bug">Vị trí lỗi</th>
+                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Tổng số task Dev đã làm và mở PR trong kỳ">Tổng PR</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đã hoàn thành, review xong và deploy thành công (Closed, Deployed) trong kỳ">Đã Close</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đã sửa xong nhưng chưa được review hoặc merge (Resolved) trong kỳ">Resolved</th>
+                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đã sửa xong (Resolved) trong kỳ">Resolved</th>
+                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug Resolved đang CHỜ QC/Lead review">Chờ Review</th>
+                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đã được Lead Huyền review trong kỳ">Huyền Review</th>
+                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đã được QC Lead Trường review trong kỳ">Trường Review</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đóng trực tiếp không qua PR (Ví dụ: Không tái hiện, Trùng lặp, Không phải lỗi, v.v.)">Không tái hiện</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong:&#10;(Số bug Reopen / Tổng số bug đã sửa xong (Closed + Resolved)) * 100%&#10;Mục tiêu: < 15%">Tỷ lệ Reopen</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Tỷ lệ & số PR mà Dev phải push thêm commit (2, 3... commits) sau khi đã Resolved/tạo PR ban đầu">Sửa Bổ Sung</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Năng suất sửa lỗi trung bình mỗi ngày công: (Đã Close + Resolved) / MD">Bug/Ngày</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Đối với Lead (HuyenTN): Tổng số task đã trực tiếp review trong kỳ.&#10;Đối với Dev: Số task của dev đã được Lead review trong kỳ.">Lead Review</th>
                 <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số review comment trung bình nhận từ anh T trên mỗi PR task:&#10;Tổng review comments / Số task sửa qua PR">Comments/Task</th>
                 <th style={{ textAlign: "center" }} className="has-tooltip" data-tooltip="Số lượng bug vi phạm các bài học kinh nghiệm được lưu trong Checklist">Lỗi Lặp</th>
               </tr>
@@ -639,8 +706,56 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     <td style={{ textAlign: "left", fontSize: "13px", color: "var(--text-2)", fontWeight: "500", paddingLeft: "12px" }}>
                       {row.locationText}
                     </td>
+                    <td 
+                      className="td-num has-tooltip" 
+                      style={{ 
+                        color: row.solvedWithPr > 0 ? "var(--accent)" : "var(--text-3)",
+                        cursor: row.solvedWithPr > 0 ? "pointer" : "default",
+                        textDecoration: row.solvedWithPr > 0 ? "underline dashed" : "none"
+                      }}
+                      data-tooltip={row.solvedWithPr > 0 ? row.prBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n') : "0 PR task"}
+                      onClick={() => row.solvedWithPr > 0 && setSelectedPrBugs(row.prBugsList)}
+                    >
+                      {row.solvedWithPr} PR
+                    </td>
                     <td className="td-num" style={{ color: row.closedCount > 0 ? "var(--green)" : "var(--text-3)" }}>{row.closedCount}</td>
                     <td className="td-num" style={{ color: row.resolvedCount > 0 ? "var(--blue)" : "var(--text-3)" }}>{row.resolvedCount}</td>
+                    <td 
+                      className="td-num has-tooltip" 
+                      style={{ 
+                        color: row.pendingReviewCount > 0 ? "var(--yellow)" : "var(--text-3)",
+                        cursor: row.pendingReviewCount > 0 ? "pointer" : "default",
+                        textDecoration: row.pendingReviewCount > 0 ? "underline dashed" : "none"
+                      }}
+                      data-tooltip={row.pendingReviewCount > 0 ? row.pendingReviewBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n') : "0 task chờ review"}
+                      onClick={() => row.pendingReviewCount > 0 && setSelectedPrBugs(row.pendingReviewBugsList)}
+                    >
+                      {row.pendingReviewCount}
+                    </td>
+                    <td 
+                      className="td-num has-tooltip" 
+                      style={{ 
+                        color: row.huyenReviewedCount > 0 ? "var(--cyan)" : "var(--text-3)",
+                        cursor: row.huyenReviewedCount > 0 ? "pointer" : "default",
+                        textDecoration: row.huyenReviewedCount > 0 ? "underline dashed" : "none"
+                      }}
+                      data-tooltip={row.huyenReviewedCount > 0 ? row.huyenReviewedBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n') : "0 task đã review bởi Huyền"}
+                      onClick={() => row.huyenReviewedCount > 0 && setSelectedPrBugs(row.huyenReviewedBugsList)}
+                    >
+                      {row.huyenReviewedCount}
+                    </td>
+                    <td 
+                      className="td-num has-tooltip" 
+                      style={{ 
+                        color: row.truongReviewedCount > 0 ? "var(--purple)" : "var(--text-3)",
+                        cursor: row.truongReviewedCount > 0 ? "pointer" : "default",
+                        textDecoration: row.truongReviewedCount > 0 ? "underline dashed" : "none"
+                      }}
+                      data-tooltip={row.truongReviewedCount > 0 ? row.truongReviewedBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n') : "0 task đã review bởi Anh Trường"}
+                      onClick={() => row.truongReviewedCount > 0 && setSelectedPrBugs(row.truongReviewedBugsList)}
+                    >
+                      {row.truongReviewedCount}
+                    </td>
                     <td className="td-num" style={{ color: "var(--text-3)" }}>{row.noRepro}</td>
                     <td 
                       className="td-num has-tooltip" 

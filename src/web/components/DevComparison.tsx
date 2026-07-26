@@ -268,9 +268,15 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         ? manDaysOverrides[dev.code]
         : (pMetric ? pMetric.manDays : 0);
 
-      const reCommitBugsList = solvedWithPrBugs.filter(
-        b => (b.ghCommitsCount ?? 1) > 1 || (b.prCommentsByHuyen ?? 0) > 1 || (b.huyenReviewRounds ?? 0) > 1
-      ).map(b => ({
+      const reCommitBugsList = solvedWithPrBugs.filter(b => {
+        const st = (b.status ?? "").toLowerCase();
+        const isResolvedOrClosed = ["resolved", "closed", "deployed"].includes(st);
+        const hasMultipleCommitsOrRounds =
+          (b.ghCommitsCount ?? 1) > 1 ||
+          (b.prCommentsByHuyen ?? 0) > 0 ||
+          (b.huyenReviewRounds ?? 0) > 1;
+        return isResolvedOrClosed && hasMultipleCommitsOrRounds;
+      }).map(b => ({
         bugId: b.bugId || b.id,
         title: b.title,
         url: b.url,

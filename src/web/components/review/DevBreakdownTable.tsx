@@ -268,25 +268,31 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
                     padding: "8px 12px",
                     textAlign: "center",
                     color: (() => {
-                      const reCommitBugs = devBugs.filter(
-                        (b) =>
+                      const reCommitBugs = devBugs.filter((b) => {
+                        const st = (b.status ?? "").toLowerCase();
+                        const isResolvedOrClosed = ["resolved", "closed", "deployed"].includes(st);
+                        const hasMultipleCommitsOrRounds =
                           (b.ghCommitsCount ?? 1) > 1 ||
-                          (b.prCommentsByHuyen ?? 0) > 1 ||
-                          (b.huyenReviewRounds ?? 0) > 1,
-                      ).length;
+                          (b.prCommentsByHuyen ?? 0) > 0 ||
+                          (b.huyenReviewRounds ?? 0) > 1;
+                        return isResolvedOrClosed && hasMultipleCommitsOrRounds;
+                      }).length;
                       return reCommitBugs > 0 ? "#f59e0b" : "var(--text-2)";
                     })(),
                     fontWeight: "600",
                   }}
-                  title={`Số PR của ${row.dev.code} có > 1 commit bổ sung sau lượt đầu`}
+                  title={`Số PR của ${row.dev.code} đã Resolved nhưng có > 1 commit bổ sung sau lượt đầu`}
                 >
                   {(() => {
-                    const reCommitBugs = devBugs.filter(
-                      (b) =>
+                    const reCommitBugs = devBugs.filter((b) => {
+                      const st = (b.status ?? "").toLowerCase();
+                      const isResolvedOrClosed = ["resolved", "closed", "deployed"].includes(st);
+                      const hasMultipleCommitsOrRounds =
                         (b.ghCommitsCount ?? 1) > 1 ||
-                        (b.prCommentsByHuyen ?? 0) > 1 ||
-                        (b.huyenReviewRounds ?? 0) > 1,
-                    ).length;
+                        (b.prCommentsByHuyen ?? 0) > 0 ||
+                        (b.huyenReviewRounds ?? 0) > 1;
+                      return isResolvedOrClosed && hasMultipleCommitsOrRounds;
+                    }).length;
                     return `${reCommitBugs} PR`;
                   })()}
                 </td>

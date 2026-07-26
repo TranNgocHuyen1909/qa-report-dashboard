@@ -8,7 +8,8 @@
     "dev:api": "tsx watch src/server/main.ts",
     "dev:web": "vite --host 0.0.0.0",
     "build": "vite build && tsup --config tsup.config.ts",
-    "start": "node dist/server/main.js"
+    "start": "node dist/server/main.js",
+    "deploy:ftp": "npm run build && node scripts/deploy-ftp.js"
   },
   "dependencies": {
     "dotenv": "^17.4.2",
@@ -22,6 +23,7 @@
     "@types/react": "^19.2.15",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.2",
+    "basic-ftp": "^6.0.2",
     "concurrently": "^10.0.1",
     "tsup": "^8.5.1",
     "tsx": "^4.22.4",

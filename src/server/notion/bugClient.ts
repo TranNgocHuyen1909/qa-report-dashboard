@@ -27,6 +27,29 @@ function uid(prop: any): string | undefined {
   return undefined;
 }
 
+function formulaOrChk(prop: any): boolean {
+  if (!prop) return false;
+  if (prop.type === "checkbox") return prop.checkbox === true;
+  if (prop.type === "formula") {
+    if (prop.formula?.type === "boolean") return prop.formula.boolean === true;
+    if (prop.formula?.type === "string") return prop.formula.string === "true" || prop.formula.string === "1";
+    if (prop.formula?.type === "number") return prop.formula.number > 0;
+  }
+  if (prop.checkbox !== undefined) return prop.checkbox === true;
+  return false;
+}
+
+function relationIds(prop: any): string[] {
+  if (!prop) return [];
+  if (prop.type === "relation" && Array.isArray(prop.relation)) {
+    return prop.relation.flatMap((r: any) => r.id ? [r.id] : []);
+  }
+  if (prop.type === "rollup" && Array.isArray(prop.rollup?.array)) {
+    return prop.rollup.array.flatMap((item: any) => relationIds(item));
+  }
+  return [];
+}
+
 function mapPage(page: NotionPage): BugRecord {
   const p = page.properties ?? {};
   return {
@@ -70,6 +93,23 @@ function mapPage(page: NotionPage): BugRecord {
       stat(p["Tạm dừng fix"]) === "Tạm dừng" ||
       stat(p["Tạm dừng Fix"]) === "Tạm dừng" ||
       stat(p["Status"]) === "Tạm dừng",
+    isDuplicate:
+      formulaOrChk(p["Duplicate?"]) ||
+      formulaOrChk(p["Duplicates?"]) ||
+      formulaOrChk(p["Duplicate"]) ||
+      formulaOrChk(p["Duplicates"]) ||
+      formulaOrChk(p["Lỗi trùng"]) ||
+      chk(p["Duplicate?"]) ||
+      chk(p["Duplicates?"]) ||
+      chk(p["Duplicate"]) ||
+      (p["Duplicates"]?.relation?.length ?? 0) > 0 ||
+      (p["Duplicate"]?.relation?.length ?? 0) > 0,
+    duplicateIds:
+      relationIds(p["Duplicates"]).length > 0
+        ? relationIds(p["Duplicates"])
+        : relationIds(p["Duplicate"]).length > 0
+        ? relationIds(p["Duplicate"])
+        : relationIds(p["Task trùng"]),
   };
 }
 

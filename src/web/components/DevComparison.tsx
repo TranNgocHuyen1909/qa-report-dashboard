@@ -31,6 +31,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
   const [selectedReopenedBugs, setSelectedReopenedBugs] = useState<any[] | null>(null);
   const [selectedPrBugs, setSelectedPrBugs] = useState<any[] | null>(null);
   const [selectedReviewsList, setSelectedReviewsList] = useState<any[] | null>(null);
+  const [selectedDuplicateGroup, setSelectedDuplicateGroup] = useState<{
+    totalCount: number;
+    groups: Array<{ parentBugId: string; parentTitle: string; childTasks: any[] }>;
+  } | null>(null);
   const [selectedDevCode, setSelectedDevCode] = useState<string>("");
 
   const [manDaysOverrides, setManDaysOverrides] = useState<Record<string, number>>({});
@@ -294,25 +298,142 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         ? manDaysOverrides[dev.code]
         : (pMetric ? pMetric.manDays : 0);
 
-      const reCommitBugsList = solvedWithPrBugs.filter(b => {
+      const reCommitBugsList = devBugs.filter(b => {
         const st = (b.status ?? "").toLowerCase();
         const isResolvedOrClosed = ["resolved", "closed", "deployed"].includes(st);
-        const hasMultipleCommitsOrRounds =
+        const d = bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || dateKey(b.createdTime);
+        if (!dateInRange(d, activePeriod.startDate, activePeriod.endDate)) return false;
+        
+        const hasRecommitOrEdits =
           (b.ghCommitsCount ?? 1) > 1 ||
           (b.prCommentsByHuyen ?? 0) > 0 ||
-          (b.huyenReviewRounds ?? 0) > 1;
-        return isResolvedOrClosed && hasMultipleCommitsOrRounds;
+          (b.prCommentsByTruong ?? 0) > 0 ||
+          (b.prCommentsByAuthor ?? 0) > 0 ||
+          (b.huyenReviewRounds ?? 0) > 1 ||
+          (b.ghReviews ?? []).length > 0 ||
+          (b.ghLabels ?? []).some(l => {
+            const low = l.toLowerCase();
+            return low.includes("changes") || low.includes("wait") || low.includes("fix") || low.includes("recommit") || low.includes("review");
+          }) ||
+          st === "resolved" ||
+          (b.solution ?? "").toLowerCase().includes("sửa") ||
+          (b.note ?? "").toLowerCase().includes("sửa");
+
+        return isResolvedOrClosed && hasRecommitOrEdits;
       }).map(b => ({
         bugId: b.bugId || b.id,
         title: b.title,
         url: b.url,
         prUrl: b.pullRequestUrl,
         commitsCount: b.ghCommitsCount ?? 1,
-        commentsCount: b.prCommentsByTruong ?? 0,
+        commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
         date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
       }));
       const reCommitCount = reCommitBugsList.length;
       const reCommitRate = solvedWithPr > 0 ? (reCommitCount / solvedWithPr) * 100 : 0;
+
+      const isDuplicateBugRecord = (b: BugRecord) => {
+        if (b.isDuplicate) return true;
+        if (b.duplicateIds && b.duplicateIds.length > 0) return true;
+        const note = (b.note ?? "").toLowerCase();
+        const title = (b.title ?? "").toLowerCase();
+        const status = (b.status ?? "").toLowerCase();
+        const solution = (b.solution ?? "").toLowerCase();
+        return note.includes("trùng") || note.includes("duplicate") || title.includes("trùng") || status.includes("duplicate") || status.includes("trùng") || solution.includes("trùng");
+      };
+
+      const duplicateBugsInPeriod = view.bugs.filter(b => {
+        if ((b.status ?? "").toLowerCase() === "cancel") return false;
+        if (!isDuplicateBugRecord(b)) return false;
+        const d = dateKey(b.detectedDate) ?? dateKey(b.createdTime) ?? bugFixedDate(b);
+        if (!dateInRange(d, activePeriod.startDate, activePeriod.endDate)) return false;
+        if (dev.code === "HuyenTN") return true;
+        return bugBelongsToDev(b, dev);
+      });
+
+      const getParentBugRef = (b: BugRecord): { parentId: string; parentTitle: string } => {
+        const text = `${b.title} ${b.note ?? ''} ${b.solution ?? ''}`;
+        const matches = text.match(/\[?([A-Z0-9]+-\d+)\]?/g) || [];
+        const validMatches = matches.map(m => m.replace(/[\[\]]/g, '').toUpperCase()).filter(m => m !== (b.bugId || '').toUpperCase());
+        if (validMatches.length > 0) {
+          const parentId = validMatches[0];
+          const parentBug = view.bugs.find(orig => (orig.bugId || '').toUpperCase() === parentId);
+          return {
+            parentId,
+            parentTitle: parentBug ? parentBug.title : `Bug gốc (${parentId})`
+          };
+        }
+        return {
+          parentId: b.bugId || b.id,
+          parentTitle: b.title
+        };
+      };
+
+      const dupGroupMap = new Map<string, { parentBugId: string; parentTitle: string; parentUrl?: string; childTasks: any[] }>();
+
+      // First check Notion Duplicates relations
+      duplicateBugsInPeriod.forEach(b => {
+        if (b.duplicateIds && b.duplicateIds.length > 0) {
+          const parentKey = b.bugId || b.id;
+          const childTasks = b.duplicateIds.map(childId => {
+            const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
+            return {
+              bugId: childObj ? (childObj.bugId || childObj.id) : childId,
+              title: childObj ? childObj.title : `Task trùng (${childId.slice(0, 8)}...)`,
+              url: childObj?.url,
+              prUrl: childObj?.pullRequestUrl,
+              date: childObj ? (bugFixedDate(childObj) || dateKey(childObj.confirmedDate) || dateKey(childObj.createdTime) || "—") : "—",
+              note: childObj?.note || childObj?.solution || ""
+            };
+          });
+
+          dupGroupMap.set(parentKey, {
+            parentBugId: parentKey,
+            parentTitle: b.title,
+            parentUrl: b.url,
+            childTasks
+          });
+        }
+      });
+
+      // Second check text-based or standalone duplicate bugs
+      duplicateBugsInPeriod.forEach(b => {
+        const isAlreadyInGroup = Array.from(dupGroupMap.values()).some(g =>
+          g.parentBugId === (b.bugId || b.id) || g.childTasks.some(c => c.bugId === (b.bugId || b.id))
+        );
+
+        if (!isAlreadyInGroup) {
+          const { parentId, parentTitle } = getParentBugRef(b);
+          if (!dupGroupMap.has(parentId)) {
+            dupGroupMap.set(parentId, {
+              parentBugId: parentId,
+              parentTitle,
+              childTasks: []
+            });
+          }
+          dupGroupMap.get(parentId)!.childTasks.push({
+            bugId: b.bugId || b.id,
+            title: b.title,
+            url: b.url,
+            prUrl: b.pullRequestUrl,
+            date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.createdTime) || "—",
+            note: b.note || b.solution || ""
+          });
+        }
+      });
+
+      const duplicateGroups = Array.from(dupGroupMap.values());
+      const totalChildTasks = duplicateGroups.reduce((sum, g) => sum + g.childTasks.length, 0);
+      const duplicateCount = totalChildTasks > 0 ? totalChildTasks : duplicateBugsInPeriod.length;
+
+      const duplicateBugsList = duplicateBugsInPeriod.map(b => ({
+        bugId: b.bugId || b.id,
+        title: b.title,
+        url: b.url,
+        prUrl: b.pullRequestUrl,
+        commitsCount: b.ghCommitsCount ?? 1,
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.createdTime) || "—",
+      }));
 
       const huyenReviewedBugsList = solvedWithPrBugs.filter(b => isReviewedByHuyen(b)).map(b => ({
         bugId: b.bugId || b.id,
@@ -408,7 +529,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         reCommitBugsList,
         huyenReviewedCount: huyenReviewedBugsList.length,
         truongReviewedCount: truongReviewedBugsList.length,
+        duplicateCount: duplicateBugsList.length,
+        duplicateBugsList,
+        duplicateGroups,
         pendingReviewCount: pendingReviewBugsList.length,
+        huyenReviewedCountList: huyenReviewedBugsList,
         huyenReviewedBugsList,
         truongReviewedBugsList,
         pendingReviewBugsList,
@@ -661,7 +786,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã sửa xong (Resolved) trong kỳ">Resolved</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug Resolved đang CHỜ QC/Lead review">Chờ Review</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã được Lead Huyền review trong kỳ">Huyền</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã được QC Lead Trường review trong kỳ">Trường</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug trùng lặp (Duplicate) do Lead Huyền kiểm tra & lọc trong kỳ">Duplicate</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đóng trực tiếp không qua PR (Ví dụ: Không tái hiện, Trùng lặp, Không phải lỗi, v.v.)">No Repro</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong:&#10;(Số bug Reopen / Tổng số bug đã sửa xong (Closed + Resolved)) * 100%&#10;Mục tiêu: < 15%">Reopen</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Tỷ lệ & số PR mà Dev phải push thêm commit (2, 3... commits) sau khi đã Resolved/tạo PR ban đầu">Sửa Bổ Sung</th>
@@ -758,14 +883,21 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       style={{ 
                         padding: "8px 6px",
                         fontSize: "12px",
-                        color: row.truongReviewedCount > 0 ? "var(--purple)" : "var(--text-3)",
-                        cursor: row.truongReviewedCount > 0 ? "pointer" : "default",
-                        textDecoration: row.truongReviewedCount > 0 ? "underline dashed" : "none"
+                        color: row.duplicateCount > 0 ? "var(--orange, #f97316)" : "var(--text-3)",
+                        cursor: row.duplicateCount > 0 ? "pointer" : "default",
+                        textDecoration: row.duplicateCount > 0 ? "underline dashed" : "none"
                       }}
-                      data-tooltip={row.truongReviewedCount > 0 ? row.truongReviewedBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n') : "0 task đã review bởi Anh Trường"}
-                      onClick={() => row.truongReviewedCount > 0 && setSelectedPrBugs(row.truongReviewedBugsList)}
+                      data-tooltip={row.duplicateCount > 0 ? `Tổng ${row.duplicateCount} bug trùng lặp do Lead Huyền lọc:\n` + row.duplicateBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n') : "0 bug trùng lặp"}
+                      onClick={() => {
+                        if (row.duplicateCount > 0) {
+                          setSelectedDuplicateGroup({
+                            totalCount: row.duplicateCount,
+                            groups: row.duplicateGroups
+                          });
+                        }
+                      }}
                     >
-                      {row.truongReviewedCount}
+                      {row.duplicateCount}
                     </td>
                     <td className="td-num" style={{ padding: "8px 6px", fontSize: "12px", color: "var(--text-3)" }}>{row.noRepro}</td>
                     <td 
@@ -1149,6 +1281,69 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                   </tbody>
                 </table>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Duplicate Bugs Detail Modal */}
+      {selectedDuplicateGroup && (
+        <div className="modal-overlay" onClick={() => setSelectedDuplicateGroup(null)}>
+          <div className="modal" style={{ width: "750px", padding: "20px", borderRadius: "8px" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>🔍</span> Danh sách Lỗi Trùng Lặp do Lead Huyền Lọc ({selectedDuplicateGroup.totalCount} bug trùng)
+              </h3>
+              <button 
+                type="button" 
+                className="ctrl" 
+                style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "4px" }} 
+                onClick={() => setSelectedDuplicateGroup(null)}
+              >
+                Đóng
+              </button>
+            </div>
+            
+            <div style={{ maxHeight: "400px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--bg-2)", padding: "12px" }}>
+              {selectedDuplicateGroup.groups.length === 0 ? (
+                <div style={{ padding: "16px", color: "var(--text-3)", textAlign: "center" }}>Không có bug trùng lặp nào trong kỳ này.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "14px" }}>
+                  {selectedDuplicateGroup.groups.map((group, gIdx) => (
+                    <div key={gIdx} style={{ background: "var(--surface-2)", padding: "12px", borderRadius: "8px", border: "1px solid var(--border-3)" }}>
+                      <div style={{ fontWeight: "bold", fontSize: "13px", color: "var(--cyan)", marginBottom: "8px", display: "flex", alignItems: "center", gap: "6px" }}>
+                        📌 Bug Gốc: <span style={{ color: "var(--accent-2)" }}>[{group.parentBugId}]</span> {group.parentTitle}
+                      </div>
+
+                      <div style={{ display: "flex", flexDirection: "column", gap: "6px", paddingLeft: "12px", borderLeft: "2px solid var(--cyan)" }}>
+                        {group.childTasks.map((child: any, cIdx: number) => (
+                          <div key={cIdx} style={{ background: "var(--surface-3)", padding: "8px 10px", borderRadius: "6px", fontSize: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                            <div>
+                              <span style={{ fontWeight: "bold", color: "var(--orange, #f97316)" }}>↳ 🔗 Task trùng: [{child.bugId}]</span>
+                              <span style={{ color: "var(--text-1)", marginLeft: "6px" }}>{child.title}</span>
+                              {child.note && (
+                                <div style={{ fontSize: "11px", color: "var(--text-3)", fontStyle: "italic", marginTop: "2px" }}>
+                                  📝 Ghi chú: {child.note}
+                                </div>
+                              )}
+                            </div>
+                            <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
+                              <span style={{ color: "var(--text-3)" }}>{child.date}</span>
+                              {child.url && (
+                                <a href={child.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+                                  Notion 🔗
+                                </a>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+            <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--text-2)", textAlign: "right" }}>
+              * Danh sách được tổng hợp dựa trên liên kết Bug Gốc &amp; các task trùng lặp do Lead Huyền lọc.
             </div>
           </div>
         </div>

@@ -76,6 +76,21 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     { weekLabel: "Tuần 10", targetPerDev: 14, milestoneLabel: "Duy trì năng suất tiêu chuẩn (~14 Bug/Tuần)" },
   ];
 
+  // Weekly Targets Trajectory for Lead Reviewer (100% PR Team Capacity Target Curve)
+  // Ensures target progressively increases over time and never drops to 0 or arbitrary static values.
+  const leadReviewTargetTrajectory = [
+    { weekLabel: "Tuần 1", target: 17, milestoneLabel: "👑 Mốc Onboarding: Review Code & Nghiệm thu 100% PRs (~17 PRs/tuần)" },
+    { weekLabel: "Tuần 2", target: 25, milestoneLabel: "👑 Mốc T1: Kiểm soát chất lượng PRs toàn team (~25 PRs/tuần)" },
+    { weekLabel: "Tuần 3", target: 28, milestoneLabel: "👑 Mốc T2: Tăng tốc nghiệm thu PRs (~28 PRs/tuần)" },
+    { weekLabel: "Tuần 4", target: 30, milestoneLabel: "👑 Mốc T3: Review & nghiệm thu tối đa sản lượng team (~30 PRs/tuần)" },
+    { weekLabel: "Tuần 5", target: 35, milestoneLabel: "👑 Mốc Tiệm Cận Cao Điểm: Review PRs chất lượng cao (~35 PRs/tuần)" },
+    { weekLabel: "Tuần 6", target: 40, milestoneLabel: "👑 Mốc 100%: Năng suất Review tiêu chuẩn (~40 PRs/Tuần)" },
+    { weekLabel: "Tuần 7", target: 42, milestoneLabel: "👑 Duy trì năng suất Review tiêu chuẩn (~42 PRs/Tuần)" },
+    { weekLabel: "Tuần 8", target: 42, milestoneLabel: "👑 Duy trì năng suất Review tiêu chuẩn (~42 PRs/Tuần)" },
+    { weekLabel: "Tuần 9", target: 45, milestoneLabel: "👑 Mốc Tối Đa: Duy trì năng suất Review đỉnh cao (~45 PRs/Tuần)" },
+    { weekLabel: "Tuần 10", target: 45, milestoneLabel: "👑 Mốc Tối Đa: Duy trì năng suất Review đỉnh cao (~45 PRs/Tuần)" },
+  ];
+
   const handleAutoDraft = () => {
     if (!latest) return;
     
@@ -160,6 +175,17 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     return Math.max(1, Math.floor((periodStart.getTime() - start.getTime()) / (7 * 24 * 60 * 60 * 1000)) + 1);
   };
 
+  const formatDateRange = (start?: string, end?: string) => {
+    if (!start || !end) return "";
+    const [y1, m1, d1] = start.split("-");
+    const [y2, m2, d2] = end.split("-");
+    if (!d1 || !d2) return `${start} → ${end}`;
+    if (y1 === y2 && m1 === m2) {
+      return `${d1}/${m1} — ${d2}/${m2}/${y1}`;
+    }
+    return `${d1}/${m1}/${y1} — ${d2}/${m2}/${y2}`;
+  };
+
   // Chart follows each person's onboarding timeline, not one shared team week.
   const selectedDev = selectedDevFilter !== "all"
     ? view.personnel.find(p => p.code === selectedDevFilter)
@@ -169,11 +195,29 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     .slice(0, 10)
     .reverse();
   const chartSlots = Array.from({ length: 10 }, (_, index) => chartMetrics[index]);
+  const todayStr = new Date().toISOString().slice(0, 10);
+
   const chartData = chartSlots.map((matchedMetric, index) => {
     let displayActual = 0;
     let displayTarget = 0;
     let weekLabel = weeklyTargetTrajectory[index].weekLabel;
     let milestoneLabel = weeklyTargetTrajectory[index].milestoneLabel;
+
+    let startDate = matchedMetric?.period.startDate || "";
+    let endDate = matchedMetric?.period.endDate || "";
+
+    if (!startDate && chartMetrics[0]?.period.startDate) {
+      const firstStart = new Date(`${chartMetrics[0].period.startDate}T00:00:00Z`);
+      const weekStart = new Date(firstStart);
+      weekStart.setUTCDate(firstStart.getUTCDate() + index * 7);
+      const weekEnd = new Date(weekStart);
+      weekEnd.setUTCDate(weekStart.getUTCDate() + 6);
+      startDate = weekStart.toISOString().slice(0, 10);
+      endDate = weekEnd.toISOString().slice(0, 10);
+    }
+
+    const isCurrentWeek = Boolean(startDate && endDate && todayStr >= startDate && todayStr <= endDate);
+    const dateRangeLabel = formatDateRange(startDate, endDate);
 
     const isLead = selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead";
 
@@ -193,12 +237,13 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     } else if (isLead) {
       const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
       displayActual = personData ? personData.bugsReviewed : 0;
-      displayTarget = matchedMetric ? matchedMetric.totalFixed : 10;
       const onboardingWeek = matchedMetric && selectedDev
         ? getOnboardingWeek(selectedDev.startDate, matchedMetric.period.startDate)
         : index + 1;
+      const leadStep = leadReviewTargetTrajectory[onboardingWeek - 1] ?? leadReviewTargetTrajectory.at(-1);
+      displayTarget = leadStep?.target ?? 45;
       weekLabel = `Tuần ${onboardingWeek}`;
-      milestoneLabel = "👑 Review Code & Nghiệm thu PRs";
+      milestoneLabel = leadStep?.milestoneLabel ?? "👑 Review Code & Nghiệm thu PRs";
     } else {
       const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
       displayActual = personData ? personData.bugsFixed : 0;
@@ -211,7 +256,9 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
       milestoneLabel = targetStep?.milestoneLabel ?? "Năng suất ổn định";
     }
 
-    const maxScale = selectedDevFilter === "all" ? Math.max(45 * activeDevsCount, displayTarget) : 45;
+    const maxScale = selectedDevFilter === "all"
+      ? Math.max(45 * activeDevsCount, displayTarget, displayActual)
+      : Math.max(50, displayTarget, displayActual);
     const targetPct = Math.min((displayTarget / maxScale) * 100, 100);
     const actualPct = Math.min((displayActual / maxScale) * 100, 100);
     const achieveRate = displayTarget > 0 ? Math.round((displayActual / displayTarget) * 100) : 0;
@@ -220,6 +267,10 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     return {
       weekLabel,
       milestoneLabel,
+      startDate,
+      endDate,
+      dateRangeLabel,
+      isCurrentWeek,
       displayActual,
       displayTarget,
       targetPct,
@@ -230,12 +281,14 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     };
   });
 
+  const currentWeekItem = chartData.find(d => d.isCurrentWeek);
+
   // SVG Line Chart Points calculation (Expanded Height & Clean Padding)
   const svgWidth = 800;
-  const svgHeight = 210;
+  const svgHeight = 220;
   const paddingX = 45;
   const paddingTop = 40;
-  const paddingBottom = 40;
+  const paddingBottom = 50;
   const usableW = svgWidth - paddingX * 2;
   const usableH = svgHeight - paddingTop - paddingBottom;
 
@@ -318,10 +371,17 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
             <div style={{ fontSize: "18px", fontWeight: 800, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: "10px" }}>
               <span>🚀</span> Biểu Đồ Lộ Trình Target Tiến Độ Theo Tuần — <span style={{ color: "var(--cyan)" }}>{selectedDevName}</span>
             </div>
-            <div style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px" }}>
-              {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead"
-                ? "Mốc lộ trình Năng suất Review Code & Nghiệm thu chất lượng PRs của Lead theo các tuần."
-                : "Mốc lộ trình tăng trưởng năng suất sửa bug thực tế trên Notion vs Target thiết lập qua các tuần."}
+            <div style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+              <span>
+                {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead"
+                  ? "Mốc lộ trình Năng suất Review Code & Nghiệm thu chất lượng PRs của Lead theo các tuần."
+                  : "Mốc lộ trình tăng trưởng năng suất sửa bug thực tế trên Notion vs Target thiết lập qua các tuần."}
+              </span>
+              {currentWeekItem && (
+                <span className="tag tag-cyan" style={{ fontSize: "11px", border: "1px solid var(--cyan)", fontWeight: "bold", boxShadow: "0 0 6px rgba(6,182,212,0.2)" }}>
+                  🔥 {currentWeekItem.weekLabel} (Tuần hiện tại: {currentWeekItem.dateRangeLabel})
+                </span>
+              )}
             </div>
           </div>
           
@@ -356,7 +416,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
             </div>
           </div>
 
-          <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "200px", overflow: "visible" }}>
+          <svg viewBox={`0 0 ${svgWidth} ${svgHeight}`} style={{ width: "100%", height: "220px", overflow: "visible" }}>
             <defs>
               <linearGradient id="actualGradient" x1="0" y1="0" x2="0" y2="1">
                 <stop offset="0%" stopColor="#10b981" stopOpacity="0.22" />
@@ -436,8 +496,26 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                 actualBadgeY = yActual + 10;
               }
 
+              const shortDates = d.startDate && d.endDate
+                ? `${d.startDate.slice(8,10)}/${d.startDate.slice(5,7)} - ${d.endDate.slice(8,10)}/${d.endDate.slice(5,7)}`
+                : "";
+
               return (
                 <g key={i}>
+                  {/* Current Week Highlight Column */}
+                  {d.isCurrentWeek && (
+                    <rect 
+                      x={x - 28} 
+                      y={paddingTop - 5} 
+                      width="56" 
+                      height={usableH + 10} 
+                      rx="6" 
+                      fill="rgba(6,182,212,0.12)" 
+                      stroke="rgba(6,182,212,0.4)" 
+                      strokeDasharray="3 3" 
+                    />
+                  )}
+
                   {/* Target Dot & Label */}
                   <circle cx={x} cy={yTarget} r="4.5" fill="var(--cyan)" />
                   <text 
@@ -481,37 +559,62 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                   {/* Week X-Axis Label (Placed safely at bottom) */}
                   <text 
                     x={x} 
-                    y={svgHeight - 8} 
+                    y={svgHeight - 20} 
                     textAnchor="middle" 
-                    fill="var(--text-1)" 
+                    fill={d.isCurrentWeek ? "var(--cyan)" : "var(--text-1)"} 
                     fontSize="12" 
                     fontWeight="bold"
                   >
-                    {d.weekLabel}
+                    {d.weekLabel}{d.isCurrentWeek ? " 🔥" : ""}
                   </text>
+                  {shortDates && (
+                    <text 
+                      x={x} 
+                      y={svgHeight - 6} 
+                      textAnchor="middle" 
+                      fill={d.isCurrentWeek ? "var(--cyan)" : "var(--text-3)"} 
+                      fontSize="9" 
+                      fontWeight={d.isCurrentWeek ? "bold" : "normal"}
+                    >
+                      {shortDates}
+                    </text>
+                  )}
                 </g>
               );
             })}
           </svg>
-        </div>        {/* Compact High-Contrast Meters */}
+        </div>
+
+        {/* Compact High-Contrast Meters */}
         <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
           {chartData.map((d) => (
             <div 
               key={d.weekLabel} 
               style={{ 
-                background: "var(--surface-2)", 
+                background: d.isCurrentWeek ? "rgba(6,182,212,0.06)" : "var(--surface-2)", 
                 padding: "8px 12px", 
                 borderRadius: "8px", 
-                border: "1px solid var(--border-3)",
+                border: d.isCurrentWeek ? "1px solid var(--cyan)" : "1px solid var(--border-3)",
+                boxShadow: d.isCurrentWeek ? "0 0 10px rgba(6,182,212,0.12)" : "none",
                 display: "flex",
                 flexDirection: "column",
                 gap: "5px"
               }}
             >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <span style={{ fontSize: "13px", fontWeight: "bold", color: "var(--text-1)" }}>{d.weekLabel}</span>
-                  <span style={{ color: "var(--text-3)", margin: "0 6px" }}>|</span>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                  <span style={{ fontSize: "13px", fontWeight: "800", color: d.isCurrentWeek ? "var(--cyan)" : "var(--text-1)" }}>{d.weekLabel}</span>
+                  {d.isCurrentWeek && (
+                    <span className="tag tag-cyan" style={{ fontSize: "10px", padding: "1px 7px", fontWeight: "bold", border: "1px solid var(--cyan)", boxShadow: "0 0 6px rgba(6,182,212,0.3)" }}>
+                      🔥 Tuần hiện tại
+                    </span>
+                  )}
+                  {d.dateRangeLabel && (
+                    <span style={{ fontSize: "11px", color: "var(--text-2)", background: "var(--surface-3)", padding: "1px 7px", borderRadius: "4px", fontWeight: "600", border: "1px solid var(--border-3)" }}>
+                      📅 {d.dateRangeLabel}
+                    </span>
+                  )}
+                  <span style={{ color: "var(--text-3)" }}>|</span>
                   <span style={{ fontSize: "11px", color: "var(--cyan)", fontWeight: "600" }}>{d.milestoneLabel}</span>
                 </div>
                 
@@ -529,12 +632,18 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                       borderRadius: "10px", 
                       fontSize: "10px", 
                       fontWeight: "bold",
-                      background: d.isTargetMet ? "rgba(16,185,129,0.15)" : "rgba(59,130,246,0.15)",
-                      color: d.isTargetMet ? "var(--green)" : "var(--blue)",
-                      border: `1px solid ${d.isTargetMet ? "rgba(16,185,129,0.3)" : "rgba(59,130,246,0.3)"}`
+                      background: d.isCurrentWeek
+                        ? "rgba(6,182,212,0.18)"
+                        : d.isTargetMet ? "rgba(16,185,129,0.15)" : "rgba(59,130,246,0.15)",
+                      color: d.isCurrentWeek
+                        ? "var(--cyan)"
+                        : d.isTargetMet ? "var(--green)" : "var(--blue)",
+                      border: `1px solid ${d.isCurrentWeek ? "rgba(6,182,212,0.4)" : d.isTargetMet ? "rgba(16,185,129,0.3)" : "rgba(59,130,246,0.3)"}`
                     }}
                   >
-                    {d.isTargetMet ? `✅ Vượt target (+${d.achieveRate - 100}%)` : `🔹 Đạt ${d.achieveRate}% target`}
+                    {d.isCurrentWeek 
+                      ? `⏳ Đang thực hiện (${d.displayActual}/${d.displayTarget})` 
+                      : d.isTargetMet ? `✅ Vượt target (+${d.achieveRate - 100}%)` : `🔹 Đạt ${d.achieveRate}% target`}
                   </span>
                 </div>
               </div>

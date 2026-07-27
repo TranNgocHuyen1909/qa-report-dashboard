@@ -93,9 +93,10 @@ export function BenchmarkView({ view }: { view: DashboardView }) {
                 {/* Visual Trajectory Bars per Week */}
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "8px" }}>
                   {devWeeklyHistory.map((h, i) => {
-                    const maxScale = isLead ? 20 : 15;
+                    const leadTargets = [17, 25, 28, 30, 35, 40];
+                    const targetForWeek = isLead ? (leadTargets[i] ?? 40) : Math.round(4 + (i * 2));
+                    const maxScale = isLead ? Math.max(45, targetForWeek, h.val) : 15;
                     const barHeightPct = Math.min((h.val / maxScale) * 100, 100);
-                    const targetForWeek = isLead ? 10 : Math.round(4 + (i * 2));
 
                     return (
                       <div key={h.weekLabel} style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: "4px" }}>

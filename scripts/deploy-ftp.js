@@ -47,6 +47,14 @@ async function deploy() {
       await client.uploadFrom(localEnvPath, ".env");
     }
 
+    // Đồng bộ file .cache/bugs.json lên server để live server có đầy đủ dữ liệu Notion & GitHub
+    const localCachePath = path.resolve(process.cwd(), ".cache/bugs.json");
+    if (fs.existsSync(localCachePath)) {
+      console.log("📦 Đang đồng bộ file .cache/bugs.json dữ liệu lên server...");
+      await client.ensureDir(".cache");
+      await client.uploadFrom(localCachePath, "bugs.json");
+    }
+
     console.log("🎉 DEPLOY THÀNH CÔNG 100%!");
     console.log(`🌐 Kiểm tra trang web tại: https://${FTP_USER}:${encodeURIComponent(FTP_PASSWORD)}@${FTP_HOST}/`);
   } catch (err) {

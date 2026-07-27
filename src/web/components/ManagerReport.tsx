@@ -62,18 +62,18 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     }
   }, [activePeriodKey, activeConclusion]);
 
-  // Weekly Targets Trajectory for New Joiners (Realistic Onboarding Curve - NO MENTIONS OF AN)
+  // Weekly Targets Trajectory for Developers (Realistic Capacity Milestone Curve)
   const weeklyTargetTrajectory = [
-    { weekLabel: "Tuần 1", targetPerDev: 10, milestoneLabel: "Mức 0: Làm quen codebase & quy trình" },
-    { weekLabel: "Tuần 2", targetPerDev: 15, milestoneLabel: "Mức Onboarding: Tự chủ fix bug độc lập" },
-    { weekLabel: "Tuần 3", targetPerDev: 20, milestoneLabel: "Mốc T1: Đạt chuẩn tiến độ người mới" },
-    { weekLabel: "Tuần 4", targetPerDev: 25, milestoneLabel: "Mốc T2: Tự làm các task luồng khó" },
-    { weekLabel: "Tuần 5", targetPerDev: 30, milestoneLabel: "Mốc T3: Tiệm cận năng suất tối đa" },
-    { weekLabel: "Tuần 6", targetPerDev: 40, milestoneLabel: "Mốc 100%: Năng suất tối đa (~40 Bug/Tuần)" },
-    { weekLabel: "Tuần 7", targetPerDev: 40, milestoneLabel: "Duy trì năng suất tối đa" },
-    { weekLabel: "Tuần 8", targetPerDev: 40, milestoneLabel: "Duy trì năng suất tối đa" },
-    { weekLabel: "Tuần 9", targetPerDev: 40, milestoneLabel: "Duy trì năng suất tối đa" },
-    { weekLabel: "Tuần 10", targetPerDev: 40, milestoneLabel: "Duy trì năng suất tối đa" },
+    { weekLabel: "Tuần 1", targetPerDev: 4, milestoneLabel: "Mức 0: Làm quen codebase & quy trình (3-5 bug/tuần)" },
+    { weekLabel: "Tuần 2", targetPerDev: 6, milestoneLabel: "Mức Onboarding: Tự chủ fix bug độc lập (5-7 bug/tuần)" },
+    { weekLabel: "Tuần 3", targetPerDev: 8, milestoneLabel: "Mốc T1: Đạt chuẩn tiến độ người mới (7-9 bug/tuần)" },
+    { weekLabel: "Tuần 4", targetPerDev: 10, milestoneLabel: "Mốc T2: Tự làm các task luồng khó (9-11 bug/tuần)" },
+    { weekLabel: "Tuần 5", targetPerDev: 12, milestoneLabel: "Mốc T3: Tiệm cận năng suất tối đa (11-13 bug/tuần)" },
+    { weekLabel: "Tuần 6", targetPerDev: 14, milestoneLabel: "Mốc 100%: Năng suất thực tế tiêu chuẩn (~12-15 Bug/Tuần)" },
+    { weekLabel: "Tuần 7", targetPerDev: 14, milestoneLabel: "Duy trì năng suất tiêu chuẩn (~14 Bug/Tuần)" },
+    { weekLabel: "Tuần 8", targetPerDev: 14, milestoneLabel: "Duy trì năng suất tiêu chuẩn (~14 Bug/Tuần)" },
+    { weekLabel: "Tuần 9", targetPerDev: 14, milestoneLabel: "Duy trì năng suất tiêu chuẩn (~14 Bug/Tuần)" },
+    { weekLabel: "Tuần 10", targetPerDev: 14, milestoneLabel: "Duy trì năng suất tiêu chuẩn (~14 Bug/Tuần)" },
   ];
 
   const handleAutoDraft = () => {
@@ -175,6 +175,8 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     let weekLabel = weeklyTargetTrajectory[index].weekLabel;
     let milestoneLabel = weeklyTargetTrajectory[index].milestoneLabel;
 
+    const isLead = selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead";
+
     if (selectedDevFilter === "all") {
       const teamTotalFixed = matchedMetric ? matchedMetric.totalFixed : 0;
       displayActual = teamTotalFixed;
@@ -188,6 +190,15 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
         weekLabel = matchedMetric.period.label;
         milestoneLabel = "Theo tuần lịch";
       }
+    } else if (isLead) {
+      const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
+      displayActual = personData ? personData.bugsReviewed : 0;
+      displayTarget = matchedMetric ? matchedMetric.totalFixed : 10;
+      const onboardingWeek = matchedMetric && selectedDev
+        ? getOnboardingWeek(selectedDev.startDate, matchedMetric.period.startDate)
+        : index + 1;
+      weekLabel = `Tuần ${onboardingWeek}`;
+      milestoneLabel = "👑 Review Code & Nghiệm thu PRs";
     } else {
       const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
       displayActual = personData ? personData.bugsFixed : 0;
@@ -308,7 +319,9 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
               <span>🚀</span> Biểu Đồ Lộ Trình Target Tiến Độ Theo Tuần — <span style={{ color: "var(--cyan)" }}>{selectedDevName}</span>
             </div>
             <div style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px" }}>
-              Mốc lộ trình tăng trưởng năng suất sửa bug thực tế trên Notion vs Target thiết lập qua các tuần.
+              {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead"
+                ? "Mốc lộ trình Năng suất Review Code & Nghiệm thu chất lượng PRs của Lead theo các tuần."
+                : "Mốc lộ trình tăng trưởng năng suất sửa bug thực tế trên Notion vs Target thiết lập qua các tuần."}
             </div>
           </div>
           
@@ -334,8 +347,12 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
           <div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--text-1)", marginBottom: "12px", display: "flex", justifyContent: "space-between" }}>
             <span>📈 Đồ Thị Đường Tăng Trưởng Thực Tế vs Target Curve</span>
             <div style={{ display: "flex", gap: "20px", fontSize: "11px" }}>
-              <span style={{ color: "var(--cyan)", fontWeight: "bold" }}>── 🎯 Target Curve</span>
-              <span style={{ color: "var(--green)", fontWeight: "bold" }}>── 🟢 Thực Tế Progress</span>
+              <span style={{ color: "var(--cyan)", fontWeight: "bold" }}>
+                ── 🎯 {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead" ? "Target Review Curve (100% PR Team)" : "Target Curve"}
+              </span>
+              <span style={{ color: selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead" ? "var(--purple)" : "var(--green)", fontWeight: "bold" }}>
+                ── {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead" ? "🟣 Thực Tế PRs Reviewed" : "🟢 Thực Tế Progress"}
+              </span>
             </div>
           </div>
 
@@ -500,11 +517,11 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                 
                 <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
                   <span style={{ color: "var(--text-2)" }}>
-                    Target: <strong style={{ color: "var(--cyan)" }}>{d.displayTarget} bug/tuần</strong>
+                    Target: <strong style={{ color: "var(--cyan)" }}>{d.displayTarget} {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead" ? "PRs review" : "bug/tuần"}</strong>
                   </span>
                   <span style={{ color: "var(--text-3)" }}>|</span>
                   <span style={{ color: "var(--text-1)" }}>
-                    Thực tế: <strong style={{ color: d.isTargetMet ? "var(--green)" : "var(--accent-2)" }}>{d.displayActual} bug/tuần</strong>
+                    Thực tế: <strong style={{ color: d.isTargetMet ? "var(--green)" : "var(--accent-2)" }}>{d.displayActual} {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead" ? "PRs đã review" : "bug/tuần"}</strong>
                   </span>
                   <span 
                     style={{ 

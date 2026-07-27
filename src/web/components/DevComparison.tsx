@@ -653,22 +653,22 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         <div className="table-wrap">
           <table>
             <thead>
-              <tr>
-                <th style={{ textAlign: "left" }}>Nhân sự</th>
-                <th style={{ textAlign: "left" }} className="has-tooltip" data-tooltip="Vị trí lỗi (component) của bug">Vị trí lỗi</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Tổng số task Dev đã làm và mở PR trong kỳ">Tổng PR</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đã hoàn thành, review xong và deploy thành công (Closed, Deployed) trong kỳ">Đã Close</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đã sửa xong (Resolved) trong kỳ">Resolved</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug Resolved đang CHỜ QC/Lead review">Chờ Review</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đã được Lead Huyền review trong kỳ">Huyền Review</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đã được QC Lead Trường review trong kỳ">Trường Review</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số bug đóng trực tiếp không qua PR (Ví dụ: Không tái hiện, Trùng lặp, Không phải lỗi, v.v.)">Không tái hiện</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong:&#10;(Số bug Reopen / Tổng số bug đã sửa xong (Closed + Resolved)) * 100%&#10;Mục tiêu: < 15%">Tỷ lệ Reopen</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Tỷ lệ & số PR mà Dev phải push thêm commit (2, 3... commits) sau khi đã Resolved/tạo PR ban đầu">Sửa Bổ Sung</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Năng suất sửa lỗi trung bình mỗi ngày công: (Đã Close + Resolved) / MD">Bug/Ngày</th>
-                <th style={{ textAlign: "right" }} className="has-tooltip" data-tooltip="Số review comment trung bình nhận từ anh T trên mỗi PR task:&#10;Tổng review comments / Số task sửa qua PR">Comments/Task</th>
-                <th style={{ textAlign: "center" }} className="has-tooltip" data-tooltip="Số lượng bug vi phạm các bài học kinh nghiệm được lưu trong Checklist">Lỗi Lặp</th>
+              <tr style={{ fontSize: "11px" }}>
+                <th style={{ textAlign: "left", padding: "8px 6px" }}>Nhân sự</th>
+                <th style={{ textAlign: "left", padding: "8px 6px" }} className="has-tooltip" data-tooltip="Vị trí lỗi (component) của bug">Vị trí lỗi</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Tổng số task Dev đã làm và mở PR trong kỳ">Tổng PR</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã hoàn thành, review xong và deploy thành công (Closed, Deployed) trong kỳ">Close</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã sửa xong (Resolved) trong kỳ">Resolved</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug Resolved đang CHỜ QC/Lead review">Chờ Review</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã được Lead Huyền review trong kỳ">Huyền</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã được QC Lead Trường review trong kỳ">Trường</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đóng trực tiếp không qua PR (Ví dụ: Không tái hiện, Trùng lặp, Không phải lỗi, v.v.)">No Repro</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong:&#10;(Số bug Reopen / Tổng số bug đã sửa xong (Closed + Resolved)) * 100%&#10;Mục tiêu: < 15%">Reopen</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Tỷ lệ & số PR mà Dev phải push thêm commit (2, 3... commits) sau khi đã Resolved/tạo PR ban đầu">Sửa Bổ Sung</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Năng suất sửa lỗi trung bình mỗi ngày công: (Đã Close + Resolved) / MD">Bug/Ngày</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số review comment trung bình nhận từ anh T trên mỗi PR task:&#10;Tổng review comments / Số task sửa qua PR">Comments/Task</th>
+                <th style={{ textAlign: "center", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số lượng bug vi phạm các bài học kinh nghiệm được lưu trong Checklist">Lỗi Lặp</th>
               </tr>
             </thead>
             <tbody>
@@ -687,7 +687,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         textAlign: "left", 
                         verticalAlign: "middle", 
                         fontWeight: "bold",
-                        padding: "12px 10px"
+                        padding: "8px 6px"
                       }}
                     >
                       <strong>{row.dev.displayName}</strong>
@@ -706,12 +706,14 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         return null;
                       })()}
                     </td>
-                    <td style={{ textAlign: "left", fontSize: "13px", color: "var(--text-2)", fontWeight: "500", paddingLeft: "12px" }}>
+                    <td style={{ textAlign: "left", fontSize: "12px", color: "var(--text-2)", fontWeight: "500", padding: "8px 6px" }}>
                       {row.locationText}
                     </td>
                     <td 
                       className="td-num has-tooltip" 
                       style={{ 
+                        padding: "8px 6px",
+                        fontSize: "12px",
                         color: row.solvedWithPr > 0 ? "var(--accent)" : "var(--text-3)",
                         cursor: row.solvedWithPr > 0 ? "pointer" : "default",
                         textDecoration: row.solvedWithPr > 0 ? "underline dashed" : "none"
@@ -721,11 +723,13 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     >
                       {row.solvedWithPr} PR
                     </td>
-                    <td className="td-num" style={{ color: row.closedCount > 0 ? "var(--green)" : "var(--text-3)" }}>{row.closedCount}</td>
-                    <td className="td-num" style={{ color: row.resolvedCount > 0 ? "var(--blue)" : "var(--text-3)" }}>{row.resolvedCount}</td>
+                    <td className="td-num" style={{ padding: "8px 6px", fontSize: "12px", color: row.closedCount > 0 ? "var(--green)" : "var(--text-3)" }}>{row.closedCount}</td>
+                    <td className="td-num" style={{ padding: "8px 6px", fontSize: "12px", color: row.resolvedCount > 0 ? "var(--blue)" : "var(--text-3)" }}>{row.resolvedCount}</td>
                     <td 
                       className="td-num has-tooltip" 
                       style={{ 
+                        padding: "8px 6px",
+                        fontSize: "12px",
                         color: row.pendingReviewCount > 0 ? "var(--yellow)" : "var(--text-3)",
                         cursor: row.pendingReviewCount > 0 ? "pointer" : "default",
                         textDecoration: row.pendingReviewCount > 0 ? "underline dashed" : "none"
@@ -738,6 +742,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     <td 
                       className="td-num has-tooltip" 
                       style={{ 
+                        padding: "8px 6px",
+                        fontSize: "12px",
                         color: row.huyenReviewedCount > 0 ? "var(--cyan)" : "var(--text-3)",
                         cursor: row.huyenReviewedCount > 0 ? "pointer" : "default",
                         textDecoration: row.huyenReviewedCount > 0 ? "underline dashed" : "none"
@@ -750,6 +756,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     <td 
                       className="td-num has-tooltip" 
                       style={{ 
+                        padding: "8px 6px",
+                        fontSize: "12px",
                         color: row.truongReviewedCount > 0 ? "var(--purple)" : "var(--text-3)",
                         cursor: row.truongReviewedCount > 0 ? "pointer" : "default",
                         textDecoration: row.truongReviewedCount > 0 ? "underline dashed" : "none"
@@ -759,10 +767,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     >
                       {row.truongReviewedCount}
                     </td>
-                    <td className="td-num" style={{ color: "var(--text-3)" }}>{row.noRepro}</td>
+                    <td className="td-num" style={{ padding: "8px 6px", fontSize: "12px", color: "var(--text-3)" }}>{row.noRepro}</td>
                     <td 
                       className="td-num has-tooltip" 
                       style={{ 
+                        padding: "8px 6px",
+                        fontSize: "12px",
                         color: row.reopenedCount > 0 ? "var(--red)" : "var(--text-2)", 
                         cursor: row.reopenedCount > 0 ? "pointer" : "default",
                         textDecoration: row.reopenedCount > 0 ? "underline dashed" : "none"
@@ -775,6 +785,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     <td 
                       className="td-num has-tooltip" 
                       style={{ 
+                        padding: "8px 6px",
+                        fontSize: "12px",
                         color: row.reCommitCount > 0 ? "var(--yellow)" : "var(--text-2)", 
                         cursor: row.reCommitCount > 0 ? "pointer" : "default",
                         textDecoration: row.reCommitCount > 0 ? "underline dashed" : "none"
@@ -784,17 +796,17 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     >
                       {row.reCommitCount > 0 ? `${row.reCommitCount} PR` : "0 PR"}
                     </td>
-                    <td className="td-num" style={{ verticalAlign: "middle", padding: "8px 10px" }}>
+                    <td className="td-num" style={{ verticalAlign: "middle", padding: "8px 6px" }}>
                       <input 
                         type="number" 
                         step="0.5" 
                         min="0" 
                         max="31"
                         style={{ 
-                          width: "55px", 
+                          width: "48px", 
                           textAlign: "right", 
-                          padding: "4px 6px", 
-                          fontSize: "13px", 
+                          padding: "2px 4px", 
+                          fontSize: "12px", 
                           border: "1px solid var(--border-3)", 
                           borderRadius: "4px",
                           background: "var(--surface-2)",

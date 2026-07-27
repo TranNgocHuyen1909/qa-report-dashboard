@@ -157,3 +157,37 @@ Kết quả mong đợi:
 ```json
 {"ok":true}
 ```
+
+---
+
+## 🖥️ Hướng dẫn kết nối SSH vào Máy Ảo bằng VS Code (Remote - SSH)
+
+Để phát triển, chỉnh sửa file `.env` hoặc quản lý ứng dụng trực tiếp trên máy ảo thông qua giao diện VS Code:
+
+### Bước 1: Cài đặt Extension Remote - SSH
+1. Mở VS Code trên máy tính cá nhân.
+2. Mở cửa sổ Extension bằng phím tắt `Ctrl + Shift + X` (hoặc `Cmd + Shift + X` trên Mac).
+3. Tìm kiếm với từ khóa **`Remote - SSH`** (phát hành bởi Microsoft) và chọn **Install**.
+
+### Bước 2: Kết nối tới Máy Ảo (Virtual Machine)
+1. Bật ứng dụng **Tailscale** trên máy tính để kết nối vào mạng nội bộ với máy ảo.
+2. Nhấn `F1` (hoặc `Ctrl + Shift + P`) trên VS Code để mở **Command Palette**.
+3. Nhập từ khóa: `Remote-SSH: Connect to Host...` và chọn lệnh này.
+4. Nhập cú pháp SSH kết nối:
+   ```text
+   ssh ubuntu@bug-report-app
+   ```
+   *(Hoặc `ssh ubuntu@<IP_TAILSCALE_CỦA_MÁY_ẢO>`)*.
+5. Nhấn `Enter`, chọn Platform của máy chủ là **Linux**.
+6. Nếu được yêu cầu, chọn **Continue** và nhập mật khẩu của máy ảo.
+
+### Bước 3: Mở Thư Mục Dự Án Trên Máy Ảo
+1. Khi kết nối thành công, góc dưới bên trái của VS Code sẽ hiển thị nhãn màu xanh: `SSH: ubuntu@bug-report-app`.
+2. Vào menu **File** ➔ chọn **Open Folder...**.
+3. Điền đường dẫn thư mục dự án:
+   ```text
+   /home/ubuntu/qa-report-dashboard
+   ```
+   và bấm **OK**.
+4. Mở Terminal trong VS Code bằng `Ctrl + ~` để chạy các lệnh quản lý `pm2`, `git pull`, `npm run build` trực tiếp trên máy ảo.
+

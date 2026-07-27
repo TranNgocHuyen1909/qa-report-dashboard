@@ -251,9 +251,28 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
         ? getOnboardingWeek(selectedDev.startDate, matchedMetric.period.startDate)
         : index + 1;
       const targetStep = weeklyTargetTrajectory[onboardingWeek - 1] ?? weeklyTargetTrajectory.at(-1);
-      displayTarget = targetStep?.targetPerDev ?? 0;
+      const floorTarget = targetStep?.targetPerDev ?? 0;
+
+      // Dynamic target calculation based on previous week's performance
+      const prev1Slot = chartSlots[index - 1];
+      const prev2Slot = chartSlots[index - 2];
+      const prev1Data = prev1Slot?.byPerson.find(p => p.personCode === selectedDevFilter);
+      const prev2Data = prev2Slot?.byPerson.find(p => p.personCode === selectedDevFilter);
+
+      const actualPrev1 = prev1Data?.bugsFixed;
+      const actualPrev2 = prev2Data?.bugsFixed;
+
+      if (actualPrev1 !== undefined) {
+        const avgTwo = actualPrev2 !== undefined ? (actualPrev1 + actualPrev2) / 2 : actualPrev1;
+        const basePrev = Math.max(actualPrev1, avgTwo);
+        const movingTarget = Math.ceil(basePrev * 1.1); // +10% over recent high/average
+        displayTarget = Math.max(movingTarget, floorTarget);
+        milestoneLabel = `Target động: ${displayTarget} bug (Tuần trước ${actualPrev1} bug +10%)`;
+      } else {
+        displayTarget = floorTarget;
+        milestoneLabel = targetStep?.milestoneLabel ?? "Năng suất ổn định";
+      }
       weekLabel = `Tuần ${onboardingWeek}`;
-      milestoneLabel = targetStep?.milestoneLabel ?? "Năng suất ổn định";
     }
 
     const maxScale = selectedDevFilter === "all"

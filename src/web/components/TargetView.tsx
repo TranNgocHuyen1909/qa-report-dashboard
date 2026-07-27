@@ -25,6 +25,7 @@ type WeeklyTargetRow = {
   remaining: number;
   achievementPercent: number;
   isCurrentWeek: boolean;
+  targetBasis: string;
 };
 
 const TARGET_LEVELS: TargetLevel[] = [
@@ -80,18 +81,51 @@ export function TargetView({ view }: { view: DashboardView }) {
   const rows = useMemo<WeeklyTargetRow[]>(() => {
     const developers = view.personnel.filter(person => person.role === "developer");
 
-    return view.weeklyMetrics.flatMap(metric => {
+    // view.weeklyMetrics is ordered descending (newest week at index 0)
+    return view.weeklyMetrics.flatMap((metric, metricIndex) => {
       const isCurrentWeek = today >= metric.period.startDate && today <= metric.period.endDate;
+
+      // Older weeks for calculating 2-week moving average
+      const prev1Metric = view.weeklyMetrics[metricIndex + 1];
+      const prev2Metric = view.weeklyMetrics[metricIndex + 2];
 
       return developers
         .filter(person => person.startDate <= metric.period.endDate)
         .map(person => {
           const onboardingWeek = getOnboardingWeek(person, metric.period);
           const level = getTargetLevel(onboardingWeek);
-          const target = Math.ceil(benchmarkPerWeek * level.percent / 100);
+          const onboardingFloor = Math.ceil((benchmarkPerWeek * level.percent) / 100);
           const actual = getPersonActual(
             metric.byPerson.find(personMetric => personMetric.personCode === person.code),
           );
+
+          // Get previous 2 completed weeks actual performance
+          const p1 = prev1Metric?.byPerson.find(pm => pm.personCode === person.code);
+          const p2 = prev2Metric?.byPerson.find(pm => pm.personCode === person.code);
+
+          const actualPrev1 = p1?.bugsFixed;
+          const actualPrev2 = p2?.bugsFixed;
+
+          let target: number;
+          let targetBasis: string;
+
+          if (actualPrev1 !== undefined) {
+            const avgTwo = actualPrev2 !== undefined ? (actualPrev1 + actualPrev2) / 2 : actualPrev1;
+            const basePrev = Math.max(actualPrev1, avgTwo);
+            const movingTarget = Math.ceil(basePrev * 1.1); // +10% growth over recent high/average
+
+            if (movingTarget >= onboardingFloor) {
+              target = movingTarget;
+              targetBasis = `Tuần trước ${actualPrev1} bug ➔ Target +10% (${movingTarget} bug)`;
+            } else {
+              target = onboardingFloor;
+              targetBasis = `Mức sàn ${level.label} (${onboardingFloor} bug)`;
+            }
+          } else {
+            // First week or no history -> fallback to onboarding floor
+            target = onboardingFloor;
+            targetBasis = `Mức sàn Onboarding ${level.label}`;
+          }
 
           return {
             period: metric.period,
@@ -101,8 +135,9 @@ export function TargetView({ view }: { view: DashboardView }) {
             target,
             actual,
             remaining: Math.max(0, target - actual),
-            achievementPercent: target > 0 ? actual / target * 100 : 0,
+            achievementPercent: target > 0 ? (actual / target) * 100 : 0,
             isCurrentWeek,
+            targetBasis,
           };
         });
     });
@@ -128,15 +163,16 @@ export function TargetView({ view }: { view: DashboardView }) {
 
   return (
     <div>
-      <h1 className="section-title">🎯 Target theo tuần</h1>
+      <h1 className="section-title">🎯 Target theo tuần (Option 2 - Dynamic Moving Average)</h1>
       <div className="card" style={{ marginBottom: 16 }}>
         <div className="card-header">
           <div>
-            <div className="card-title">Cơ sở thiết lập mục tiêu</div>
+            <div className="card-title">Cơ sở thiết lập mục tiêu động</div>
             <div className="card-subtitle">
-              Benchmark An từ {benchmarkMonth.label}: {benchmarkMonth.totalFixed} bug / 21 ngày công
-              = {benchmarkMonth.avgBugsPerDay} bug/ngày = <strong>{benchmarkPerWeek.toFixed(0)} bug/tuần</strong>.
-              Target được chốt theo tuần, không đánh giá bằng trung bình từng ngày.
+              Target mỗi tuần được tính tự động = <strong>Trung bình 2 tuần gần nhất × 1.1 (+10% tăng trưởng)</strong>.
+              Đồng thời bảo đảm mức sàn tối thiểu theo giai đoạn Onboarding (
+              {TARGET_LEVELS.map(l => `${l.label}: ${Math.ceil((benchmarkPerWeek * l.percent) / 100)} bug/tuần`).join(" · ")}
+              ).
             </div>
           </div>
         </div>
@@ -147,8 +183,8 @@ export function TargetView({ view }: { view: DashboardView }) {
           </div>
           {TARGET_LEVELS.map(level => (
             <div className="kpi kpi-accent" key={level.label}>
-              <div className="kpi-value">{Math.ceil(benchmarkPerWeek * level.percent / 100)}</div>
-              <div className="kpi-label">{level.label} · {level.percent}% benchmark</div>
+              <div className="kpi-value">{Math.ceil((benchmarkPerWeek * level.percent) / 100)}</div>
+              <div className="kpi-label">Sàn {level.label} · {level.percent}% benchmark</div>
             </div>
           ))}
         </div>
@@ -210,7 +246,7 @@ export function TargetView({ view }: { view: DashboardView }) {
         <div className="card-header">
           <div>
             <div className="card-title">Theo dõi target từng thành viên</div>
-            <div className="card-subtitle">Target tăng theo số tuần onboarding; Actual là số bug hoàn thành trong tuần.</div>
+            <div className="card-subtitle">Target được tính tự động từ phong độ 2 tuần gần nhất (+10%); Actual là số bug hoàn thành trong tuần.</div>
           </div>
         </div>
         <div className="table-wrap">
@@ -220,7 +256,7 @@ export function TargetView({ view }: { view: DashboardView }) {
                 <th>Tuần</th>
                 <th>Thành viên</th>
                 <th style={{ textAlign: "right" }}>Tuần onboarding</th>
-                <th>Mốc</th>
+                <th>Cơ sở Target</th>
                 <th style={{ textAlign: "right" }}>Target bug/tuần</th>
                 <th style={{ textAlign: "right" }}>Actual</th>
                 <th style={{ textAlign: "right" }}>Còn thiếu</th>
@@ -251,7 +287,7 @@ export function TargetView({ view }: { view: DashboardView }) {
                     <td><strong>{row.person.code}</strong></td>
                     <td className="td-num">{row.onboardingWeek}</td>
                     <td>
-                      <span className="tag tag-gray">{row.level.label} · {row.level.percent}%</span>
+                      <span className="tag tag-gray" title={row.targetBasis}>{row.targetBasis}</span>
                     </td>
                     <td className="td-num" style={{ color: "var(--accent-2)", fontWeight: 700 }}>{row.target}</td>
                     <td className="td-num" style={{ color: "var(--green)", fontWeight: 700 }}>{row.actual}</td>
@@ -268,3 +304,4 @@ export function TargetView({ view }: { view: DashboardView }) {
     </div>
   );
 }
+

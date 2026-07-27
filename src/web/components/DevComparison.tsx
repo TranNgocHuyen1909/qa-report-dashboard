@@ -530,38 +530,41 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
           <span key={`repeated-${d.code}`}>⚠️ <strong>{d.code}</strong> tái phạm <strong>{d.repeatedCount} lỗi lặp checklist</strong> bài học kinh nghiệm. Cần nghiêm túc tuân thủ checklist cũ.</span>
         );
       }
-      if (d.bugsPerDay < 1.0 && d.fixed > 0) {
+      if (d.bugsPerDay < 0.8 && d.fixed > 0 && d.code !== "HuyenTN") {
         abnormalNotes.push(
-          <span key={`lowperf-${d.code}`}>⚠️ Năng suất của <strong>{d.code}</strong> thấp (<strong>{d.bugsPerDay.toFixed(1)} bug/ngày</strong>) so với tốc độ tham chiếu.</span>
+          <span key={`lowperf-${d.code}`}>⚠️ Năng suất của <strong>{d.code}</strong> thấp (<strong>{d.bugsPerDay.toFixed(1)} bug/ngày</strong>) so với mốc tiêu chuẩn (&gt;= 1.0 bug/ngày).</span>
         );
       }
     });
 
-    // Check Leader effort distribution
+    // Check Leader (HuyenTN) effort & review performance
     const huyen = activeMetric.byPerson.find(p => p.personCode === "HuyenTN");
-    const huyenReviewed = huyen ? huyen.bugsReviewed : 0;
-    if (huyenReviewed === 0) {
+    const huyenStat = devPerformance.find(d => d.code === "HuyenTN");
+    const huyenReviewed = huyenStat ? ((huyenStat as any).huyenReviewedCount ?? (huyenStat as any).bugsReviewed ?? 0) : (huyen ? huyen.bugsReviewed : 0);
+    const totalTeamPrs = devPerformance.reduce((sum, d) => sum + (d as any).solvedWithPr, 0);
+
+    if (huyenReviewed === 0 && totalTeamPrs > 0) {
       leaderNotes.push(
-        <span key="leader-warn">⚠️ Lead (HuyenTN) <strong>chưa ghi nhận review PR/task nào</strong> trong kỳ. Cần đảm bảo phân bổ tối thiểu <strong>20% thời gian (~1.6 giờ/ngày)</strong> cho việc review/check PR và kiểm soát chất lượng để tránh lọt lỗi.</span>
+        <span key="leader-warn">⚠️ Lead (HuyenTN) <strong>chưa ghi nhận review PR/task nào</strong> trong kỳ. Mục tiêu trọng tâm của Lead là review code & nghiệm thu PRs để đảm bảo chất lượng hệ thống.</span>
       );
     } else {
       leaderNotes.push(
-        <span key="leader-ok">✔️ Lead (HuyenTN) đã ghi nhận review <strong>{huyenReviewed} PR/task</strong> trong kỳ. Cần duy trì tỷ lệ tối thiểu 20% nỗ lực hàng ngày cho hoạt động kiểm soát chất lượng này.</span>
+        <span key="leader-ok">✔️ Lead (HuyenTN) đã hoàn thành review <strong>{huyenReviewed} / {totalTeamPrs} PR tasks</strong> của team trong kỳ. Tỷ lệ Review đạt <strong>{totalTeamPrs > 0 ? ((huyenReviewed / totalTeamPrs) * 100).toFixed(0) : 100}%</strong> mục tiêu kiểm soát chất lượng.</span>
       );
     }
 
     // proposed resource coordination actions
-    const lowPerfDevs = devPerformance.filter(d => d.bugsPerDay < 1.0 && d.code !== "HuyenTN").map(d => d.code);
-    const highPerfDevs = devPerformance.filter(d => d.bugsPerDay >= 3.0).map(d => d.code);
+    const lowPerfDevs = devPerformance.filter(d => d.bugsPerDay < 0.8 && d.code !== "HuyenTN").map(d => d.code);
+    const highPerfDevs = devPerformance.filter(d => d.bugsPerDay >= 2.0 && d.code !== "HuyenTN").map(d => d.code);
     
     if (lowPerfDevs.length > 0) {
       coordinationNotes.push(
-        <span key="coord-low">👉 <strong>Điều phối hỗ trợ:</strong> Cần trao đổi làm rõ rào cản kỹ thuật hoặc <strong>giảm tải bớt task / lùi deadline / thay đổi độ ưu tiên</strong> cho <strong>{lowPerfDevs.join(", ")}</strong> do năng suất sửa lỗi thấp (&lt; 1.0 bug/ngày).</span>
+        <span key="coord-low">👉 <strong>Điều phối hỗ trợ:</strong> Cần trao đổi làm rõ rào cản kỹ thuật hoặc <strong>giảm tải bớt task / lùi deadline / thay đổi độ ưu tiên</strong> cho <strong>{lowPerfDevs.join(", ")}</strong> do năng suất sửa lỗi dưới mốc kỳ vọng (&lt; 0.8 bug/ngày).</span>
       );
     }
     if (highPerfDevs.length > 0) {
       coordinationNotes.push(
-        <span key="coord-high">👉 <strong>Phân bổ tài nguyên tối ưu:</strong> Tận dụng và giao thêm các task phức tạp/độ khó cao hơn cho <strong>{highPerfDevs.join(", ")}</strong> do năng suất sửa lỗi đạt mức xuất sắc (&gt;= 3.0 bug/ngày).</span>
+        <span key="coord-high">👉 <strong>Phân bổ tài nguyên tối ưu:</strong> Tận dụng và giao thêm các task phức tạp/độ khó cao hơn cho <strong>{highPerfDevs.join(", ")}</strong> do năng suất sửa lỗi đạt mức vượt trội (&gt;= 2.0 bug/ngày).</span>
       );
     }
     

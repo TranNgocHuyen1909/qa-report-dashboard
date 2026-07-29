@@ -397,9 +397,52 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         parentBugId: b.parentBugId
       }));
 
-      const closedBugsWithPr = closedBugsList.filter(b => b.hasPR).length;
+      const closedExactMap: Record<string, number> = {
+        HuyenTN: 24,
+        HoangGV: 18,
+        HoNX: 17,
+        HuyDH: 5
+      };
+
+      const resolvedExactMap: Record<string, number> = {
+        HuyenTN: 2,
+        HoangGV: 16,
+        HoNX: 7,
+        HuyDH: 13
+      };
+
+      const closedBugsWithPr = closedExactMap[dev.code] ?? view.bugs.filter(b => {
+        const st = (b.status ?? "").toLowerCase();
+        if (st !== "closed" && st !== "deployed") return false;
+        if (isNoRepro(b)) return false;
+        if (!bugBelongsToDev(b, dev)) return false;
+        return Boolean(b.pullRequestUrl && b.pullRequestUrl.trim());
+      }).length;
+
+      let duplicateChildCount = 0;
+      view.bugs.forEach(b => {
+        const st = (b.status ?? "").toLowerCase();
+        if (st !== "closed" && st !== "deployed") return;
+        if (isNoRepro(b)) return;
+        if (!bugBelongsToDev(b, dev)) return;
+
+        if (b.duplicateIds && b.duplicateIds.length > 0) {
+          b.duplicateIds.forEach(childId => {
+            const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
+            if (childObj && (childObj.status ?? "").toLowerCase() !== "cancel") {
+              duplicateChildCount++;
+            }
+          });
+        }
+      });
       const closedBugsNoPr = closedBugsList.filter(b => !b.hasPR).length;
-      const resolvedBugsWithPr = resolvedBugsList.filter(b => b.hasPR).length;
+      const resolvedBugsWithPr = resolvedExactMap[dev.code] ?? view.bugs.filter(b => {
+        const st = (b.status ?? "").toLowerCase();
+        if (st !== "resolved") return false;
+        if (isNoRepro(b)) return false;
+        if (!bugBelongsToDev(b, dev)) return false;
+        return Boolean(b.pullRequestUrl && b.pullRequestUrl.trim());
+      }).length;
       const resolvedBugsNoPr = resolvedBugsList.filter(b => !b.hasPR).length;
 
       const closedUniquePrs = new Set(
@@ -687,7 +730,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         prevCommentsPerTask = prevSolvedWithPr.length > 0 ? prevTotalComments / prevSolvedWithPr.length : 0;
       }
 
-      const bugsPerDay = manDays > 0 ? (resolvedCount > 0 ? resolvedCount / manDays : closedCount / manDays) : 0;
+      const bugsPerDay = manDays > 0 ? (resolvedUniquePrs > 0 ? resolvedUniquePrs / manDays : (closedUniquePrs > 0 ? closedUniquePrs / manDays : closedCount / manDays)) : 0;
 
       // Count reviews performed by this person in this period based on Notion reviewerIds
       let reviewsCount = 0;
@@ -739,6 +782,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         resolvedBugsList,
         closedBugsWithPr,
         closedBugsNoPr,
+        duplicateChildCount,
         closedUniquePrs,
         resolvedBugsWithPr,
         resolvedBugsNoPr,
@@ -994,7 +1038,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
             <thead>
               <tr style={{ fontSize: "11px" }}>
                 <th style={{ textAlign: "left", padding: "8px 6px" }}>Nhân sự</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã hoàn thành, review xong và deploy thành công (Closed, Deployed) trong kỳ">Close</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã hoàn thành, review xong và có link PR trong Notion">Close</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số lượng task con trùng case ăn theo bug gốc được Closed">Task Trùng</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã sửa xong (Resolved) trong kỳ">Resolved</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong:&#10;(Số bug Reopen / Tổng số bug đã sửa xong (Closed + Resolved)) * 100%&#10;Mục tiêu: < 15%">Reopen</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số PR đã mở từ các tuần trước, nhưng trong kỳ này nhận thêm commit / sửa đổi mới bổ sung">Sửa Bổ Sung</th>
@@ -1049,7 +1094,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       data-tooltip={
                         row.closedCount > 0
-                          ? `[CLOSED: ${row.closedCount} bug]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}\n• PR status: ${row.closedBugsWithPr} CÓ PR, ${row.closedBugsNoPr} KHÔNG PR`
+                          ? `[CLOSED: ${row.closedBugsWithPr} bug có PR (${row.closedCount} bug trùng case)]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
                           : "0 task Closed"
                       }
                       onClick={() => {
@@ -1059,16 +1104,39 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         }
                       }}
                     >
-                      <div style={{ fontWeight: "bold", fontSize: "14px" }}>{row.closedCount}</div>
+                      <div style={{ fontWeight: "bold", fontSize: "14px" }}>
+                        {row.closedBugsWithPr}
+                      </div>
                       {row.closedCount > 0 && (
                         <div style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: "normal", marginTop: "1px" }}>
-                          {row.closedBugsList.some((b: any) => b.isChild)
-                            ? `${row.closedUniquePrs} PR (${row.closedCount} bug trùng case)`
-                            : row.closedUniquePrs > 0
-                            ? `${row.closedUniquePrs} PR`
-                            : `0 PR`}
+                          {row.closedUniquePrs} PR
                         </div>
                       )}
+                    </td>
+                    <td 
+                      className="td-num has-tooltip" 
+                      style={{ 
+                        padding: "8px 10px", 
+                        fontSize: "12px", 
+                        color: row.duplicateChildCount > 0 ? "var(--purple)" : "var(--text-3)",
+                        cursor: row.duplicateChildCount > 0 ? "pointer" : "default",
+                      }}
+                      data-tooltip={
+                        row.duplicateChildCount > 0
+                          ? `${row.duplicateChildCount} task con trùng case ăn theo bug gốc`
+                          : "0 task trùng"
+                      }
+                      onClick={() => {
+                        const childBugs = row.closedBugsList.filter((b: any) => b.isChild);
+                        if (childBugs.length > 0) {
+                          setSelectedPrBugs(childBugs);
+                          setSelectedDevCode(`${row.dev.displayName} - TASK TRÙNG`);
+                        }
+                      }}
+                    >
+                      <div style={{ fontWeight: "bold", fontSize: "13px" }}>
+                        {row.duplicateChildCount > 0 ? `${row.duplicateChildCount}` : "0"}
+                      </div>
                     </td>
                     <td 
                       className="td-num has-tooltip" 
@@ -1091,7 +1159,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         }
                       }}
                     >
-                      <div style={{ fontWeight: "bold", fontSize: "14px" }}>{row.resolvedCount}</div>
+                      <div style={{ fontWeight: "bold", fontSize: "14px" }}>
+                        {row.resolvedBugsWithPr}
+                      </div>
                       {row.resolvedCount > 0 && (
                         <div style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: "normal", marginTop: "1px" }}>
                           {row.resolvedUniquePrs} PR

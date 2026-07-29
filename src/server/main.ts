@@ -52,6 +52,7 @@ function getDefaultChecklist(): ChecklistItem[] {
 }
 
 const CONCLUSIONS_PATH = ".cache/conclusions.json";
+const CUSTOM_TARGETS_PATH = ".cache/custom_targets.json";
 
 function loadConclusions(): Record<string, any> {
   try { return JSON.parse(fs.readFileSync(CONCLUSIONS_PATH, "utf-8")); } catch { return {}; }
@@ -60,6 +61,17 @@ function loadConclusions(): Record<string, any> {
 function saveConclusions(data: Record<string, any>) {
   ensureDir(CONCLUSIONS_PATH);
   fs.writeFileSync(CONCLUSIONS_PATH, JSON.stringify(data, null, 2));
+}
+
+function loadCustomTargets(): Record<string, number[]> {
+  try { return JSON.parse(fs.readFileSync(CUSTOM_TARGETS_PATH, "utf-8")); } catch { 
+    return { HuyenTN: [0, 10, 18, 25, 30, 35, 40, 42, 45, 45] }; 
+  }
+}
+
+function saveCustomTargets(data: Record<string, number[]>) {
+  ensureDir(CUSTOM_TARGETS_PATH);
+  fs.writeFileSync(CUSTOM_TARGETS_PATH, JSON.stringify(data, null, 2));
 }
 
 let refreshing = false;
@@ -88,6 +100,7 @@ async function refreshBugs() {
 cachedBugs = loadCache();
 let checklistData = loadChecklist();
 let conclusionsData = loadConclusions();
+let customTargetsData = loadCustomTargets();
 
 const app = createApi({
   getBugs: () => loadCache(),
@@ -96,12 +109,17 @@ const app = createApi({
   refresh: refreshBugs,
   getConclusions: () => conclusionsData,
   saveConclusions: (data) => { conclusionsData = data; saveConclusions(data); },
+  getCustomTargets: () => customTargetsData,
+  saveCustomTargets: (data) => { customTargetsData = data; saveCustomTargets(data); },
   githubToken: config.githubToken,
 });
 
-// Serve Vite build from dist/ (cPanel single-app: UI + /api on same origin)
-const webRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
-const indexHtml = path.join(webRoot, "index.html");
+// Serve Vite build or root index.html
+const projectRoot = process.cwd();
+const indexHtml = fs.existsSync(path.join(projectRoot, "dist", "index.html"))
+  ? path.join(projectRoot, "dist", "index.html")
+  : path.join(projectRoot, "index.html");
+const webRoot = path.dirname(indexHtml);
 if (fs.existsSync(indexHtml)) {
   app.use((req, res, next) => {
     if (req.path.startsWith("/server")) {

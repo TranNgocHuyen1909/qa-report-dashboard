@@ -494,7 +494,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         if ((b.status ?? "").toLowerCase() !== "cancel") {
           const isReviewer = (b.reviewerIds ?? []).some(id => dev.notionIds.includes(id));
           if (isReviewer) {
-            const reviewDate = b.confirmedDate || dateKey(b.prCreatedAt) || dateKey(b.lastEditedTime);
+            const reviewDate = dateKey(b.huyenLastCommentAt) || dateKey(b.lastEditedTime) || b.confirmedDate || dateKey(b.prCreatedAt);
             if (reviewDate && dateInRange(reviewDate, activePeriod.startDate, activePeriod.endDate)) {
               reviewsCount++;
               

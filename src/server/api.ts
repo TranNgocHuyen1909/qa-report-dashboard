@@ -14,6 +14,8 @@ interface ApiDeps {
   refresh: () => Promise<void>;
   getConclusions: () => Record<string, any>;
   saveConclusions: (data: Record<string, any>) => void;
+  getCustomTargets: () => Record<string, number[]>;
+  saveCustomTargets: (data: Record<string, number[]>) => void;
   githubToken?: string;
 }
 
@@ -38,7 +40,7 @@ export function createApi(deps: ApiDeps) {
         deps.getChecklist(),
         deps.getConclusions(),
       );
-      res.json({ ...view, conclusions: deps.getConclusions() });
+      res.json({ ...view, conclusions: deps.getConclusions(), customTargets: deps.getCustomTargets() });
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }
@@ -72,6 +74,16 @@ export function createApi(deps: ApiDeps) {
     };
     deps.saveConclusions(data);
     res.json({ ok: true, data: data[periodKey] });
+  });
+
+  app.get("/api/custom-targets", (_req, res) => {
+    res.json(deps.getCustomTargets());
+  });
+
+  app.post("/api/custom-targets", (req, res) => {
+    const data = req.body || {};
+    deps.saveCustomTargets(data);
+    res.json({ ok: true, data });
   });
 
   // Checklist CRUD

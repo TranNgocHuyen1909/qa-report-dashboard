@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import type { DashboardView } from "../../shared/types";
-import { saveConclusion } from "../api";
+import { saveConclusion, saveCustomTargetsApi } from "../api";
 
 export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdate: () => void }) {
   const getDisplayName = (code: string) => {
@@ -17,15 +17,51 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     return !hasPR || hasNoRepro || hasDuplicate;
   };
 
+  const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
   const bugs = view.bugs;
-  const closedBugs = bugs.filter(b => ["closed", "deployed"].includes((b.status ?? "").toLowerCase()) && !isInvalidBug(b)).length;
-  const resolvedBugs = bugs.filter(b => (b.status ?? "").toLowerCase() === "resolved" && !isInvalidBug(b)).length;
-  const fixedBugs = closedBugs + resolvedBugs;
-  const openBugs = bugs.filter(b => ["open", "in progress", "wait", "doing"].includes((b.status ?? "").toLowerCase()) && !isInvalidBug(b)).length;
-  const reopened = bugs.filter(b => (b.status ?? "").toLowerCase() === "reopened" && !isInvalidBug(b)).length;
-  const validBugsOnNotion = bugs.filter(b => !isInvalidBug(b));
-  const actualReceived = validBugsOnNotion.length;
-  const closeRate = actualReceived > 0 ? ((closedBugs / actualReceived) * 100).toFixed(1) : "0";
+
+  // Filter ONLY valid bugs WITH Pull Request URL (excluding no repro / duplicate / cancel)
+  const validPrBugs = bugs.filter(b => !isInvalidBug(b) && (b.status ?? "").toLowerCase().trim() !== "cancel");
+
+  // Active Bugs on Notion WITH PR EXCEPT Closed, Cancel, and Pending
+  const activeExcludingPendingBugs = validPrBugs.filter(b => {
+    const st = (b.status ?? "").toLowerCase().trim();
+    return st !== "closed" && st !== "cancel" && st !== "pending";
+  });
+  const totalActiveExcludingPending = activeExcludingPendingBugs.length;
+
+  // 1. Closed Bugs with PR
+  const closedBugs = validPrBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "closed").length;
+
+  // 2. Resolved (CHƯA REVIEW) -> Active bug with status = resolved, not reviewed by Huyen yet
+  const resolvedPendingReviewBugs = activeExcludingPendingBugs.filter(b => {
+    const st = (b.status ?? "").toLowerCase().trim();
+    if (st !== "resolved") return false;
+    const ghLbls = (b.ghLabels ?? []).map(l => l.toLowerCase());
+    const isWait = st.includes("wait") || ghLbls.some(l => l.includes("wait"));
+    const hasHuyenReviewer = (b.reviewerIds ?? []).includes(huyenNotionId);
+    const hasComment = (b.prCommentsByHuyen ?? 0) > 0;
+    return !isWait && !hasHuyenReviewer && !hasComment;
+  }).length;
+
+  // 3. Review Xong ➔ CHỜ DEPLOY -> Active bug where Huyen HAS reviewed or status/label is wait
+  const reviewedWaitingDeployBugs = activeExcludingPendingBugs.filter(b => {
+    const st = (b.status ?? "").toLowerCase().trim();
+    const ghLbls = (b.ghLabels ?? []).map(l => l.toLowerCase());
+    const isWait = st.includes("wait") || ghLbls.some(l => l.includes("wait"));
+    const hasHuyenReviewer = (b.reviewerIds ?? []).includes(huyenNotionId);
+    const hasComment = (b.prCommentsByHuyen ?? 0) > 0;
+    return isWait || (st === "resolved" && (hasHuyenReviewer || hasComment || ghLbls.includes("wait for deployment")));
+  }).length;
+
+  // 4. Deployed (Đã up Prod, chờ OP nghiệm thu Close)
+  const deployedBugs = activeExcludingPendingBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "deployed").length;
+
+  // 5. Reopened
+  const reopenedBugs = activeExcludingPendingBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "reopened").length;
+
+  const totalAllTrackable = closedBugs + totalActiveExcludingPending;
+  const overallCloseRate = totalAllTrackable > 0 ? ((closedBugs / totalAllTrackable) * 100).toFixed(1) : "0";
 
   // Latest period summary
   const latest = view.teamMetrics[0];
@@ -42,9 +78,31 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
   // Selected Dev Filter for Chart ("all" for total team, or specific person code)
   const [selectedDevFilter, setSelectedDevFilter] = useState<string>("all");
 
+  // Custom targets per person code, persisted in localStorage
+  const [customTargets, setCustomTargets] = useState<Record<string, number[]>>(() => {
+    try {
+      const saved = localStorage.getItem("qa_custom_targets");
+      if (saved) return JSON.parse(saved);
+    } catch (e) {
+      console.error("Failed to load custom targets from localStorage", e);
+    }
+    return {
+      HuyenTN: [0, 10, 18, 25, 30, 35, 40, 42, 45, 45]
+    };
+  });
+
+  const [isEditingTargetsModalOpen, setIsEditingTargetsModalOpen] = useState(false);
+  const [tempTargetValues, setTempTargetValues] = useState<number[]>([]);
+
   // Load existing conclusion when active period changes
   const activePeriodKey = latest?.period.key;
   const activeConclusion = activePeriodKey && view.conclusions ? view.conclusions[activePeriodKey] : null;
+
+  useEffect(() => {
+    if (view.customTargets && Object.keys(view.customTargets).length > 0) {
+      setCustomTargets(prev => ({ ...prev, ...view.customTargets }));
+    }
+  }, [view.customTargets]);
 
   useEffect(() => {
     if (activeConclusion) {
@@ -240,10 +298,10 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
       const onboardingWeek = matchedMetric && selectedDev
         ? getOnboardingWeek(selectedDev.startDate, matchedMetric.period.startDate)
         : index + 1;
-      const leadStep = leadReviewTargetTrajectory[onboardingWeek - 1] ?? leadReviewTargetTrajectory.at(-1);
-      displayTarget = leadStep?.target ?? 45;
+      const customTrajectory = customTargets[selectedDevFilter] || customTargets["HuyenTN"] || [0, 10, 18, 25, 30, 35, 40, 42, 45, 45];
+      displayTarget = customTrajectory[onboardingWeek - 1] ?? customTrajectory.at(-1) ?? 45;
       weekLabel = `Tuần ${onboardingWeek}`;
-      milestoneLabel = leadStep?.milestoneLabel ?? "👑 Review Code & Nghiệm thu PRs";
+      milestoneLabel = `👑 Target Review Lộ Trình: ${displayTarget} PRs/tuần`;
     } else {
       const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
       displayActual = personData ? personData.bugsFixed : 0;
@@ -332,7 +390,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
         <div>
           <h1 className="section-title" style={{ margin: "0 0 4px 0" }}>📊 Báo cáo Quản lý &amp; Tiến độ Tuần</h1>
           <p style={{ fontSize: "12px", color: "var(--text-3)", margin: 0 }}>
-            Tổng hợp số bug đã sửa trên Notion (<strong>bắt buộc phải có PR URL</strong>, đã trừ lỗi Không tái hiện / Trùng): <strong>{latest?.period.label}</strong>
+            Tổng hợp các task bug có PR URL trên Notion (đã trừ lỗi Không tái hiện / Trùng): <strong>{latest?.period.label}</strong>
           </p>
         </div>
         {activePeriodKey && (
@@ -346,30 +404,36 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
         )}
       </div>
 
-      {/* 4 Core KPIs Grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "12px" }}>
-        <div className="card" style={{ padding: "14px", borderLeft: "4px solid var(--green)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>ĐÃ CLOSE / DEPLOY</div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--green)", marginTop: "4px" }}>{closedBugs}</div>
-          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Tỷ lệ Close: {closeRate}%</div>
+      {/* Single Unified 5-Card KPI Row (Exact 5-column grid, no spillover to row 2) */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px" }}>
+        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid var(--cyan)", background: "linear-gradient(135deg, rgba(6,182,212,0.06), transparent)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>📌 TỔNG HIỆN TẠI (ĐANG XỬ LÝ)</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--cyan)", marginTop: "2px" }}>{totalActiveExcludingPending}</div>
+          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Trừ Closed, Cancel &amp; Pending</div>
         </div>
 
-        <div className="card" style={{ padding: "14px", borderLeft: "4px solid var(--blue)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>RESOLVED (CHỜ REVIEW)</div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--blue)", marginTop: "4px" }}>{resolvedBugs}</div>
-          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Đã xong code, chờ duyệt PR</div>
+        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid var(--blue)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>🟡 RESOLVED (CHƯA REVIEW)</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--blue)", marginTop: "2px" }}>{resolvedPendingReviewBugs}</div>
+          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Chưa phân công / chưa test</div>
         </div>
 
-        <div className="card" style={{ padding: "14px", borderLeft: "4px solid var(--red)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>CÒN MỞ (OPEN)</div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--red)", marginTop: "4px" }}>{openBugs}</div>
-          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Số thực nhận: {actualReceived}</div>
+        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid var(--green)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>🟢 RESOLVED (ĐÃ REVIEW / WAIT)</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--green)", marginTop: "2px" }}>{reviewedWaitingDeployBugs}</div>
+          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Đã review / Wait for Dev/Deploy</div>
         </div>
 
-        <div className="card" style={{ padding: "14px", borderLeft: "4px solid var(--yellow)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>RE-OPENED / LỖI LẶP</div>
-          <div style={{ fontSize: "24px", fontWeight: "800", color: "var(--yellow)", marginTop: "4px" }}>{reopened}</div>
-          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Target Reopen: &lt; 15%</div>
+        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid var(--yellow)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>⚠️ RE-OPENED / LỖI LẶP</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--yellow)", marginTop: "2px" }}>{reopenedBugs}</div>
+          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Lỗi bị mở lại</div>
+        </div>
+
+        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid var(--purple)", background: "linear-gradient(135deg, rgba(16,185,129,0.06), transparent)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>✅ ĐÃ CLOSE HOÀN TẤT</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--purple)", marginTop: "2px" }}>{closedBugs}</div>
+          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Tỷ lệ Close: {overallCloseRate}%</div>
         </div>
       </div>
 
@@ -404,7 +468,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
             </div>
           </div>
           
-          {/* Person Selector Dropdown */}
+          {/* Person Selector Dropdown & Target Edit Button */}
           <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
             <span style={{ fontSize: "12px", color: "var(--text-2)", fontWeight: "bold" }}>Xem biểu đồ theo:</span>
             <select 
@@ -418,6 +482,23 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                 <option key={p.code} value={p.code}>👤 {p.displayName} ({p.code})</option>
               ))}
             </select>
+
+            <button
+              type="button"
+              className="ctrl ctrl-primary"
+              onClick={() => {
+                const current = customTargets[selectedDevFilter] || (
+                  selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead"
+                    ? [0, 10, 18, 25, 30, 35, 40, 42, 45, 45]
+                    : [4, 6, 8, 10, 11, 12, 13, 14, 14, 14]
+                );
+                setTempTargetValues([...current]);
+                setIsEditingTargetsModalOpen(true);
+              }}
+              style={{ fontSize: "12px", fontWeight: "bold", padding: "6px 12px", display: "flex", alignItems: "center", gap: "6px" }}
+            >
+              <span>🎯</span> Sửa Mốc Target Lộ Trình
+            </button>
           </div>
         </div>
 
@@ -846,6 +927,93 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
               >
                 {saving ? "Đang lưu..." : "Lưu kết luận &amp; Giải trình"}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Target Curve Customization Modal */}
+      {isEditingTargetsModalOpen && (
+        <div style={{
+          position: "fixed",
+          top: 0, left: 0, right: 0, bottom: 0,
+          background: "rgba(0,0,0,0.65)",
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+          zIndex: 9999,
+          backdropFilter: "blur(4px)"
+        }}>
+          <div className="card" style={{ width: "540px", padding: "24px", background: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border)", boxShadow: "var(--shadow-lg)" }}>
+            <div style={{ fontSize: "16px", fontWeight: "800", color: "var(--accent-2)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span>🎯</span> Chỉnh Sửa Mốc Target Lộ Trình — <span style={{ color: "var(--cyan)" }}>{selectedDevName}</span>
+            </div>
+            <div style={{ fontSize: "12px", color: "var(--text-3)", marginBottom: "16px", lineHeight: "1.5" }}>
+              Tùy chỉnh chỉ tiêu Target (số PRs/Bugs) từng tuần từ Tuần 1 đến Tuần 10. Giá trị sau khi bấm Lưu sẽ tự động lưu vĩnh viễn và vẽ lại đường Target Curve!
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", maxHeight: "320px", overflowY: "auto", marginBottom: "18px", paddingRight: "4px" }}>
+              {Array.from({ length: 10 }).map((_, i) => (
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--surface-2)", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-3)" }}>
+                  <span style={{ fontSize: "12px", fontWeight: "bold", color: "var(--text-1)" }}>Tuần {i + 1}:</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+                    <input
+                      type="number"
+                      min="0"
+                      className="ctrl"
+                      style={{ width: "70px", padding: "4px 8px", fontSize: "13px", fontWeight: "bold", textAlign: "center" }}
+                      value={tempTargetValues[i] ?? 0}
+                      onChange={e => {
+                        const val = parseInt(e.target.value) || 0;
+                        setTempTargetValues(prev => {
+                          const copy = [...prev];
+                          copy[i] = val;
+                          return copy;
+                        });
+                      }}
+                    />
+                    <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>PRs</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border-2)", paddingTop: "14px" }}>
+              <div style={{ display: "flex", gap: "6px" }}>
+                <button 
+                  type="button" 
+                  className="ctrl" 
+                  style={{ fontSize: "11px", padding: "4px 10px" }}
+                  onClick={() => setTempTargetValues([0, 10, 18, 25, 30, 35, 40, 42, 45, 45])}
+                >
+                  ⚡ Mẫu Lead (Tuần 1 = 0)
+                </button>
+              </div>
+              <div style={{ display: "flex", gap: "10px" }}>
+                <button type="button" className="ctrl" onClick={() => setIsEditingTargetsModalOpen(false)}>Hủy</button>
+                <button 
+                  type="button" 
+                  className="ctrl ctrl-primary" 
+                  onClick={async () => {
+                    const updated = {
+                      ...customTargets,
+                      [selectedDevFilter]: tempTargetValues
+                    };
+                    setCustomTargets(updated);
+                    try {
+                      localStorage.setItem("qa_custom_targets", JSON.stringify(updated));
+                      await saveCustomTargetsApi(updated);
+                    } catch (e) {
+                      console.error("Failed to save custom targets to server API", e);
+                    }
+                    setIsEditingTargetsModalOpen(false);
+                    onUpdate();
+                  }}
+                  style={{ fontWeight: "bold" }}
+                >
+                  💾 Lưu Target Lộ Trình (Vào Server &amp; Database)
+                </button>
+              </div>
             </div>
           </div>
         </div>

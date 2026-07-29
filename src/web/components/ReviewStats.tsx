@@ -757,14 +757,14 @@ export function ReviewStats({
   }, [view.bugs, activePeriod]);
 
   // Helper to determine exact review timestamp for Huyen
-  // Ưu tiên: Thời gian comment lần đầu -> Thời gian comment lần 2 (re-review) -> Thời gian đổi label 'wait for dev' -> confirmedDate -> prCreatedAt
+  // Ưu tiên: Thời gian comment lần cuối (re-review/post-merge) -> Thời gian comment lần đầu -> Thời gian sửa card Notion mới nhất (lastEditedTime) -> confirmedDate -> prCreatedAt
   const huyenReviewDate = (b: BugRecord) => {
     return (
-      dateKey(b.huyenFirstCommentAt) ||
       dateKey(b.huyenLastCommentAt) ||
+      dateKey(b.huyenFirstCommentAt) ||
+      dateKey(b.lastEditedTime) ||
       b.confirmedDate ||
-      dateKey(b.prCreatedAt) ||
-      dateKey(b.lastEditedTime)
+      dateKey(b.prCreatedAt)
     );
   };
 

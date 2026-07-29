@@ -221,6 +221,7 @@ export interface DashboardView {
   checklist: ChecklistItem[];
   totalDatabaseBugs?: number;
   conclusions?: Record<string, ManagerConclusion>;
+  customTargets?: Record<string, number[]>;
 }
 
 export interface BenchmarkSnapshot {

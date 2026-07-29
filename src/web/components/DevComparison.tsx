@@ -14,6 +14,29 @@ function dateInRange(d: string | undefined, start: string, end: string): boolean
   return !!d && d >= start && d <= end;
 }
 
+// Helper to check if bug has a valid PR
+function hasPR(b: BugRecord): boolean {
+  return Boolean(b.pullRequestUrl && b.pullRequestUrl.trim().length > 0);
+}
+
+const LOCATION_PRIORITY = ["Flow", "Prompt", "Metadata", "Docs"];
+
+// Helper to pick 1 single primary location by priority: Flow > Prompt > Metadata > Docs > Others
+function getPrimaryLocation(locs: string[] | undefined): string {
+  if (!locs || locs.length === 0) return "Others";
+  for (const prio of LOCATION_PRIORITY) {
+    const match = locs.find(l => l.toLowerCase().includes(prio.toLowerCase()));
+    if (match) {
+      if (prio === "Flow") return "Flow";
+      if (prio === "Prompt") return "Prompt";
+      if (prio === "Metadata") return "Metadata";
+      if (prio === "Docs") return "Docs";
+      return match;
+    }
+  }
+  return locs[0] || "Others";
+}
+
 export function DevComparison({ view, periodType, periodKey, onUpdate }: { view: DashboardView; periodType?: PeriodType; periodKey?: string; onUpdate?: () => Promise<void> }) {
   // Find active period details from topbar filters
   const activePeriod = useMemo(() => {
@@ -62,7 +85,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     });
   }, [developers, view.teamMetrics, activePeriod, manDaysOverrides]);
 
-  const handleSaveMd = async () => {
+  const handleSaveMd = async (overrideData?: Record<string, number>) => {
     if (!activePeriod) return;
     setSavingMd(true);
     try {
@@ -70,8 +93,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       const good = currentConclusion?.good || "";
       const bad = currentConclusion?.bad || "";
       const risks = currentConclusion?.risks || "";
+      const dataToSave = overrideData || manDaysOverrides;
       
-      await saveConclusion(activePeriod.key, good, bad, risks, manDaysOverrides);
+      await saveConclusion(activePeriod.key, good, bad, risks, dataToSave);
       if (onUpdate) {
         await onUpdate();
       }
@@ -248,8 +272,6 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     return developers.map(dev => {
       const devRows = devStats.filter(r => r.dev.code === dev.code);
       
-      const closedCount = devRows.reduce((sum, r) => sum + r.closedCount, 0);
-      const resolvedCount = devRows.reduce((sum, r) => sum + r.resolvedCount, 0);
       const noRepro = devRows.reduce((sum, r) => sum + r.noRepro, 0);
       const reopenedCount = devRows.reduce((sum, r) => sum + r.reopenedCount, 0);
       const repeatedCount = devRows.reduce((sum, r) => sum + r.repeatedCount, 0);
@@ -271,55 +293,237 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
       // Calculate comments per task directly from the developer's bugs in the period
       const devBugs = view.bugs.filter(b => bugBelongsToDev(b, dev) && (b.status ?? "").toLowerCase() !== "cancel");
-      const completedBugs = devBugs.filter(b => 
-        isFixed(b) && 
-        dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
-      );
-      const solvedWithPrBugs = completedBugs.filter(b => !!b.pullRequestUrl);
-      const solvedWithPr = solvedWithPrBugs.length;
-      const totalComments = solvedWithPrBugs.reduce((sum, b) => sum + (b.prCommentsByTruong ?? 0), 0);
+      // 1. TỔNG PR: Direct unique PR tasks belonging to dev in active period (does not include child duplicate tasks)
+      const directPrBugs = devBugs.filter(b => {
+        if (!hasPR(b)) return false;
+        const d = bugFixedDate(b);
+        return isFixed(b) && dateInRange(d, activePeriod.startDate, activePeriod.endDate);
+      });
+      const solvedWithPrBugs = directPrBugs;
+      const solvedWithPr = directPrBugs.length;
+      const totalComments = directPrBugs.reduce((sum, b) => sum + (b.prCommentsByTruong ?? 0), 0);
       const commentsPerTask = solvedWithPr > 0 ? totalComments / solvedWithPr : 0;
-      
-      const prBugsList = solvedWithPrBugs.map(b => ({
+
+      const prBugsList = directPrBugs.map(b => ({
         bugId: b.bugId || b.id,
         title: b.title,
         url: b.url,
         prUrl: b.pullRequestUrl,
-        commentsCount: b.prCommentsByTruong ?? 0,
+        hasPR: true,
+        status: (b.status ?? "RESOLVED").toUpperCase(),
+        location: b.location && b.location.length > 0 ? b.location.join(", ") : "Chưa phân loại",
+        commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
         commitsCount: b.ghCommitsCount ?? 1,
         date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
       }));
+
+      // 2. CLOSE: Fixed by + confirmedDate / lastEditedTime in active period (with or without PR)
+      const closedBugsMap = new Map<string, any>();
+      view.bugs.forEach(b => {
+        const st = (b.status ?? "").toLowerCase();
+        if (st !== "closed" && st !== "deployed") return;
+        if (isNoRepro(b)) return;
+
+        const isFixedByDev = (b.fixedByIds ?? []).some(id => dev.notionIds.includes(id));
+        const prAuthor = b.prAuthor?.toLowerCase();
+        const isPrDev = dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase();
+        if (!isFixedByDev && !isPrDev) return;
+
+        const closedDate = dateKey(b.confirmedDate) ?? dateKey(b.lastEditedTime) ?? bugFixedDate(b);
+        if (!dateInRange(closedDate, activePeriod.startDate, activePeriod.endDate)) return;
+
+        const key = b.bugId || b.id;
+        if (!closedBugsMap.has(key)) {
+          closedBugsMap.set(key, b);
+        }
+
+        if (b.duplicateIds && b.duplicateIds.length > 0) {
+          b.duplicateIds.forEach((childId: string) => {
+            const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
+            if (childObj && (childObj.status ?? "").toLowerCase() !== "cancel") {
+              const childKey = childObj.bugId || childObj.id;
+              if (!closedBugsMap.has(childKey)) {
+                closedBugsMap.set(childKey, {
+                  ...childObj,
+                  isChild: true,
+                  parentBugId: key,
+                  pullRequestUrl: childObj.pullRequestUrl,
+                  location: childObj.location && childObj.location.length > 0 ? childObj.location : b.location,
+                  title: `${childObj.title} (Task trùng lặp của [${key}])`
+                });
+              }
+            }
+          });
+        }
+      });
+
+      const closedBugs = Array.from(closedBugsMap.values());
+      const resolvedBugs = devBugs.filter(b => 
+        (b.status ?? "").toLowerCase() === "resolved" &&
+        !isNoRepro(b) &&
+        dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
+      );
+
+      const closedCount = closedBugs.length;
+      const resolvedCount = resolvedBugs.length;
+
+      const closedBugsList = closedBugs.map(b => ({
+        bugId: b.bugId || b.id,
+        title: b.title,
+        url: b.url,
+        prUrl: b.pullRequestUrl,
+        hasPR: !!b.pullRequestUrl,
+        status: (b.status ?? "").toUpperCase(),
+        location: getPrimaryLocation(b.location),
+        commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
+        commitsCount: b.ghCommitsCount ?? 1,
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
+        isChild: b.isChild,
+        parentBugId: b.parentBugId
+      }));
+
+      const resolvedBugsList = resolvedBugs.map(b => ({
+        bugId: b.bugId || b.id,
+        title: b.title,
+        url: b.url,
+        prUrl: b.pullRequestUrl,
+        hasPR: !!b.pullRequestUrl,
+        status: "RESOLVED",
+        location: getPrimaryLocation(b.location),
+        commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
+        commitsCount: b.ghCommitsCount ?? 1,
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
+        isChild: b.isChild,
+        parentBugId: b.parentBugId
+      }));
+
+      const closedBugsWithPr = closedBugsList.filter(b => b.hasPR).length;
+      const closedBugsNoPr = closedBugsList.filter(b => !b.hasPR).length;
+      const resolvedBugsWithPr = resolvedBugsList.filter(b => b.hasPR).length;
+      const resolvedBugsNoPr = resolvedBugsList.filter(b => !b.hasPR).length;
+
+      const closedUniquePrs = new Set(
+        closedBugsList
+          .map(b => b.prUrl)
+          .filter((url): url is string => Boolean(url && url.trim().length > 0))
+      ).size;
+
+      const resolvedUniquePrs = new Set(
+        resolvedBugsList
+          .map(b => b.prUrl)
+          .filter((url): url is string => Boolean(url && url.trim().length > 0))
+      ).size;
+
+      // Closed location summary text
+      const closedLocMap = new Map<string, { total: number; withPr: number; noPr: number }>();
+      closedBugs.forEach(b => {
+        const loc = getPrimaryLocation(b.location);
+        const hasPr = !!b.pullRequestUrl;
+        if (!closedLocMap.has(loc)) closedLocMap.set(loc, { total: 0, withPr: 0, noPr: 0 });
+        const item = closedLocMap.get(loc)!;
+        item.total++;
+        if (hasPr) item.withPr++; else item.noPr++;
+      });
+      const closedLocParts = Array.from(closedLocMap.entries()).map(([loc, d]) => {
+        if (d.noPr > 0 && d.withPr > 0) return `${loc} (${d.total}: ${d.withPr} PR, ${d.noPr} chưa PR)`;
+        if (d.noPr > 0) return `${loc} (${d.total} chưa PR)`;
+        return `${loc} (${d.total})`;
+      });
+      const closedLocText = closedLocParts.length > 0 ? closedLocParts.join(", ") : "";
+
+      // Resolved location summary text
+      const resolvedLocMap = new Map<string, { total: number; withPr: number; noPr: number }>();
+      resolvedBugs.forEach(b => {
+        const loc = getPrimaryLocation(b.location);
+        const hasPr = !!b.pullRequestUrl;
+        if (!resolvedLocMap.has(loc)) resolvedLocMap.set(loc, { total: 0, withPr: 0, noPr: 0 });
+        const item = resolvedLocMap.get(loc)!;
+        item.total++;
+        if (hasPr) item.withPr++; else item.noPr++;
+      });
+      const resolvedLocParts = Array.from(resolvedLocMap.entries()).map(([loc, d]) => {
+        if (d.noPr > 0 && d.withPr > 0) return `${loc} (${d.total}: ${d.withPr} PR, ${d.noPr} chưa PR)`;
+        if (d.noPr > 0) return `${loc} (${d.total} chưa PR)`;
+        return `${loc} (${d.total})`;
+      });
+      const resolvedLocText = resolvedLocParts.length > 0 ? resolvedLocParts.join(", ") : "";
+
+      // Group location breakdown details from closedBugsList and resolvedBugsList
+      const locDetailsMap = new Map<string, {
+        location: string;
+        closedWithPr: number;
+        closedNoPr: number;
+        resolvedWithPr: number;
+        resolvedNoPr: number;
+        bugList: any[];
+      }>();
+
+      const allReportBugs = [...closedBugsList, ...resolvedBugsList];
+      allReportBugs.forEach(b => {
+        const loc = b.location;
+        const isClosed = b.status !== "RESOLVED";
+        const isRes = b.status === "RESOLVED";
+        const hasPr = b.hasPR;
+
+        if (!locDetailsMap.has(loc)) {
+          locDetailsMap.set(loc, {
+            location: loc,
+            closedWithPr: 0,
+            closedNoPr: 0,
+            resolvedWithPr: 0,
+            resolvedNoPr: 0,
+            bugList: [],
+          });
+        }
+        const item = locDetailsMap.get(loc)!;
+        if (isClosed) {
+          if (hasPr) item.closedWithPr++; else item.closedNoPr++;
+        }
+        if (isRes) {
+          if (hasPr) item.resolvedWithPr++; else item.resolvedNoPr++;
+        }
+        if (!item.bugList.some(exist => exist.bugId === b.bugId)) {
+          item.bugList.push(b);
+        }
+      });
+
+      const locationDetailsList = Array.from(locDetailsMap.values()).sort((a, b) => {
+        const order = ["Flow", "Prompt", "Metadata", "Docs", "Others"];
+        const idxA = order.indexOf(a.location);
+        const idxB = order.indexOf(b.location);
+        return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
+      });
       
       const activeMetric = view.teamMetrics.find(m => m.period.key === activePeriod.key);
       const pMetric = activeMetric?.byPerson.find(p => p.personCode === dev.code);
       
-      // Use local overrides if defined, otherwise fallback to the backend metric's value
+      // Use local overrides if defined, otherwise fallback to the backend metric's value (default 5 MD)
       const manDays = manDaysOverrides[dev.code] !== undefined
         ? manDaysOverrides[dev.code]
-        : (pMetric ? pMetric.manDays : 0);
+        : (pMetric && pMetric.manDays > 0 ? pMetric.manDays : 5);
 
       const reCommitBugsList = devBugs.filter(b => {
-        const st = (b.status ?? "").toLowerCase();
-        const isResolvedOrClosed = ["resolved", "closed", "deployed"].includes(st);
-        const d = bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || dateKey(b.createdTime);
-        if (!dateInRange(d, activePeriod.startDate, activePeriod.endDate)) return false;
+        if (!b.pullRequestUrl) return false;
         
-        const hasRecommitOrEdits =
+        const createdDate = dateKey(b.prCreatedAt) ?? dateKey(b.createdTime);
+        const fixDate = bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.lastEditedTime);
+
+        // 1. PR created BEFORE active period (opened in an earlier period)
+        const isCreatedEarlier = !!createdDate && createdDate < activePeriod.startDate;
+
+        // 2. Received new commits / updates within active period
+        const isUpdatedInPeriod = dateInRange(fixDate, activePeriod.startDate, activePeriod.endDate);
+
+        // 3. Has extra commits / re-commits / review comments
+        const hasExtraCommitsOrEdits =
           (b.ghCommitsCount ?? 1) > 1 ||
           (b.prCommentsByHuyen ?? 0) > 0 ||
           (b.prCommentsByTruong ?? 0) > 0 ||
           (b.prCommentsByAuthor ?? 0) > 0 ||
           (b.huyenReviewRounds ?? 0) > 1 ||
-          (b.ghReviews ?? []).length > 0 ||
-          (b.ghLabels ?? []).some(l => {
-            const low = l.toLowerCase();
-            return low.includes("changes") || low.includes("wait") || low.includes("fix") || low.includes("recommit") || low.includes("review");
-          }) ||
-          st === "resolved" ||
-          (b.solution ?? "").toLowerCase().includes("sửa") ||
-          (b.note ?? "").toLowerCase().includes("sửa");
+          (fixDate && createdDate && fixDate > createdDate);
 
-        return isResolvedOrClosed && hasRecommitOrEdits;
+        return isCreatedEarlier && isUpdatedInPeriod && hasExtraCommitsOrEdits;
       }).map(b => ({
         bugId: b.bugId || b.id,
         title: b.title,
@@ -328,6 +532,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         commitsCount: b.ghCommitsCount ?? 1,
         commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
         date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
+        prCreatedAt: dateKey(b.prCreatedAt) || "—",
       }));
       const reCommitCount = reCommitBugsList.length;
       const reCommitRate = solvedWithPr > 0 ? (reCommitCount / solvedWithPr) * 100 : 0;
@@ -470,9 +675,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         ? (reopenedCount / (closedCount + resolvedCount)) * 100 
         : 0;
 
-      const locParts = devRows
-        .filter(r => (r.closedCount + r.resolvedCount) > 0 && r.location !== "—")
-        .map(r => `${r.location} (${r.closedCount + r.resolvedCount})`);
+      const locParts = locationDetailsList.map(r => `${r.location} (${r.closedWithPr + r.closedNoPr + r.resolvedWithPr + r.resolvedNoPr})`);
       const locationText = locParts.length > 0 ? locParts.join(", ") : "—";
 
       // Trend comparison for review comments
@@ -484,7 +687,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         prevCommentsPerTask = prevSolvedWithPr.length > 0 ? prevTotalComments / prevSolvedWithPr.length : 0;
       }
 
-      const bugsPerDay = manDays > 0 ? (closedCount + resolvedCount) / manDays : 0;
+      const bugsPerDay = manDays > 0 ? (resolvedCount > 0 ? resolvedCount / manDays : closedCount / manDays) : 0;
 
       // Count reviews performed by this person in this period based on Notion reviewerIds
       let reviewsCount = 0;
@@ -532,6 +735,17 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         duplicateCount: duplicateBugsList.length,
         duplicateBugsList,
         duplicateGroups,
+        closedBugsList,
+        resolvedBugsList,
+        closedBugsWithPr,
+        closedBugsNoPr,
+        closedUniquePrs,
+        resolvedBugsWithPr,
+        resolvedBugsNoPr,
+        resolvedUniquePrs,
+        closedLocText,
+        resolvedLocText,
+        locationDetailsList,
         pendingReviewCount: pendingReviewBugsList.length,
         huyenReviewedCountList: huyenReviewedBugsList,
         huyenReviewedBugsList,
@@ -780,25 +994,18 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
             <thead>
               <tr style={{ fontSize: "11px" }}>
                 <th style={{ textAlign: "left", padding: "8px 6px" }}>Nhân sự</th>
-                <th style={{ textAlign: "left", padding: "8px 6px" }} className="has-tooltip" data-tooltip="Vị trí lỗi (component) của bug">Vị trí lỗi</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Tổng số task Dev đã làm và mở PR trong kỳ">Tổng PR</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã hoàn thành, review xong và deploy thành công (Closed, Deployed) trong kỳ">Close</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã sửa xong (Resolved) trong kỳ">Resolved</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug Resolved đang CHỜ QC/Lead review">Chờ Review</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã được Lead Huyền review trong kỳ">Huyền</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug trùng lặp (Duplicate) do Lead Huyền kiểm tra & lọc trong kỳ">Duplicate</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đóng trực tiếp không qua PR (Ví dụ: Không tái hiện, Trùng lặp, Không phải lỗi, v.v.)">No Repro</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong:&#10;(Số bug Reopen / Tổng số bug đã sửa xong (Closed + Resolved)) * 100%&#10;Mục tiêu: < 15%">Reopen</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Tỷ lệ & số PR mà Dev phải push thêm commit (2, 3... commits) sau khi đã Resolved/tạo PR ban đầu">Sửa Bổ Sung</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số PR đã mở từ các tuần trước, nhưng trong kỳ này nhận thêm commit / sửa đổi mới bổ sung">Sửa Bổ Sung</th>
                 <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Năng suất sửa lỗi trung bình mỗi ngày công: (Đã Close + Resolved) / MD">Bug/Ngày</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số review comment trung bình nhận từ anh T trên mỗi PR task:&#10;Tổng review comments / Số task sửa qua PR">Comments/Task</th>
-                <th style={{ textAlign: "center", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số lượng bug vi phạm các bài học kinh nghiệm được lưu trong Checklist">Lỗi Lặp</th>
+                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Năng suất sửa lỗi trung bình mỗi ngày công: Task Resolved / MD">Bug/Ngày</th>
               </tr>
             </thead>
             <tbody>
               {aggregatedDevStats.map((row, devIdx) => {
                 const groupBg = devIdx % 2 === 1 ? "rgba(99, 102, 241, 0.015)" : "transparent";
+
                 return (
                   <tr 
                     key={row.dev.code} 
@@ -817,7 +1024,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     >
                       <strong>{row.dev.displayName}</strong>
                       <div style={{ color: "var(--text-3)", fontSize: "11px", fontWeight: "normal", marginTop: 2 }}>
-                        {row.dev.role === "lead" ? "👑 Lead" : "💻 Dev"} ({row.dev.code})
+                        ({row.dev.code})
                       </div>
                       {(() => {
                         const exp = activePeriod && view.conclusions?.[activePeriod.key]?.explanations?.[row.dev.code];
@@ -831,75 +1038,66 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         return null;
                       })()}
                     </td>
-                    <td style={{ textAlign: "left", fontSize: "12px", color: "var(--text-2)", fontWeight: "500", padding: "8px 6px" }}>
-                      {row.locationText}
-                    </td>
                     <td 
                       className="td-num has-tooltip" 
                       style={{ 
-                        padding: "8px 6px",
-                        fontSize: "12px",
-                        color: row.solvedWithPr > 0 ? "var(--accent)" : "var(--text-3)",
-                        cursor: row.solvedWithPr > 0 ? "pointer" : "default",
-                        textDecoration: row.solvedWithPr > 0 ? "underline dashed" : "none"
+                        padding: "8px 10px", 
+                        fontSize: "12px", 
+                        color: row.closedCount > 0 ? "var(--green)" : "var(--text-3)",
+                        cursor: row.closedCount > 0 ? "pointer" : "default",
+                        textDecoration: row.closedCount > 0 ? "underline dashed" : "none"
                       }}
-                      data-tooltip={row.solvedWithPr > 0 ? row.prBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n') : "0 PR task"}
-                      onClick={() => row.solvedWithPr > 0 && setSelectedPrBugs(row.prBugsList)}
-                    >
-                      {row.solvedWithPr} PR
-                    </td>
-                    <td className="td-num" style={{ padding: "8px 6px", fontSize: "12px", color: row.closedCount > 0 ? "var(--green)" : "var(--text-3)" }}>{row.closedCount}</td>
-                    <td className="td-num" style={{ padding: "8px 6px", fontSize: "12px", color: row.resolvedCount > 0 ? "var(--blue)" : "var(--text-3)" }}>{row.resolvedCount}</td>
-                    <td 
-                      className="td-num has-tooltip" 
-                      style={{ 
-                        padding: "8px 6px",
-                        fontSize: "12px",
-                        color: row.pendingReviewCount > 0 ? "var(--yellow)" : "var(--text-3)",
-                        cursor: row.pendingReviewCount > 0 ? "pointer" : "default",
-                        textDecoration: row.pendingReviewCount > 0 ? "underline dashed" : "none"
-                      }}
-                      data-tooltip={row.pendingReviewCount > 0 ? row.pendingReviewBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n') : "0 task chờ review"}
-                      onClick={() => row.pendingReviewCount > 0 && setSelectedPrBugs(row.pendingReviewBugsList)}
-                    >
-                      {row.pendingReviewCount}
-                    </td>
-                    <td 
-                      className="td-num has-tooltip" 
-                      style={{ 
-                        padding: "8px 6px",
-                        fontSize: "12px",
-                        color: row.huyenReviewedCount > 0 ? "var(--cyan)" : "var(--text-3)",
-                        cursor: row.huyenReviewedCount > 0 ? "pointer" : "default",
-                        textDecoration: row.huyenReviewedCount > 0 ? "underline dashed" : "none"
-                      }}
-                      data-tooltip={row.huyenReviewedCount > 0 ? row.huyenReviewedBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n') : "0 task đã review bởi Huyền"}
-                      onClick={() => row.huyenReviewedCount > 0 && setSelectedPrBugs(row.huyenReviewedBugsList)}
-                    >
-                      {row.huyenReviewedCount}
-                    </td>
-                    <td 
-                      className="td-num has-tooltip" 
-                      style={{ 
-                        padding: "8px 6px",
-                        fontSize: "12px",
-                        color: row.duplicateCount > 0 ? "var(--orange, #f97316)" : "var(--text-3)",
-                        cursor: row.duplicateCount > 0 ? "pointer" : "default",
-                        textDecoration: row.duplicateCount > 0 ? "underline dashed" : "none"
-                      }}
-                      data-tooltip={row.duplicateCount > 0 ? `Tổng ${row.duplicateCount} bug trùng lặp do Lead Huyền lọc:\n` + row.duplicateBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n') : "0 bug trùng lặp"}
+                      data-tooltip={
+                        row.closedCount > 0
+                          ? `[CLOSED: ${row.closedCount} bug]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}\n• PR status: ${row.closedBugsWithPr} CÓ PR, ${row.closedBugsNoPr} KHÔNG PR`
+                          : "0 task Closed"
+                      }
                       onClick={() => {
-                        if (row.duplicateCount > 0) {
-                          setSelectedDuplicateGroup({
-                            totalCount: row.duplicateCount,
-                            groups: row.duplicateGroups
-                          });
+                        if (row.closedCount > 0) {
+                          setSelectedPrBugs(row.closedBugsList);
+                          setSelectedDevCode(`${row.dev.displayName} - CLOSED`);
                         }
                       }}
                     >
-                      {row.duplicateCount}
+                      <div style={{ fontWeight: "bold", fontSize: "14px" }}>{row.closedCount}</div>
+                      {row.closedCount > 0 && (
+                        <div style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: "normal", marginTop: "1px" }}>
+                          {row.closedBugsList.some((b: any) => b.isChild)
+                            ? `${row.closedUniquePrs} PR (${row.closedCount} bug trùng case)`
+                            : row.closedUniquePrs > 0
+                            ? `${row.closedUniquePrs} PR`
+                            : `0 PR`}
+                        </div>
+                      )}
                     </td>
-                    <td className="td-num" style={{ padding: "8px 6px", fontSize: "12px", color: "var(--text-3)" }}>{row.noRepro}</td>
+                    <td 
+                      className="td-num has-tooltip" 
+                      style={{ 
+                        padding: "8px 10px", 
+                        fontSize: "12px", 
+                        color: row.resolvedCount > 0 ? "var(--blue)" : "var(--text-3)",
+                        cursor: row.resolvedCount > 0 ? "pointer" : "default",
+                        textDecoration: row.resolvedCount > 0 ? "underline dashed" : "none"
+                      }}
+                      data-tooltip={
+                        row.resolvedCount > 0
+                          ? `[RESOLVED: ${row.resolvedCount} bug]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}\n• PR status: ${row.resolvedBugsWithPr} CÓ PR, ${row.resolvedBugsNoPr} KHÔNG PR`
+                          : "0 task Resolved"
+                      }
+                      onClick={() => {
+                        if (row.resolvedCount > 0) {
+                          setSelectedPrBugs(row.resolvedBugsList);
+                          setSelectedDevCode(`${row.dev.displayName} - RESOLVED`);
+                        }
+                      }}
+                    >
+                      <div style={{ fontWeight: "bold", fontSize: "14px" }}>{row.resolvedCount}</div>
+                      {row.resolvedCount > 0 && (
+                        <div style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: "normal", marginTop: "1px" }}>
+                          {row.resolvedUniquePrs} PR
+                        </div>
+                      )}
+                    </td>
                     <td 
                       className="td-num has-tooltip" 
                       style={{ 
@@ -934,108 +1132,106 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         step="0.5" 
                         min="0" 
                         max="31"
+                        title="Bấm để nhập lại ngày công (MD), tự động lưu khi nhấn Enter hoặc click ra ngoài"
                         style={{ 
-                          width: "48px", 
-                          textAlign: "right", 
-                          padding: "2px 4px", 
+                          width: "52px", 
+                          textAlign: "center", 
+                          padding: "3px 4px", 
                           fontSize: "12px", 
-                          border: "1px solid var(--border-3)", 
-                          borderRadius: "4px",
-                          background: "var(--surface-2)",
-                          color: "var(--text)"
+                          fontWeight: "bold",
+                          border: "1.5px solid var(--accent)", 
+                          borderRadius: "6px",
+                          background: "rgba(99, 102, 241, 0.1)",
+                          color: "var(--text-1)",
+                          cursor: "text"
                         }}
                         value={row.manDays}
                         onChange={(e) => {
                           const val = parseFloat(e.target.value);
-                          setManDaysOverrides(prev => ({
-                            ...prev,
+                          const newOverrides = {
+                            ...manDaysOverrides,
                             [row.dev.code]: isNaN(val) ? 0 : val
-                          }));
+                          };
+                          setManDaysOverrides(newOverrides);
+                        }}
+                        onBlur={() => handleSaveMd()}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") {
+                            (e.target as HTMLInputElement).blur();
+                            handleSaveMd();
+                          }
                         }}
                       />
                     </td>
                     <td className="td-num" style={{ fontWeight: "bold", color: "var(--cyan)", verticalAlign: "middle" }}>
                       {row.bugsPerDay.toFixed(1)}
                     </td>
-                    <td 
-                      className="td-num has-tooltip" 
-                      style={{ 
-                        color: row.bugsReviewed > 0 ? "var(--green)" : "var(--text-3)",
-                        cursor: row.bugsReviewed > 0 ? "pointer" : "default",
-                        textDecoration: row.bugsReviewed > 0 ? "underline dashed" : "none",
-                        fontWeight: "bold",
-                        verticalAlign: "middle"
-                      }}
-                      data-tooltip={row.bugsReviewed > 0 ? `Tổng số ${row.bugsReviewed} PR đã được ${row.dev.code} review:\n` + row.reviewedBugsList.map(b => `[${b.bugId}] của ${b.author}: ${b.title}`).join('\n') : "Chưa thực hiện review nào"}
-                      onClick={() => {
-                        if (row.bugsReviewed > 0) {
-                          setSelectedReviewsList(row.reviewedBugsList);
-                          setSelectedDevCode(row.dev.code);
-                        }
-                      }}
-                    >
-                      <div>{row.bugsReviewed}</div>
-                      {row.bugsReviewed > 0 && (
-                        <div style={{ fontSize: "10px", fontWeight: "normal", color: "var(--text-3)", marginTop: "2px" }}>
-                          đã duyệt
-                        </div>
-                      )}
-                    </td>
-                    <td 
-                      className="td-num has-tooltip" 
-                      style={{ 
-                        color: row.commentsPerTask > 3 ? "var(--yellow)" : "var(--green)",
-                        cursor: row.prBugsList && row.prBugsList.length > 0 ? "pointer" : "default",
-                        textDecoration: row.prBugsList && row.prBugsList.length > 0 ? "underline dashed" : "none"
-                      }}
-                      data-tooltip={row.prBugsList && row.prBugsList.length > 0 ? row.prBugsList.map(b => `[${b.bugId}] ${b.title}: ${b.commentsCount} comments`).join('\n') : "0 task có PR"}
-                      onClick={() => {
-                        if (row.prBugsList && row.prBugsList.length > 0) {
-                          setSelectedPrBugs(row.prBugsList);
-                          setSelectedDevCode(row.dev.code);
-                        }
-                      }}
-                    >
-                      <div>{row.commentsPerTask.toFixed(1)}/task</div>
-                      {row.hasPrevData && (() => {
-                        const diff = row.commentsPerTask - row.prevCommentsPerTask;
-                        if (diff < -0.1) {
-                          return (
-                            <div style={{ fontSize: "11px", color: "var(--green)", marginTop: "2px" }} title={`Tuần trước: ${row.prevCommentsPerTask.toFixed(1)}`}>
-                              📉 ({row.prevCommentsPerTask.toFixed(1)})
-                            </div>
-                          );
-                        } else if (diff > 0.1) {
-                          return (
-                            <div style={{ fontSize: "11px", color: "var(--red)", marginTop: "2px" }} title={`Tuần trước: ${row.prevCommentsPerTask.toFixed(1)}`}>
-                              📈 ({row.prevCommentsPerTask.toFixed(1)})
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </td>
-                    <td style={{ textAlign: "center" }}>
-                      {row.repeatedCount === 0 ? (
-                        <span style={{ color: "var(--green)", fontSize: "11px" }}>✔️ Không</span>
-                      ) : (
-                        <div style={{ display: "inline-flex", flexDirection: "column", gap: "2px", alignItems: "center" }}>
-                          <span style={{ color: "var(--red)", fontWeight: "bold", fontSize: "13px" }}>{row.repeatedCount} lỗi</span>
-                          <div style={{ display: "flex", flexWrap: "wrap", gap: "2px", justifyContent: "center", marginTop: "4px", maxWidth: "200px" }}>
-                            {row.repeatedDetails.map(det => (
-                              <span key={det.code} title={det.title} className="tag tag-red" style={{ fontSize: "11px", padding: "1px 4px" }}>
-                                {det.code}
-                              </span>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-                    </td>
                   </tr>
                 );
               })}
             </tbody>
           </table>
+        </div>
+      </div>
+
+      {/* Location Breakdown Grid Cards */}
+      <div style={{ marginTop: "20px" }}>
+        <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-1)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
+          <span>📂</span> Phân Rã Chi Tiết Vị Trí Lỗi Theo Nhân Sự ({activePeriod?.label})
+        </h3>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "14px" }}>
+          {aggregatedDevStats.map(row => (
+            <div key={row.dev.code} className="card" style={{ padding: "14px", borderRadius: "8px", borderTop: "3px solid var(--accent)" }}>
+              <div style={{ fontWeight: 700, fontSize: "13px", color: "var(--text-1)", marginBottom: "8px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>{row.dev.displayName} ({row.dev.code})</span>
+                <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "normal" }}>Ngày công: {row.manDays} MD</span>
+              </div>
+              
+              {row.locationDetailsList.length === 0 ? (
+                <div style={{ fontSize: "12px", color: "var(--text-3)", fontStyle: "italic", padding: "8px 0" }}>Không có bug nào được sửa trong kỳ này.</div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: "6px" }}>
+                  {row.locationDetailsList.map(l => (
+                    <div
+                      key={l.location}
+                      style={{
+                        padding: "8px 10px",
+                        borderRadius: "6px",
+                        background: "var(--surface-2)",
+                        border: "1px solid var(--border-3)",
+                        fontSize: "12px",
+                        display: "flex",
+                        justify: "space-between",
+                        alignItems: "center",
+                        cursor: "pointer"
+                      }}
+                      title="Bấm để xem danh sách bug thuộc vị trí này"
+                      onClick={() => {
+                        setSelectedPrBugs(l.bugList);
+                        setSelectedDevCode(`${row.dev.displayName} - Vị trí: ${l.location}`);
+                      }}
+                    >
+                      <div style={{ fontWeight: 600, color: "var(--accent-2)" }}>
+                        🏷️ {l.location} ({l.bugList.length} bug)
+                      </div>
+                      <div style={{ display: "flex", gap: "6px", fontSize: "11px" }}>
+                        {l.closedWithPr + l.closedNoPr > 0 && (
+                          <span style={{ color: "var(--green)", fontWeight: 700 }}>
+                            {l.closedWithPr + l.closedNoPr} Closed ({l.closedWithPr} PR)
+                          </span>
+                        )}
+                        {l.resolvedWithPr + l.resolvedNoPr > 0 && (
+                          <span style={{ color: "var(--blue)", fontWeight: 700 }}>
+                            {l.resolvedWithPr + l.resolvedNoPr} Resolved ({l.resolvedWithPr} PR)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       </div>
 
@@ -1131,6 +1327,27 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               </button>
             </div>
             
+            {/* Highlight Banner if there are duplicate child bugs resolved via PR */}
+            {selectedPrBugs.some(b => b.isChild) && (
+              <div style={{ 
+                background: "linear-gradient(135deg, rgba(147, 51, 234, 0.15), rgba(99, 102, 241, 0.15))", 
+                border: "1px solid rgba(147, 51, 234, 0.35)", 
+                borderRadius: "6px", 
+                padding: "10px 14px", 
+                marginBottom: "14px", 
+                fontSize: "12.5px", 
+                color: "#e9d5ff",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
+              }}>
+                <span style={{ fontSize: "16px" }}>🔥</span>
+                <div>
+                  <strong>Thành quả xử lý Root Cause:</strong> 1 PR merged đã giải quyết triệt để vấn đề cốt lõi, kéo theo <strong>{selectedPrBugs.filter(b => b.isChild).length} bug trùng lặp (cùng case)</strong> tự động được nghiệm thu &amp; Closed!
+                </div>
+              </div>
+            )}
+
             <div style={{ maxHeight: "380px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--bg-2)" }}>
               {selectedPrBugs.length === 0 ? (
                 <div style={{ padding: "16px", color: "var(--text-3)", textAlign: "center" }}>Không có task nào.</div>
@@ -1139,57 +1356,138 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                   <thead>
                     <tr style={{ background: "var(--bg-3)", borderBottom: "1px solid var(--border-2)" }}>
                       <th style={{ padding: "10px", textAlign: "left" }}>BUG ID</th>
-                      <th style={{ padding: "10px", textAlign: "left" }}>NGÀY TÍNH</th>
+                      <th style={{ padding: "10px", textAlign: "left" }}>VỊ TRÍ LỖI</th>
+                      <th style={{ padding: "10px", textAlign: "center" }}>TRẠNG THÁI</th>
+                      <th style={{ padding: "10px", textAlign: "center" }}>TRẠNG THÁI PR &amp; CLUSTER</th>
                       <th style={{ padding: "10px", textAlign: "left" }}>TIÊU ĐỀ LỖI</th>
-                      <th style={{ padding: "10px", textAlign: "center" }}>LINK PR</th>
-                      <th style={{ padding: "10px", textAlign: "center" }}>COMMITS</th>
-                      <th style={{ padding: "10px", textAlign: "right" }}>COMMENTS</th>
+                      <th style={{ padding: "10px", textAlign: "right" }}>NGÀY TÍNH</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedPrBugs.map((b, idx) => (
-                      <tr key={idx} style={{ borderBottom: "1px solid var(--border-3)", background: "var(--bg-1)" }}>
-                        <td style={{ padding: "10px", fontWeight: "bold", whiteSpace: "nowrap" }}>
-                          {b.url ? (
-                            <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
-                              {b.bugId}
-                            </a>
-                          ) : (
-                            b.bugId
-                          )}
-                        </td>
-                        <td style={{ padding: "10px", whiteSpace: "nowrap", color: "var(--text-3)", fontSize: "12px" }}>
-                          {b.date || "—"}
-                        </td>
-                        <td style={{ padding: "10px", color: "var(--text-1)" }}>{b.title}</td>
-                        <td style={{ padding: "10px", textAlign: "center" }}>
-                          {b.prUrl ? (
-                            <a href={b.prUrl} target="_blank" rel="noreferrer" style={{ color: "var(--cyan)", textDecoration: "underline", fontSize: "12px" }}>
-                              GitHub PR 🔗
-                            </a>
-                          ) : (
-                            "—"
-                          )}
-                        </td>
-                        <td style={{ padding: "10px", textAlign: "center" }}>
-                          <span 
-                            style={{ 
-                              padding: "2px 6px", 
-                              borderRadius: "4px", 
-                              fontSize: "11px", 
-                              fontWeight: 600,
-                              background: (b.commitsCount ?? 1) > 1 ? "#fef3c7" : "var(--surface-3)",
-                              color: (b.commitsCount ?? 1) > 1 ? "#d97706" : "var(--text-2)"
-                            }}
-                          >
-                            {b.commitsCount ?? 1} commits
-                          </span>
-                        </td>
-                        <td style={{ padding: "10px", textAlign: "right", fontWeight: "bold", color: b.commentsCount > 3 ? "var(--red)" : b.commentsCount > 0 ? "var(--yellow)" : "var(--green)" }}>
-                          {b.commentsCount}
-                        </td>
-                      </tr>
-                    ))}
+                    {selectedPrBugs.map((b, idx) => {
+                      const isClosed = (b.status ?? "").toLowerCase().includes("close") || (b.status ?? "").toLowerCase().includes("deploy");
+                      const isRes = (b.status ?? "").toLowerCase().includes("resolve");
+                      const hasPr = Boolean(b.prUrl || b.hasPR);
+                      const isChild = Boolean(b.isChild);
+
+                      return (
+                        <tr 
+                          key={idx} 
+                          style={{ 
+                            borderBottom: "1px solid var(--border-3)", 
+                            background: isChild ? "rgba(147, 51, 234, 0.05)" : "var(--bg-1)" 
+                          }}
+                        >
+                          <td style={{ padding: "10px", fontWeight: "bold", whiteSpace: "nowrap" }}>
+                            {b.url ? (
+                              <a href={b.url} target="_blank" rel="noreferrer" style={{ color: isChild ? "#c084fc" : "var(--accent)", textDecoration: "underline" }}>
+                                {b.bugId}
+                              </a>
+                            ) : (
+                              b.bugId
+                            )}
+                          </td>
+                          <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                            <span
+                              style={{
+                                padding: "2px 6px",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                fontWeight: 600,
+                                background: isChild ? "rgba(147, 51, 234, 0.15)" : "rgba(99, 102, 241, 0.1)",
+                                color: isChild ? "#e9d5ff" : "var(--accent-2)",
+                                border: isChild ? "1px solid rgba(147, 51, 234, 0.3)" : "1px solid rgba(99, 102, 241, 0.2)",
+                              }}
+                            >
+                              {b.location || "Chưa phân loại"}
+                            </span>
+                          </td>
+                          <td style={{ padding: "10px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            <span
+                              style={{
+                                padding: "2px 8px",
+                                borderRadius: "4px",
+                                fontSize: "11px",
+                                fontWeight: 700,
+                                background: isClosed
+                                  ? "rgba(16, 185, 129, 0.15)"
+                                  : isRes
+                                  ? "rgba(59, 130, 246, 0.15)"
+                                  : "var(--surface-3)",
+                                color: isClosed ? "var(--green)" : isRes ? "var(--blue)" : "var(--text-2)",
+                              }}
+                            >
+                              {b.status || (isClosed ? "CLOSED" : isRes ? "RESOLVED" : "DONE")}
+                            </span>
+                          </td>
+                          <td style={{ padding: "10px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            {b.prUrl ? (
+                              <a
+                                href={b.prUrl}
+                                target="_blank"
+                                rel="noreferrer"
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  background: isChild ? "rgba(147, 51, 234, 0.2)" : "rgba(6, 182, 212, 0.12)",
+                                  color: isChild ? "#e9d5ff" : "var(--cyan)",
+                                  border: isChild ? "1px solid rgba(147, 51, 234, 0.4)" : "1px solid rgba(6, 182, 212, 0.3)",
+                                  textDecoration: "none",
+                                  display: "inline-flex",
+                                  alignItems: "center",
+                                  gap: "4px",
+                                }}
+                              >
+                                {isChild ? `🔗 PR ${b.parentBugId || "Chung"}` : "CÓ PR 🔗"}
+                              </a>
+                            ) : isChild ? (
+                              <span
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  background: "rgba(147, 51, 234, 0.18)",
+                                  color: "#c084fc",
+                                  border: "1px solid rgba(147, 51, 234, 0.3)",
+                                }}
+                              >
+                                ↳ TRÙNG CASE [{b.parentBugId}]
+                              </span>
+                            ) : (
+                              <span
+                                style={{
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  background: "rgba(249, 115, 22, 0.12)",
+                                  color: "#f97316",
+                                  border: "1px solid rgba(249, 115, 22, 0.3)",
+                                }}
+                              >
+                                ⚠️ PR EMPTY
+                              </span>
+                            )}
+                          </td>
+                          <td style={{ padding: "10px", color: "var(--text-1)" }}>
+                            {isChild ? (
+                              <span>
+                                <span style={{ color: "#c084fc", fontWeight: 600, marginRight: "4px" }}>↳ Cùng Root Cause:</span>
+                                {b.title.replace(/ \(Task trùng lặp của \[.*\]\)/, "")}
+                              </span>
+                            ) : (
+                              b.title
+                            )}
+                          </td>
+                          <td style={{ padding: "10px", textAlign: "right", whiteSpace: "nowrap", color: "var(--text-3)", fontSize: "12px" }}>
+                            {b.date || "—"}
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               )}

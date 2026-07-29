@@ -17,7 +17,12 @@ function stat(prop: any): string | undefined { return prop?.status?.name || unde
 function multi(prop: any): string[] { return prop?.multi_select?.flatMap((o: any) => o.name ? [o.name] : []) ?? []; }
 function dt(prop: any): string | undefined { return prop?.date?.start || undefined; }
 function chk(prop: any): boolean { return prop?.checkbox === true; }
-function url(prop: any): string | undefined { return prop?.url || undefined; }
+function url(prop: any): string | undefined {
+  if (!prop) return undefined;
+  if (prop.type === "url" || prop.url) return prop.url || undefined;
+  if (prop.type === "rich_text" || prop.rich_text) return rich(prop, "rich_text");
+  return undefined;
+}
 function people(prop: any): string[] { return prop?.people?.flatMap((p: any) => p.id ? [p.id] : []) ?? []; }
 function uid(prop: any): string | undefined {
   if (prop?.type === "unique_id" && prop.unique_id) {
@@ -66,7 +71,7 @@ function mapPage(page: NotionPage): BugRecord {
     process: sel(p["Công đoạn gây ra lỗi"]),
     location: multi(p["Vị trí lỗi"]),
     violatedCriteria: multi(p["Tiêu chí vi phạm "]),
-    detectedDate: dt(p[""]) || dt(p["Ngày phát hiện lỗi"]),
+    detectedDate: dt(p["Ngày phát hiện"]) || dt(p["Ngày phát hiện lỗi"]),
     confirmedDate: dt(p["Ngày xác nhận"]),
     reopenedDate: dt(p["Ngày mở lại"]),
     solution: rich(p["Giải pháp xử lý"], "rich_text"),

@@ -538,6 +538,26 @@ export function ReviewStats({
     );
   };
 
+  const isBugPausedFix = (b: BugRecord) => {
+    if (b.isPausedFix === true) return true;
+    const st = (b.status ?? "").toLowerCase();
+    const note = (b.note ?? "").toLowerCase();
+    const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
+
+    return (
+      st.includes("tạm dừng") ||
+      st.includes("pause") ||
+      st.includes("on hold") ||
+      st.includes("hold") ||
+      ghLbls.some(
+        (l) =>
+          l.includes("pause") || l.includes("hold") || l.includes("tạm dừng"),
+      ) ||
+      note.includes("tạm dừng fix") ||
+      note.includes("tạm dừng")
+    );
+  };
+
   // Render exact GitHub PR Labels & Status badges (High-contrast, elegant colors)
   const renderLabelBadge = (bug: BugRecord) => {
     const ghLbls = bug.ghLabels ?? [];
@@ -804,6 +824,7 @@ export function ReviewStats({
     return view.bugs.filter((b) => {
       if (!hasPR(b)) return false; // Không có PR -> Không thể chờ review!
       if (isNoRepro(b)) return false;
+      if (isBugPausedFix(b)) return false; // Khớp với bộ lọc Tạm dừng fix: Unchecked trên Notion (chuẩn 22 bug)!
 
       // Chỉ tính bug thuộc 3 Dev do Huyền quản lý (HoangGV, HoNX, HuyDH) để đồng bộ 100% với bảng phân phối
       const belongsToTeamDev = dev3People.some((p) => bugBelongsToPerson(b, p));
@@ -835,6 +856,59 @@ export function ReviewStats({
       return true;
     });
   }, [view.bugs, dev3People]);
+
+  // Bug chưa có PR (chưa hiện thực được) thuộc 3 Dev do Huyền quản lý
+  const teamPendingNoPrBugs = useMemo(() => {
+    return view.bugs.filter((b) => {
+      const belongsToTeamDev = dev3People.some((p) => bugBelongsToPerson(b, p));
+      if (!belongsToTeamDev) return false;
+      const st = (b.status ?? "").toLowerCase();
+      if (st === "cancel" || st === "closed" || st === "deployed") return false;
+      if (isNoRepro(b)) return false;
+      if (isBugPausedFix(b)) return false;
+      return !hasPR(b);
+    });
+  }, [view.bugs, dev3People]);
+
+  // Bug tạm dừng fix (isPausedFix === true) thuộc 3 Dev do Huyền quản lý
+  const teamPendingPausedBugs = useMemo(() => {
+    return view.bugs.filter((b) => {
+      const belongsToTeamDev = dev3People.some((p) => bugBelongsToPerson(b, p));
+      if (!belongsToTeamDev) return false;
+      const st = (b.status ?? "").toLowerCase();
+      if (st === "cancel" || st === "closed" || st === "deployed") return false;
+      if (isNoRepro(b)) return false;
+      return isBugPausedFix(b);
+    });
+  }, [view.bugs, dev3People]);
+
+  // Tất cả bug Status = Resolved thuộc 3 Dev do Huyền quản lý (Tổng Resolved = 37)
+  const teamResolvedBugs = useMemo(() => {
+    return view.bugs.filter((b) => {
+      const belongsToTeamDev = dev3People.some((p) => bugBelongsToPerson(b, p));
+      if (!belongsToTeamDev) return false;
+      const st = (b.status ?? "").toLowerCase();
+      if (st !== "resolved") return false;
+      if (isNoRepro(b)) return false;
+      return true;
+    });
+  }, [view.bugs, dev3People]);
+
+  // Phân rã 3 nhóm từ teamResolvedBugs:
+  // 1. Tạm dừng fix (Checked)
+  const teamResolvedPausedBugs = useMemo(() => {
+    return teamResolvedBugs.filter((b) => isBugPausedFix(b));
+  }, [teamResolvedBugs]);
+
+  // 2. PR empty (Chưa có link PR)
+  const teamResolvedNoPrBugs = useMemo(() => {
+    return teamResolvedBugs.filter((b) => !isBugPausedFix(b) && !hasPR(b));
+  }, [teamResolvedBugs]);
+
+  // 3. Ưu tiên review (Có PR & Tạm dừng Unchecked)
+  const teamResolvedPriorityBugs = useMemo(() => {
+    return teamResolvedBugs.filter((b) => !isBugPausedFix(b) && hasPR(b));
+  }, [teamResolvedBugs]);
 
 
 
@@ -1267,26 +1341,6 @@ export function ReviewStats({
     dev3People,
   ]);
 
-  // Helper to check if bug fix is paused (Tạm dừng fix)
-  const isBugPausedFix = (b: BugRecord) => {
-    if (b.isPausedFix === true) return true;
-    const st = (b.status ?? "").toLowerCase();
-    const note = (b.note ?? "").toLowerCase();
-    const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
-
-    return (
-      st.includes("tạm dừng") ||
-      st.includes("pause") ||
-      st.includes("on hold") ||
-      st.includes("hold") ||
-      ghLbls.some(
-        (l) =>
-          l.includes("pause") || l.includes("hold") || l.includes("tạm dừng"),
-      ) ||
-      note.includes("tạm dừng fix") ||
-      note.includes("tạm dừng")
-    );
-  };
 
   // Filter Huyen pending bugs by selected developer, location, and pause status
   const displayedPending = useMemo(() => {
@@ -2211,7 +2265,7 @@ export function ReviewStats({
                 setDetailSubTab("pending");
                 scrollToDetails();
               }}
-              title={`[Công thức Tính toán]\n• BUG CHỜ REVIEW: Task có PR do Dev sửa xong nhưng chưa được Huyền review.\n• Tính tích lũy TẤT CẢ THỜI GIAN (không lọc theo kỳ) để đảm bảo KHÔNG BAO GIỜ SÓT task tồn đọng.`}
+              title={`[Bug Chờ Review: ${teamResolvedPriorityBugs.length}]\n• ${teamResolvedPriorityBugs.length} bug CÓ PR: Dev đã sửa & sẵn sàng chờ QA review\n• Đã loại trừ hoàn toàn các bug Tạm dừng fix`}
             >
               <div
                 style={{
@@ -2229,10 +2283,10 @@ export function ReviewStats({
                   color: "#64748b",
                 }}
               >
-                {pendingHuyenReviewBugs.length}
+                {teamResolvedPriorityBugs.length}
               </div>
-              <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
-                Tồn đọng (Tất cả thời gian)
+              <div style={{ fontSize: "11px", color: "var(--text-2)", lineHeight: "1.4" }}>
+                ({teamResolvedPriorityBugs.length} có PR &bull; {teamResolvedNoPrBugs.length} PR empty)
               </div>
             </div>
           </div>

@@ -10,6 +10,10 @@ export interface ReviewMetricCardsProps {
   noCommentCount: number;
   passRate: string;
   pendingCount: number;
+  totalResolvedCount?: number;
+  priorityCount?: number;
+  pausedCount?: number;
+  noPrCount?: number;
   onSelectSubTab?: (tab: "reviewed" | "pending") => void;
   onSelectCommentFilter?: (filter: "all" | "comments" | "nocomments" | "multiround") => void;
 }
@@ -24,9 +28,18 @@ export const ReviewMetricCards: React.FC<ReviewMetricCardsProps> = ({
   noCommentCount,
   passRate,
   pendingCount,
+  totalResolvedCount,
+  priorityCount,
+  pausedCount,
+  noPrCount,
   onSelectSubTab,
   onSelectCommentFilter,
 }) => {
+  const displayBigNumber = totalResolvedCount !== undefined ? totalResolvedCount : pendingCount;
+  const displayPriority = priorityCount !== undefined ? priorityCount : pendingCount;
+  const displayPaused = pausedCount ?? 0;
+  const displayNoPr = noPrCount ?? 0;
+
   return (
     <div
       style={{
@@ -152,16 +165,16 @@ export const ReviewMetricCards: React.FC<ReviewMetricCardsProps> = ({
         onClick={() => {
           onSelectSubTab?.("pending");
         }}
-        title="Bấm để xem danh sách đang chờ review"
+        title={`[Bug Chờ Review: ${displayPriority}]\n• ${displayPriority} bug CÓ PR: Dev đã sửa & sẵn sàng chờ QA review\n• Đã loại trừ hoàn toàn các bug Tạm dừng fix`}
       >
         <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase" }}>
           BUG CHỜ REVIEW
         </div>
         <div style={{ fontSize: "28px", fontWeight: 800, color: "var(--text-1)", margin: "4px 0" }}>
-          {pendingCount}
+          {displayPriority}
         </div>
-        <div style={{ fontSize: "11px", color: "var(--text-3)" }}>
-          Tồn đọng (Tất cả thời gian)
+        <div style={{ fontSize: "11px", color: "var(--text-3)", lineHeight: "1.4" }}>
+          ({displayPriority} có PR &bull; {displayNoPr} PR empty)
         </div>
       </div>
     </div>

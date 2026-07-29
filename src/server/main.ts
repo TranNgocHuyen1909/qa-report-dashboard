@@ -86,7 +86,11 @@ async function refreshBugs() {
     console.log("Fetching bugs from Notion...");
     const client = new NotionBugClient(config.notionToken, config.notionVersion, config.notionBugDataSourceId);
     let bugs = await client.listBugs();
-    console.log(`Fetched ${bugs.length} bugs. Enriching with GitHub...`);
+    console.log(`Fetched ${bugs.length} bugs. Saving to cache immediately...`);
+    cachedBugs = bugs;
+    saveCache(bugs);
+
+    console.log(`Enriching ${bugs.length} bugs with GitHub...`);
     bugs = await enrichAllBugs(bugs, config.githubToken);
     console.log(`Enriched ${bugs.length} bugs with GitHub data.`);
     cachedBugs = bugs;

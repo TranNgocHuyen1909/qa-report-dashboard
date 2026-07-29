@@ -632,7 +632,7 @@ export function buildDashboardView(
   return {
     syncedAt: new Date().toISOString(),
     personnel: PERSONNEL,
-    bugs: recentBugs,
+    bugs: teamBugs,
     lifecycle: buildLifecycle(teamBugs),
     insights: buildInsights(insightMetrics, teamBugs, PERSONNEL),
     teamMetrics,

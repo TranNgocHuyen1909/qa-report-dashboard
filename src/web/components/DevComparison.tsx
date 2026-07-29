@@ -397,21 +397,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         parentBugId: b.parentBugId
       }));
 
-      const closedExactMap: Record<string, number> = {
-        HuyenTN: 24,
-        HoangGV: 18,
-        HoNX: 17,
-        HuyDH: 5
-      };
+      const targetBugs = view.bugs;
 
-      const resolvedExactMap: Record<string, number> = {
-        HuyenTN: 2,
-        HoangGV: 16,
-        HoNX: 7,
-        HuyDH: 13
-      };
-
-      const closedBugsWithPr = closedExactMap[dev.code] ?? view.bugs.filter(b => {
+      const closedBugsWithPr = targetBugs.filter(b => {
         const st = (b.status ?? "").toLowerCase();
         if (st !== "closed" && st !== "deployed") return false;
         if (isNoRepro(b)) return false;
@@ -420,7 +408,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       }).length;
 
       let duplicateChildCount = 0;
-      view.bugs.forEach(b => {
+      targetBugs.forEach(b => {
         const st = (b.status ?? "").toLowerCase();
         if (st !== "closed" && st !== "deployed") return;
         if (isNoRepro(b)) return;
@@ -428,7 +416,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
         if (b.duplicateIds && b.duplicateIds.length > 0) {
           b.duplicateIds.forEach(childId => {
-            const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
+            const childObj = targetBugs.find(orig => orig.id === childId || orig.bugId === childId);
             if (childObj && (childObj.status ?? "").toLowerCase() !== "cancel") {
               duplicateChildCount++;
             }
@@ -436,7 +424,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         }
       });
       const closedBugsNoPr = closedBugsList.filter(b => !b.hasPR).length;
-      const resolvedBugsWithPr = resolvedExactMap[dev.code] ?? view.bugs.filter(b => {
+      const resolvedBugsWithPr = targetBugs.filter(b => {
         const st = (b.status ?? "").toLowerCase();
         if (st !== "resolved") return false;
         if (isNoRepro(b)) return false;

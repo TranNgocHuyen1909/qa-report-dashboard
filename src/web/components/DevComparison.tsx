@@ -127,13 +127,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     return (bug.fixedByIds ?? []).some(id => notionIds.includes(id));
   };
 
-  // Helper to get bug fixed date (last PR commit date, confirmed date, PR date, or created time)
+  // Helper to get bug fixed date (PR created date, last commit date, or confirmed date)
   const bugFixedDate = (b: BugRecord) => {
     return (
-      dateKey(b.prLastCommitAt) ??
-      dateKey(b.confirmedDate) ??
       dateKey(b.prCreatedAt) ??
-      dateKey(b.createdTime)
+      dateKey(b.prLastCommitAt) ??
+      dateKey(b.confirmedDate)
     );
   };
 
@@ -338,8 +337,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const isPrDev = dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase();
         if (!isFixedByDev && !isPrDev) return;
 
-        // Strict filter: Must have b.confirmedDate (Ngày xác nhận) in active period AND non-empty Pull Request link!
-        const closedDate = dateKey(b.confirmedDate);
+        // Strict filter: Must have b.confirmedDate or b.lastEditedTime in active period AND non-empty Pull Request link!
+        const closedDate = dateKey(b.confirmedDate) || dateKey(b.lastEditedTime);
         if (!closedDate || !dateInRange(closedDate, activePeriod.startDate, activePeriod.endDate)) return;
         if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
 

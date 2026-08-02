@@ -277,18 +277,18 @@ export function ManagerReport({
     }
   }, [activePeriodKey, activeConclusion]);
 
-  // Weekly Targets Trajectory for Developers (Realistic Capacity Milestone Curve with Progressive Growth)
+  // Weekly Targets Trajectory for Developers (Realistic & Achievable Capacity Milestone Curve Capped at 10 Bugs/Week)
   const weeklyTargetTrajectory = [
     { weekLabel: "Tuần 1", targetPerDev: 4, milestoneLabel: "Mức 0: Làm quen codebase & quy trình (4 bug/tuần)" },
     { weekLabel: "Tuần 2", targetPerDev: 6, milestoneLabel: "Mức Onboarding: Tự chủ fix bug độc lập (6 bug/tuần)" },
     { weekLabel: "Tuần 3", targetPerDev: 8, milestoneLabel: "Mốc T1: Đạt chuẩn tiến độ người mới (8 bug/tuần)" },
-    { weekLabel: "Tuần 4", targetPerDev: 10, milestoneLabel: "Mốc T2: Tự làm các task luồng khó (10 bug/tuần)" },
-    { weekLabel: "Tuần 5", targetPerDev: 12, milestoneLabel: "Mốc T3: Tiệm cận năng suất tối đa (12 bug/tuần)" },
-    { weekLabel: "Tuần 6", targetPerDev: 14, milestoneLabel: "Mốc 100%: Năng suất thực tế tiêu chuẩn (14 Bug/Tuần)" },
-    { weekLabel: "Tuần 7", targetPerDev: 16, milestoneLabel: "Mốc Tăng Trưởng: Nâng cao năng suất sản lượng (16 Bug/Tuần)" },
-    { weekLabel: "Tuần 8", targetPerDev: 18, milestoneLabel: "Mốc Cao Điểm: Tăng tốc hoàn thành mục tiêu (18 Bug/Tuần)" },
-    { weekLabel: "Tuần 9", targetPerDev: 20, milestoneLabel: "Mốc Tối Đa: Hiệu năng phát triển đỉnh cao (20 Bug/Tuần)" },
-    { weekLabel: "Tuần 10", targetPerDev: 22, milestoneLabel: "Mốc Tối Đa: Hiệu năng phát triển đỉnh cao (22 Bug/Tuần)" },
+    { weekLabel: "Tuần 4", targetPerDev: 8, milestoneLabel: "Mốc T2: Tự làm các task luồng khó (8 bug/tuần)" },
+    { weekLabel: "Tuần 5", targetPerDev: 9, milestoneLabel: "Mốc T3: Nâng cao sản lượng ổn định (9 bug/tuần)" },
+    { weekLabel: "Tuần 6", targetPerDev: 10, milestoneLabel: "Mốc 100%: Năng suất thực tế tiêu chuẩn (10 Bug/Tuần)" },
+    { weekLabel: "Tuần 7", targetPerDev: 10, milestoneLabel: "Duy trì năng suất tiêu chuẩn (10 Bug/Tuần)" },
+    { weekLabel: "Tuần 8", targetPerDev: 10, milestoneLabel: "Duy trì năng suất tiêu chuẩn (10 Bug/Tuần)" },
+    { weekLabel: "Tuần 9", targetPerDev: 10, milestoneLabel: "Duy trì năng suất tiêu chuẩn (10 Bug/Tuần)" },
+    { weekLabel: "Tuần 10", targetPerDev: 10, milestoneLabel: "Duy trì năng suất tiêu chuẩn (10 Bug/Tuần)" },
   ];
 
   // Weekly Targets Trajectory for Lead Reviewer (100% PR Team Capacity Target Curve)
@@ -1180,25 +1180,25 @@ export function ManagerReport({
                 type="button" 
                 className="ctrl" 
                 style={{ fontSize: "11px", padding: "4px 8px", background: "var(--surface-2)", fontWeight: "600" }}
-                onClick={() => setTempTargetValues([4, 6, 8, 10, 12, 14, 16, 18, 20, 22])}
+                onClick={() => setTempTargetValues([4, 6, 8, 8, 9, 10, 10, 10, 10, 10])}
               >
-                🎯 Mẫu Dev Tăng Trưởng (4 → 22)
+                🎯 Mẫu Dev Tiêu Chuẩn (4 → 10)
               </button>
               <button 
                 type="button" 
                 className="ctrl" 
                 style={{ fontSize: "11px", padding: "4px 8px", background: "var(--surface-2)", fontWeight: "600" }}
-                onClick={() => setTempTargetValues([10, 10, 10, 10, 10, 10, 10, 10, 10, 10])}
+                onClick={() => setTempTargetValues([8, 8, 8, 8, 8, 8, 8, 8, 8, 8])}
               >
-                ⚖️ Mẫu Cố Định (10 bug/tuần)
+                ⚖️ Mẫu Cố Định Vừa Sức (8 bug/tuần)
               </button>
               <button 
                 type="button" 
                 className="ctrl" 
                 style={{ fontSize: "11px", padding: "4px 8px", background: "var(--surface-2)", fontWeight: "600" }}
-                onClick={() => setTempTargetValues([0, 10, 18, 25, 30, 35, 40, 42, 45, 45])}
+                onClick={() => setTempTargetValues([0, 10, 18, 25, 28, 30, 30, 30, 30, 30])}
               >
-                ⚡ Mẫu Lead Review (0 → 45)
+                ⚡ Mẫu Lead Review (0 → 30)
               </button>
             </div>
 

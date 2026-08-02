@@ -537,9 +537,8 @@ export function ManagerReport({
           if (isNoRepro(b)) return false;
           if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return false;
 
-          // Strict PR Creation Date (prCreatedAt or prLastCommitAt)
-          const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt);
-          return !!prDate && dateInRange(prDate, startDate, endDate);
+          const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt) || dateKey(b.confirmedDate) || dateKey(b.lastEditedTime);
+          return dateInRange(prDate, startDate, endDate);
         });
 
         displayActual = uniquePrBugs.length;

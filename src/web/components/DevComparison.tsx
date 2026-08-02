@@ -379,8 +379,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         if (isNoRepro(b)) return false;
         if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return false;
 
-        const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt);
-        return !!prDate && dateInRange(prDate, activePeriod.startDate, activePeriod.endDate);
+        const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt) || dateKey(b.confirmedDate) || dateKey(b.lastEditedTime);
+        return dateInRange(prDate, activePeriod.startDate, activePeriod.endDate);
       });
 
       const closedCount = closedBugs.length;

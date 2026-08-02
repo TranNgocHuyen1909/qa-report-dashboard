@@ -514,12 +514,14 @@ export function ReviewStats({
     const note = (b.note ?? "").toLowerCase();
     const st = (b.status ?? "").toLowerCase();
     return (
-      note.includes("tái hiện") ||
+      note.includes("không tái hiện") ||
+      note.includes("ko tái hiện") ||
       note.includes("no repro") ||
       note.includes("nobrepro") ||
       note.includes("không phải lỗi") ||
       note.includes("ko phải lỗi") ||
-      st.includes("tái hiện") ||
+      st.includes("không tái hiện") ||
+      st.includes("ko tái hiện") ||
       st.includes("no repro")
     );
   };
@@ -826,41 +828,40 @@ export function ReviewStats({
   // 2. Pass ngay (Review không comment): Có đủ cả 2 ngày và Ngày bắt đầu === Ngày kết thúc (start === end)
   // 3. Re-review: Có Ngày bắt đầu review nhưng CHƯA CÓ Ngày kết thúc review (start && !end)
   const isHuyenBugWithComment = (b: BugRecord) => {
+    const huyenComments = b.prCommentsByHuyen ?? 0;
+    const totalComments = (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0) + (b.prCommentsByAuthor ?? 0);
+    const ghRevSt = (b.ghReviewStatus ?? "").toLowerCase();
+    if (huyenComments > 0 || totalComments > 0 || !!b.huyenFirstCommentAt || !!b.huyenLastCommentAt || ghRevSt.includes("comment") || ghRevSt.includes("change")) return true;
+
     const start = dateKey(b.reviewStartDate);
     const end = dateKey(b.reviewEndDate);
+    if (start && end && start !== end) return true;
+    if (start && !end) return true;
 
-    if (start && end) {
-      return start !== end; // 2 ngày khác nhau = Review có comment!
-    }
-    if (start && !end) {
-      return true; // Có bắt đầu nhưng chưa có kết thúc = Review có comment!
-    }
-
-    // Nếu không có cả 2 ngày review:
-    const huyenComments = b.prCommentsByHuyen ?? 0;
-    if (huyenComments > 0 || !!b.huyenFirstCommentAt || !!b.huyenLastCommentAt) return true;
+    const st = (b.status ?? "").toLowerCase();
+    const note = (b.note ?? "").toLowerCase();
+    if (st.includes("reopen") || st.includes("change") || st.includes("wait")) return true;
+    if (note.includes("lỗi") || note.includes("sửa") || note.includes("thêm") || note.includes("cập nhật")) return true;
 
     return false;
   };
 
   const isHuyenBugReReview = (b: BugRecord) => {
+    const rounds = b.huyenReviewRounds ?? 1;
+    const ghRevSt = (b.ghReviewStatus ?? "").toLowerCase();
+    if (rounds > 1 || ghRevSt.includes("change")) return true;
+
+    const st = (b.status ?? "").toLowerCase();
+    if (st.includes("reopen") || st.includes("change")) return true;
+
     const start = dateKey(b.reviewStartDate);
     const end = dateKey(b.reviewEndDate);
+    if (start && !end) return true;
 
-    if (start && !end) {
-      return true; // Có ngày bắt đầu nhưng chưa có ngày kết thúc = Re-review!
-    }
-    return (b.huyenReviewRounds ?? 0) > 1;
+    return (b.prCommentsByHuyen ?? 0) > 1;
   };
 
   const isHuyenBugPassNgay = (b: BugRecord) => {
-    const start = dateKey(b.reviewStartDate);
-    const end = dateKey(b.reviewEndDate);
-
-    if (start && end) {
-      return start === end; // Bằng nhau = Pass ngay!
-    }
-
     return !isHuyenBugWithComment(b) && !isHuyenBugReReview(b);
   };
 

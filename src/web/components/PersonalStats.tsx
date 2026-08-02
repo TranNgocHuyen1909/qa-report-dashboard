@@ -11,11 +11,13 @@ function isNoRepro(b: BugRecord): boolean {
   const note = (b.note ?? "").toLowerCase();
   const st = (b.status ?? "").toLowerCase();
   const hasNoReproNote =
-    note.includes("tái hiện") ||
+    note.includes("không tái hiện") ||
+    note.includes("ko tái hiện") ||
     note.includes("no repro") ||
     note.includes("không phải lỗi") ||
     note.includes("ko phải lỗi") ||
-    st.includes("tái hiện");
+    st.includes("không tái hiện") ||
+    st.includes("ko tái hiện");
   return hasNoReproNote || !b.pullRequestUrl;
 }
 

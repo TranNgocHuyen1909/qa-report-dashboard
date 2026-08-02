@@ -535,15 +535,16 @@ export function ManagerReport({
 
         const devBugs = view.bugs.filter(b => bugBelongsToDev(b) && (b.status ?? "").toLowerCase() !== "cancel");
 
-        // Calculate Resolved/Closed bugs belonging to Dev in period (MUST HAVE PR LINK ON NOTION, EXCLUDE DUPLICATE CHILD TASKS)
+        // Calculate Resolved/Closed bugs belonging to Dev in period (MUST HAVE PR LINK ON NOTION & PR CREATION TIME IN PERIOD)
         const uniquePrBugs = devBugs.filter(b => {
           const st = (b.status ?? "").toLowerCase();
           if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return false;
           if (isNoRepro(b)) return false;
           if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return false;
 
-          const prDate = dateKey(b.prCreatedAt) || dateKey(b.confirmedDate) || dateKey(b.prLastCommitAt) || dateKey(b.createdTime);
-          return dateInRange(prDate, startDate, endDate);
+          // Strict PR Creation Date (prCreatedAt or prLastCommitAt)
+          const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt);
+          return !!prDate && dateInRange(prDate, startDate, endDate);
         });
 
         displayActual = uniquePrBugs.length;

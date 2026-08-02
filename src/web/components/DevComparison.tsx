@@ -373,15 +373,20 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       });
 
       const closedBugs = Array.from(closedBugsMap.values());
-      const resolvedBugs = devBugs.filter(b => {
+      const resolvedBugsMap = new Map<string, any>();
+      devBugs.forEach(b => {
         const st = (b.status ?? "").toLowerCase();
-        if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return false;
-        if (isNoRepro(b)) return false;
-        if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return false;
+        if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return;
+        if (isNoRepro(b)) return;
+        if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
 
-        const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt) || dateKey(b.confirmedDate) || dateKey(b.lastEditedTime);
-        return dateInRange(prDate, activePeriod.startDate, activePeriod.endDate);
+        const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt);
+        if (prDate && dateInRange(prDate, activePeriod.startDate, activePeriod.endDate)) {
+          const taskId = b.bugId || b.id;
+          resolvedBugsMap.set(taskId, b);
+        }
       });
+      const resolvedBugs = Array.from(resolvedBugsMap.values());
 
       const closedCount = closedBugs.length;
       const resolvedCount = resolvedBugs.length;

@@ -530,18 +530,23 @@ export function ManagerReport({
 
         const devBugs = view.bugs.filter(b => bugBelongsToDev(b) && (b.status ?? "").toLowerCase() !== "cancel");
 
-        // Calculate Resolved/Closed bugs belonging to Dev in period (MUST HAVE PR LINK ON NOTION & PR CREATION TIME IN PERIOD)
-        const uniquePrBugs = devBugs.filter(b => {
-          const st = (b.status ?? "").toLowerCase();
-          if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return false;
-          if (isNoRepro(b)) return false;
-          if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return false;
+        // Calculate Unique Notion Task Cards belonging to Dev with PR creation date strictly in period (1 Task with multiple PRs = 1 Task)
+        const uniquePrTaskCards = new Map<string, any>();
 
-          const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt) || dateKey(b.confirmedDate) || dateKey(b.lastEditedTime);
-          return dateInRange(prDate, startDate, endDate);
+        devBugs.forEach(b => {
+          const st = (b.status ?? "").toLowerCase();
+          if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return;
+          if (isNoRepro(b)) return;
+          if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
+
+          const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt);
+          if (prDate && dateInRange(prDate, startDate, endDate)) {
+            const taskId = b.bugId || b.id;
+            uniquePrTaskCards.set(taskId, b);
+          }
         });
 
-        displayActual = uniquePrBugs.length;
+        displayActual = uniquePrTaskCards.size;
       } else {
         const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
         displayActual = personData ? personData.bugsFixed : 0;

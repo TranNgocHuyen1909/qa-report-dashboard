@@ -520,11 +520,11 @@ export function ManagerReport({
 
         const resolvedBugs = devBugs.filter(b => {
           const st = (b.status ?? "").toLowerCase();
-          if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return false;
+          if (st !== "resolved" && st !== "reviewed") return false;
           if (isNoRepro(b)) return false;
           if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return false;
 
-          const prDate = dateKey(b.prCreatedAt) || dateKey(b.lastEditedTime) || dateKey(b.confirmedDate);
+          const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt) || dateKey(b.createdTime);
           return dateInRange(prDate, startDate, endDate);
         });
 

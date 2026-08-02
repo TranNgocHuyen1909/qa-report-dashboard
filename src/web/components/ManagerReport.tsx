@@ -61,8 +61,8 @@ export function ManagerReport({
     return view.availablePeriods[0];
   }, [view.availablePeriods, periodKey]);
 
-  // Filter ONLY valid bugs WITH Pull Request URL (excluding no repro / duplicate / cancel)
-  const validPrBugs = useMemo(() => {
+  // Base dev-filtered valid PR bugs
+  const baseDevPrBugs = useMemo(() => {
     return bugs.filter(b => {
       if ((b.status ?? "").toLowerCase().trim() === "cancel") return false;
       if (isInvalidBug(b)) return false;
@@ -75,56 +75,81 @@ export function ManagerReport({
         if (!isDev) return false;
       }
 
-      // Filter by period if selected in topbar and not "all"
+      return true;
+    });
+  }, [bugs, activeDev]);
+
+  // Active Bugs on Notion WITH PR EXCEPT Closed, Cancel, and Pending
+  const activeExcludingPendingBugs = useMemo(() => {
+    return baseDevPrBugs.filter(b => {
+      const st = (b.status ?? "").toLowerCase().trim();
+      return st !== "closed" && st !== "cancel" && st !== "pending";
+    });
+  }, [baseDevPrBugs]);
+
+  const totalActiveExcludingPending = activeExcludingPendingBugs.length;
+
+  // 1. Closed Bugs with PR (Lọc BẮT BUỘC theo b.confirmedDate - Ngày xác nhận)
+  const closedBugs = useMemo(() => {
+    return baseDevPrBugs.filter(b => {
+      const st = (b.status ?? "").toLowerCase().trim();
+      if (st !== "closed" && st !== "deployed") return false;
       if (periodKey && periodKey !== "all" && activePeriod) {
-        const prDate = dateKey(b.prCreatedAt) || dateKey(b.lastEditedTime) || dateKey(b.confirmedDate);
-        if (!prDate || prDate < activePeriod.startDate || prDate > activePeriod.endDate) {
+        const confDate = dateKey(b.confirmedDate);
+        if (!confDate || confDate < activePeriod.startDate || confDate > activePeriod.endDate) {
           return false;
         }
       }
-
       return true;
     });
-  }, [bugs, activeDev, activePeriod, periodKey]);
-
-  // Active Bugs on Notion WITH PR EXCEPT Closed, Cancel, and Pending
-  const activeExcludingPendingBugs = validPrBugs.filter(b => {
-    const st = (b.status ?? "").toLowerCase().trim();
-    return st !== "closed" && st !== "cancel" && st !== "pending";
-  });
-  const totalActiveExcludingPending = activeExcludingPendingBugs.length;
-
-  // 1. Closed Bugs with PR
-  const closedBugs = validPrBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "closed");
+  }, [baseDevPrBugs, periodKey, activePeriod]);
 
   // 2. IN REVIEW / RESOLVED (CHƯA REVIEW) -> Active bug with status = in review / resolved (chưa xong review)
-  const resolvedPendingReviewBugs = activeExcludingPendingBugs.filter(b => {
-    const st = (b.status ?? "").toLowerCase().trim();
-    if (st === "in review" || st === "in-review" || st === "doing") return true;
-    if (st !== "resolved") return false;
-    const ghLbls = (b.ghLabels ?? []).map(l => l.toLowerCase());
-    const isWait = st.includes("wait") || ghLbls.some(l => l.includes("wait"));
-    const hasHuyenReviewer = (b.reviewerIds ?? []).includes(huyenNotionId);
-    const hasComment = (b.prCommentsByHuyen ?? 0) > 0;
-    return !isWait && !hasHuyenReviewer && !hasComment;
-  });
+  const resolvedPendingReviewBugs = useMemo(() => {
+    return activeExcludingPendingBugs.filter(b => {
+      const st = (b.status ?? "").toLowerCase().trim();
+      if (st === "in review" || st === "in-review" || st === "doing") return true;
+      if (st !== "resolved") return false;
+      const ghLbls = (b.ghLabels ?? []).map(l => l.toLowerCase());
+      const isWait = st.includes("wait") || ghLbls.some(l => l.includes("wait"));
+      const hasHuyenReviewer = (b.reviewerIds ?? []).includes(huyenNotionId);
+      const hasComment = (b.prCommentsByHuyen ?? 0) > 0;
+      return !isWait && !hasHuyenReviewer && !hasComment;
+    });
+  }, [activeExcludingPendingBugs, huyenNotionId]);
 
   // 3. REVIEWED (ĐÃ REVIEW / WAIT) -> Active bug where status is reviewed or wait for dev
-  const reviewedWaitingDeployBugs = activeExcludingPendingBugs.filter(b => {
-    const st = (b.status ?? "").toLowerCase().trim();
-    if (st === "reviewed") return true;
-    const ghLbls = (b.ghLabels ?? []).map(l => l.toLowerCase());
-    const isWait = st.includes("wait") || ghLbls.some(l => l.includes("wait"));
-    const hasHuyenReviewer = (b.reviewerIds ?? []).includes(huyenNotionId);
-    const hasComment = (b.prCommentsByHuyen ?? 0) > 0;
-    return isWait || (st === "resolved" && (hasHuyenReviewer || hasComment || ghLbls.includes("wait for deployment")));
-  });
+  const reviewedWaitingDeployBugs = useMemo(() => {
+    return activeExcludingPendingBugs.filter(b => {
+      const st = (b.status ?? "").toLowerCase().trim();
+      if (st === "reviewed") return true;
+      const ghLbls = (b.ghLabels ?? []).map(l => l.toLowerCase());
+      const isWait = st.includes("wait") || ghLbls.some(l => l.includes("wait"));
+      const hasHuyenReviewer = (b.reviewerIds ?? []).includes(huyenNotionId);
+      const hasComment = (b.prCommentsByHuyen ?? 0) > 0;
+      return isWait || (st === "resolved" && (hasHuyenReviewer || hasComment || ghLbls.includes("wait for deployment")));
+    });
+  }, [activeExcludingPendingBugs, huyenNotionId]);
 
   // 4. Deployed (Đã up Prod, chờ OP nghiệm thu Close)
-  const deployedBugs = activeExcludingPendingBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "deployed");
+  const deployedBugs = useMemo(() => {
+    return activeExcludingPendingBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "deployed");
+  }, [activeExcludingPendingBugs]);
 
-  // 5. Reopened
-  const reopenedBugs = activeExcludingPendingBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "reopened");
+  // 5. Reopened (Lọc BẮT BUỘC theo b.reopenedDate - Ngày mở lại)
+  const reopenedBugs = useMemo(() => {
+    return baseDevPrBugs.filter(b => {
+      const st = (b.status ?? "").toLowerCase().trim();
+      if (st !== "reopened") return false;
+      if (periodKey && periodKey !== "all" && activePeriod) {
+        const reDate = dateKey(b.reopenedDate) || dateKey(b.lastEditedTime);
+        if (!reDate || reDate < activePeriod.startDate || reDate > activePeriod.endDate) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [baseDevPrBugs, periodKey, activePeriod]);
 
   const totalAllTrackable = closedBugs.length + totalActiveExcludingPending;
   const overallCloseRate = totalAllTrackable > 0 ? ((closedBugs.length / totalAllTrackable) * 100).toFixed(1) : "0";

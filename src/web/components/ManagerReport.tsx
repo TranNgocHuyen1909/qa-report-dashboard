@@ -205,7 +205,13 @@ export function ManagerReport({
   const [saving, setSaving] = useState(false);
 
   // Selected Dev Filter for Chart ("all" for total team, or specific person code)
-  const [selectedDevFilter, setSelectedDevFilter] = useState<string>("all");
+  const [selectedDevFilter, setSelectedDevFilter] = useState<string>(personCode || "all");
+
+  useEffect(() => {
+    if (personCode && personCode !== "") {
+      setSelectedDevFilter(personCode);
+    }
+  }, [personCode]);
 
   // Custom targets per person code, persisted in localStorage
   const [customTargets, setCustomTargets] = useState<Record<string, number[]>>(() => {
@@ -1118,15 +1124,82 @@ export function ManagerReport({
         </div>
       )}
 
-      {/* Target Curve Customization Modal */}
+      {/* Target Curve Customization Modal (Fixed High Z-Index Overlay Popup) */}
       {isEditingTargetsModalOpen && (
-        <div className="modal-overlay">
-          <div className="modal" style={{ width: "520px", padding: "24px", background: "var(--surface)", borderRadius: "6px", border: "1px solid var(--border-2)", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
-            <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-1)", marginBottom: "6px" }}>
-              Chỉnh Sửa Mốc Target Lộ Trình — <span style={{ color: "var(--blue)" }}>{selectedDevName}</span>
+        <div 
+          className="modal-overlay" 
+          style={{ 
+            position: "fixed", 
+            top: 0, 
+            left: 0, 
+            right: 0, 
+            bottom: 0, 
+            backgroundColor: "rgba(0, 0, 0, 0.7)", 
+            zIndex: 99999, 
+            display: "flex", 
+            alignItems: "center", 
+            justifyContent: "center",
+            padding: "20px",
+            backdropFilter: "blur(4px)",
+            animation: "fadeIn 0.2s ease"
+          }}
+        >
+          <div 
+            className="modal" 
+            style={{ 
+              width: "560px", 
+              maxWidth: "95vw",
+              padding: "24px", 
+              background: "var(--surface)", 
+              borderRadius: "8px", 
+              border: "1px solid var(--accent)", 
+              boxShadow: "0 20px 40px rgba(0,0,0,0.5)" 
+            }}
+          >
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+              <div style={{ fontSize: "16px", fontWeight: "800", color: "var(--text-1)" }}>
+                🎯 Thiết Lập Target Lộ Trình — <span style={{ color: "var(--blue)" }}>{selectedDevName}</span>
+              </div>
+              <button 
+                type="button"
+                className="ctrl ctrl-sm" 
+                style={{ fontSize: "12px", padding: "2px 8px" }}
+                onClick={() => setIsEditingTargetsModalOpen(false)}
+              >
+                ✕
+              </button>
             </div>
+
             <div style={{ fontSize: "12px", color: "var(--text-3)", marginBottom: "16px", lineHeight: "1.5" }}>
-              Tùy chỉnh chỉ tiêu Target (số PRs/Bugs) từng tuần từ Tuần 1 đến Tuần 10. Giá trị sau khi bấm Lưu sẽ tự động lưu vĩnh viễn và vẽ lại đường Target Curve.
+              Nhập số bug / PRs target mong muốn cho từng tuần (từ Tuần 1 đến Tuần 10). Bấm <strong>Lưu Target Lộ Trình</strong> để áp dụng đường cong mới ngay lập tức.
+            </div>
+
+            {/* Template Buttons */}
+            <div style={{ display: "flex", gap: "8px", marginBottom: "16px", flexWrap: "wrap" }}>
+              <button 
+                type="button" 
+                className="ctrl" 
+                style={{ fontSize: "11px", padding: "4px 8px", background: "var(--surface-2)", fontWeight: "600" }}
+                onClick={() => setTempTargetValues([4, 6, 8, 10, 12, 14, 16, 18, 20, 22])}
+              >
+                🎯 Mẫu Dev Tăng Trưởng (4 → 22)
+              </button>
+              <button 
+                type="button" 
+                className="ctrl" 
+                style={{ fontSize: "11px", padding: "4px 8px", background: "var(--surface-2)", fontWeight: "600" }}
+                onClick={() => setTempTargetValues([10, 10, 10, 10, 10, 10, 10, 10, 10, 10])}
+              >
+                ⚖️ Mẫu Cố Định (10 bug/tuần)
+              </button>
+              <button 
+                type="button" 
+                className="ctrl" 
+                style={{ fontSize: "11px", padding: "4px 8px", background: "var(--surface-2)", fontWeight: "600" }}
+                onClick={() => setTempTargetValues([0, 10, 18, 25, 30, 35, 40, 42, 45, 45])}
+              >
+                ⚡ Mẫu Lead Review (0 → 45)
+              </button>
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", maxHeight: "320px", overflowY: "auto", marginBottom: "18px", paddingRight: "4px" }}>
@@ -1137,8 +1210,9 @@ export function ManagerReport({
                     <input
                       type="number"
                       min="0"
+                      max="200"
                       className="ctrl"
-                      style={{ width: "65px", padding: "4px 8px", fontSize: "12px", fontWeight: "700", textAlign: "center", background: "var(--surface)", color: "var(--text-1)", border: "1px solid var(--border-2)" }}
+                      style={{ width: "65px", padding: "4px 8px", fontSize: "13px", fontWeight: "700", textAlign: "center", background: "var(--surface)", color: "var(--text-1)", border: "1px solid var(--border-2)" }}
                       value={tempTargetValues[i] ?? 0}
                       onChange={e => {
                         const val = parseInt(e.target.value) || 0;
@@ -1149,47 +1223,36 @@ export function ManagerReport({
                         });
                       }}
                     />
-                    <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "600" }}>PRs</span>
+                    <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "600" }}>task</span>
                   </div>
                 </div>
               ))}
             </div>
 
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border-2)", paddingTop: "14px" }}>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px", borderTop: "1px solid var(--border-2)", paddingTop: "14px" }}>
+              <button type="button" className="ctrl" style={{ fontSize: "12px" }} onClick={() => setIsEditingTargetsModalOpen(false)}>Hủy</button>
               <button 
                 type="button" 
-                className="ctrl" 
-                style={{ fontSize: "11px", padding: "4px 10px" }}
-                onClick={() => setTempTargetValues([0, 10, 18, 25, 30, 35, 40, 42, 45, 45])}
+                className="ctrl ctrl-primary" 
+                onClick={async () => {
+                  const updated = {
+                    ...customTargets,
+                    [selectedDevFilter]: tempTargetValues
+                  };
+                  setCustomTargets(updated);
+                  try {
+                    localStorage.setItem("qa_custom_targets", JSON.stringify(updated));
+                    await saveCustomTargetsApi(updated);
+                  } catch (e) {
+                    console.error("Failed to save custom targets to server API", e);
+                  }
+                  setIsEditingTargetsModalOpen(false);
+                  if (onUpdate) onUpdate();
+                }}
+                style={{ fontWeight: "800", fontSize: "12px" }}
               >
-                Mẫu Lead (Tuần 1 = 0)
+                Lưu Target Lộ Trình
               </button>
-
-              <div style={{ display: "flex", gap: "8px" }}>
-                <button type="button" className="ctrl" onClick={() => setIsEditingTargetsModalOpen(false)}>Hủy</button>
-                <button 
-                  type="button" 
-                  className="ctrl ctrl-primary" 
-                  onClick={async () => {
-                    const updated = {
-                      ...customTargets,
-                      [selectedDevFilter]: tempTargetValues
-                    };
-                    setCustomTargets(updated);
-                    try {
-                      localStorage.setItem("qa_custom_targets", JSON.stringify(updated));
-                      await saveCustomTargetsApi(updated);
-                    } catch (e) {
-                      console.error("Failed to save custom targets to server API", e);
-                    }
-                    setIsEditingTargetsModalOpen(false);
-                    onUpdate();
-                  }}
-                  style={{ fontWeight: "700" }}
-                >
-                  Lưu Target Lộ Trình
-                </button>
-              </div>
             </div>
           </div>
         </div>

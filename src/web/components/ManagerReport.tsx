@@ -450,25 +450,20 @@ export function ManagerReport({
     });
 
     const currentWeekIdx = 3;
-    const baseMilestones = [4, 6, 8, 8, 10, 12, 14, 15, 16, 17];
+    const tu4Metric = chartSlots[currentWeekIdx];
+    const tu4PersonData = tu4Metric?.byPerson.find((p) => p.personCode === selectedDevFilter);
+    const tu4Actual = tu4PersonData ? tu4PersonData.bugsFixed : 3;
+
+    const baseMilestones = [4, 6, 8, Math.max(4, tu4Actual)];
     const targets: number[] = [];
-
-    const recentWindow = pastActuals.slice(0, currentWeekIdx + 1).slice(-3);
-    const avgActual = recentWindow.length > 0
-      ? recentWindow.reduce((a, b) => a + b, 0) / recentWindow.length
-      : 8;
-
-    const baselineCapacity = Math.max(6, Math.round(avgActual));
+    let runningTarget = Math.max(4, tu4Actual + 1);
 
     for (let i = 0; i < 10; i++) {
       if (i <= currentWeekIdx) {
-        targets.push(baseMilestones[i] || 8);
+        targets.push(baseMilestones[i] || Math.max(4, tu4Actual));
       } else {
-        const weeksAhead = i - currentWeekIdx;
-        const calculatedTarget = Math.min(20, Math.round(baselineCapacity * (1 + 0.15 * weeksAhead)));
-        const prevTarget = targets[i - 1];
-        const nextTarget = Math.max(prevTarget + 1, calculatedTarget);
-        targets.push(nextTarget);
+        targets.push(runningTarget);
+        runningTarget = Math.min(18, runningTarget + 1);
       }
     }
 

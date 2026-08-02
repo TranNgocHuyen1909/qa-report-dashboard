@@ -9,8 +9,9 @@ function dateKey(v: string | undefined): string | undefined {
   return /^\d{4}-\d{2}-\d{2}$/.test(k) ? k : undefined;
 }
 
-// Helper to check if a date is within a range
+// Helper to check if a date is within a range (or all periods)
 function dateInRange(d: string | undefined, start: string, end: string): boolean {
+  if (start === "2020-01-01" && end === "2099-12-31") return true;
   return !!d && d >= start && d <= end;
 }
 

@@ -40,11 +40,20 @@ function getPrimaryLocation(locs: string[] | undefined): string {
 export function DevComparison({ view, periodType, periodKey, onUpdate }: { view: DashboardView; periodType?: PeriodType; periodKey?: string; onUpdate?: () => Promise<void> }) {
   // Find active period details from topbar filters
   const activePeriod = useMemo(() => {
-    if (periodKey) {
-      return view.availablePeriods.find(p => p.key === periodKey);
+    if (periodKey && periodKey !== "all") {
+      const found = view.availablePeriods.find(p => p.key === periodKey);
+      if (found) return found;
     }
-    // Default to latest period if "Tất cả kỳ" is selected
-    return view.availablePeriods[0];
+    if (periodKey === "all") {
+      return {
+        key: "all",
+        label: "Tất cả các kỳ",
+        startDate: "2020-01-01",
+        endDate: "2099-12-31"
+      };
+    }
+    // Default to latest period if invalid
+    return view.availablePeriods.find(p => p.key !== "all") ?? view.availablePeriods[0];
   }, [view.availablePeriods, periodKey]);
 
   const developers = useMemo(() => {
@@ -317,7 +326,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
       }));
 
-      // 2. CLOSE: Fixed by + confirmedDate / lastEditedTime in active period (with or without PR)
+      // 2. CLOSE: Fixed by + confirmedDate (Ngày xác nhận) in active period
       const closedBugsMap = new Map<string, any>();
       view.bugs.forEach(b => {
         const st = (b.status ?? "").toLowerCase();
@@ -329,8 +338,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const isPrDev = dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase();
         if (!isFixedByDev && !isPrDev) return;
 
-        const closedDate = dateKey(b.confirmedDate) ?? dateKey(b.lastEditedTime) ?? bugFixedDate(b);
-        if (!dateInRange(closedDate, activePeriod.startDate, activePeriod.endDate)) return;
+        // Strict filter: Must have b.confirmedDate (Ngày xác nhận) in active period AND non-empty Pull Request link!
+        const closedDate = dateKey(b.confirmedDate);
+        if (!closedDate || !dateInRange(closedDate, activePeriod.startDate, activePeriod.endDate)) return;
+        if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
 
         const key = b.bugId || b.id;
         if (!closedBugsMap.has(key)) {
@@ -340,16 +351,20 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         if (b.duplicateIds && b.duplicateIds.length > 0) {
           b.duplicateIds.forEach((childId: string) => {
             const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
-            if (childObj && (childObj.status ?? "").toLowerCase() !== "cancel") {
-              const childKey = childObj.bugId || childObj.id;
-              if (!closedBugsMap.has(childKey)) {
+            const childKey = childObj ? (childObj.bugId || childObj.id) : childId;
+            if (!closedBugsMap.has(childKey)) {
+              const childSt = (childObj?.status ?? "").toLowerCase();
+              if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
                 closedBugsMap.set(childKey, {
-                  ...childObj,
+                  ...(childObj || {}),
+                  bugId: childObj?.bugId || childId.slice(0, 8),
+                  id: childId,
+                  status: (childObj?.status || "CLOSED").toUpperCase(),
                   isChild: true,
                   parentBugId: key,
-                  pullRequestUrl: childObj.pullRequestUrl,
-                  location: childObj.location && childObj.location.length > 0 ? childObj.location : b.location,
-                  title: `${childObj.title} (Task trùng lặp của [${key}])`
+                  pullRequestUrl: childObj?.pullRequestUrl || b.pullRequestUrl,
+                  location: childObj?.location && childObj.location.length > 0 ? childObj.location : b.location,
+                  title: childObj ? `${childObj.title} (Task trùng lặp của [${key}])` : `Task trùng lặp của [${key}]`
                 });
               }
             }
@@ -358,11 +373,15 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       });
 
       const closedBugs = Array.from(closedBugsMap.values());
-      const resolvedBugs = devBugs.filter(b => 
-        (b.status ?? "").toLowerCase() === "resolved" &&
-        !isNoRepro(b) &&
-        dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
-      );
+      const resolvedBugs = devBugs.filter(b => {
+        const st = (b.status ?? "").toLowerCase();
+        if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return false;
+        if (isNoRepro(b)) return false;
+        if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return false;
+
+        const prDate = dateKey(b.prCreatedAt);
+        return dateInRange(prDate, activePeriod.startDate, activePeriod.endDate);
+      });
 
       const closedCount = closedBugs.length;
       const resolvedCount = resolvedBugs.length;
@@ -377,7 +396,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         location: getPrimaryLocation(b.location),
         commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
         commitsCount: b.ghCommitsCount ?? 1,
-        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
+        date: dateKey(b.confirmedDate) || bugFixedDate(b) || dateKey(b.prCreatedAt) || "—",
         isChild: b.isChild,
         parentBugId: b.parentBugId
       }));
@@ -393,8 +412,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
         commitsCount: b.ghCommitsCount ?? 1,
         date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
-        isChild: b.isChild,
-        parentBugId: b.parentBugId
+        isChild: (b as any).isChild,
+        parentBugId: (b as any).parentBugId
       }));
 
       const targetBugs = view.bugs;
@@ -404,33 +423,31 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         if (st !== "closed" && st !== "deployed") return false;
         if (isNoRepro(b)) return false;
         if (!bugBelongsToDev(b, dev)) return false;
+        const closedDate = dateKey(b.confirmedDate);
+        if (!closedDate || !dateInRange(closedDate, activePeriod.startDate, activePeriod.endDate)) return false;
         return Boolean(b.pullRequestUrl && b.pullRequestUrl.trim());
       }).length;
 
       let duplicateChildCount = 0;
-      targetBugs.forEach(b => {
-        const st = (b.status ?? "").toLowerCase();
-        if (st !== "closed" && st !== "deployed") return;
-        if (isNoRepro(b)) return;
-        if (!bugBelongsToDev(b, dev)) return;
-
+      const seenChildKeys = new Set<string>();
+      closedBugs.forEach(b => {
+        if (b.isChild) return;
         if (b.duplicateIds && b.duplicateIds.length > 0) {
-          b.duplicateIds.forEach(childId => {
-            const childObj = targetBugs.find(orig => orig.id === childId || orig.bugId === childId);
-            if (childObj && (childObj.status ?? "").toLowerCase() !== "cancel") {
-              duplicateChildCount++;
+          b.duplicateIds.forEach((childId: string) => {
+            const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
+            const childKey = childObj ? (childObj.bugId || childObj.id) : childId;
+            const childSt = (childObj?.status ?? "").toLowerCase();
+            if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
+              if (!seenChildKeys.has(childKey)) {
+                seenChildKeys.add(childKey);
+                duplicateChildCount++;
+              }
             }
           });
         }
       });
       const closedBugsNoPr = closedBugsList.filter(b => !b.hasPR).length;
-      const resolvedBugsWithPr = targetBugs.filter(b => {
-        const st = (b.status ?? "").toLowerCase();
-        if (st !== "resolved") return false;
-        if (isNoRepro(b)) return false;
-        if (!bugBelongsToDev(b, dev)) return false;
-        return Boolean(b.pullRequestUrl && b.pullRequestUrl.trim());
-      }).length;
+      const resolvedBugsWithPr = resolvedBugs.length;
       const resolvedBugsNoPr = resolvedBugsList.filter(b => !b.hasPR).length;
 
       const closedUniquePrs = new Set(
@@ -718,7 +735,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         prevCommentsPerTask = prevSolvedWithPr.length > 0 ? prevTotalComments / prevSolvedWithPr.length : 0;
       }
 
-      const bugsPerDay = manDays > 0 ? (resolvedUniquePrs > 0 ? resolvedUniquePrs / manDays : (closedUniquePrs > 0 ? closedUniquePrs / manDays : closedCount / manDays)) : 0;
+      const bugsPerDay = manDays > 0 ? resolvedCount / manDays : 0;
 
       // Count reviews performed by this person in this period based on Notion reviewerIds
       let reviewsCount = 0;
@@ -1010,7 +1027,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
             type="button" 
             className="ctrl ctrl-primary" 
             style={{ display: "flex", alignItems: "center", gap: "6px", height: "36px", padding: "0 16px" }}
-            onClick={handleSaveMd}
+            onClick={() => handleSaveMd()}
             disabled={savingMd}
           >
             {savingMd ? "🔄 Đang lưu..." : "💾 Lưu Thay Đổi Ngày Công (MD)"}
@@ -1020,19 +1037,19 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
 
 
-      <div className="card">
-        <div className="table-wrap">
-          <table>
+      <div style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--border-2)", borderRadius: "6px", overflow: "hidden" }}>
+        <div style={{ width: "100%", overflowX: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", tableLayout: "fixed" }}>
             <thead>
-              <tr style={{ fontSize: "11px" }}>
-                <th style={{ textAlign: "left", padding: "8px 6px" }}>Nhân sự</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã hoàn thành, review xong và có link PR trong Notion">Close</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số lượng task con trùng case ăn theo bug gốc được Closed">Task Trùng</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số bug đã sửa xong (Resolved) trong kỳ">Resolved</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong:&#10;(Số bug Reopen / Tổng số bug đã sửa xong (Closed + Resolved)) * 100%&#10;Mục tiêu: < 15%">Reopen</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Số PR đã mở từ các tuần trước, nhưng trong kỳ này nhận thêm commit / sửa đổi mới bổ sung">Sửa Bổ Sung</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
-                <th style={{ textAlign: "right", padding: "8px 6px", whiteSpace: "nowrap" }} className="has-tooltip" data-tooltip="Năng suất sửa lỗi trung bình mỗi ngày công: Task Resolved / MD">Bug/Ngày</th>
+              <tr style={{ fontSize: "11px", background: "var(--surface-2)", borderBottom: "2px solid var(--border-2)" }}>
+                <th style={{ textAlign: "left", padding: "12px 14px", color: "var(--text-1)", width: "23%" }}>Nhân sự</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "11%" }} title="Số bug đã hoàn thành, review xong và có Ngày Xác Nhận trong kỳ">Close</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "11%" }} title="Số lượng task con trùng case ăn theo bug gốc được Closed">Task Trùng</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "11%" }} title="Số bug đã sửa xong (Resolved) trong kỳ">Resolved</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "11%" }} title="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong: (Reopen / (Closed + Resolved)) * 100%">Reopen</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "11%" }} title="Số PR đã mở từ các tuần trước, nhưng trong kỳ này nhận thêm commit / sửa đổi mới">Sửa Bổ Sung</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "11%" }} title="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "11%" }} title="Năng suất sửa lỗi trung bình mỗi ngày công: (Closed + Resolved) / MD">Bug/Ngày</th>
               </tr>
             </thead>
             <tbody>
@@ -1072,15 +1089,16 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       })()}
                     </td>
                     <td 
-                      className="td-num has-tooltip" 
+                      className="td-num" 
                       style={{ 
                         padding: "8px 10px", 
+                        textAlign: "center",
                         fontSize: "12px", 
                         color: row.closedCount > 0 ? "var(--green)" : "var(--text-3)",
                         cursor: row.closedCount > 0 ? "pointer" : "default",
                         textDecoration: row.closedCount > 0 ? "underline dashed" : "none"
                       }}
-                      data-tooltip={
+                      title={
                         row.closedCount > 0
                           ? `[CLOSED: ${row.closedBugsWithPr} bug có PR (${row.closedCount} bug trùng case)]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
                           : "0 task Closed"
@@ -1095,21 +1113,17 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <div style={{ fontWeight: "bold", fontSize: "14px" }}>
                         {row.closedBugsWithPr}
                       </div>
-                      {row.closedCount > 0 && (
-                        <div style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: "normal", marginTop: "1px" }}>
-                          {row.closedUniquePrs} PR
-                        </div>
-                      )}
                     </td>
                     <td 
-                      className="td-num has-tooltip" 
+                      className="td-num" 
                       style={{ 
                         padding: "8px 10px", 
+                        textAlign: "center",
                         fontSize: "12px", 
                         color: row.duplicateChildCount > 0 ? "var(--purple)" : "var(--text-3)",
                         cursor: row.duplicateChildCount > 0 ? "pointer" : "default",
                       }}
-                      data-tooltip={
+                      title={
                         row.duplicateChildCount > 0
                           ? `${row.duplicateChildCount} task con trùng case ăn theo bug gốc`
                           : "0 task trùng"
@@ -1127,15 +1141,16 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       </div>
                     </td>
                     <td 
-                      className="td-num has-tooltip" 
+                      className="td-num" 
                       style={{ 
                         padding: "8px 10px", 
+                        textAlign: "center",
                         fontSize: "12px", 
                         color: row.resolvedCount > 0 ? "var(--blue)" : "var(--text-3)",
                         cursor: row.resolvedCount > 0 ? "pointer" : "default",
                         textDecoration: row.resolvedCount > 0 ? "underline dashed" : "none"
                       }}
-                      data-tooltip={
+                      title={
                         row.resolvedCount > 0
                           ? `[RESOLVED: ${row.resolvedCount} bug]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}\n• PR status: ${row.resolvedBugsWithPr} CÓ PR, ${row.resolvedBugsNoPr} KHÔNG PR`
                           : "0 task Resolved"
@@ -1150,41 +1165,38 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <div style={{ fontWeight: "bold", fontSize: "14px" }}>
                         {row.resolvedBugsWithPr}
                       </div>
-                      {row.resolvedCount > 0 && (
-                        <div style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: "normal", marginTop: "1px" }}>
-                          {row.resolvedUniquePrs} PR
-                        </div>
-                      )}
                     </td>
                     <td 
-                      className="td-num has-tooltip" 
+                      className="td-num" 
                       style={{ 
                         padding: "8px 6px",
+                        textAlign: "center",
                         fontSize: "12px",
                         color: row.reopenedCount > 0 ? "var(--red)" : "var(--text-2)", 
                         cursor: row.reopenedCount > 0 ? "pointer" : "default",
                         textDecoration: row.reopenedCount > 0 ? "underline dashed" : "none"
                       }}
-                      data-tooltip={row.reopenedCount > 0 ? row.reopenedList.map(b => `[${b.bugId}] ${b.title}`).join('\n') : "0 bug bị reopen"}
+                      title={row.reopenedCount > 0 ? row.reopenedList.map(b => `[${b.bugId}] ${b.title}`).join('\n') : "0 bug bị reopen"}
                       onClick={() => row.reopenedCount > 0 && setSelectedReopenedBugs(row.reopenedList)}
                     >
                       {row.reopenedCount > 0 ? `${row.reopenRate.toFixed(1)}% (${row.reopenedCount})` : "0.0%"}
                     </td>
                     <td 
-                      className="td-num has-tooltip" 
+                      className="td-num" 
                       style={{ 
                         padding: "8px 6px",
+                        textAlign: "center",
                         fontSize: "12px",
                         color: row.reCommitCount > 0 ? "var(--yellow)" : "var(--text-2)", 
                         cursor: row.reCommitCount > 0 ? "pointer" : "default",
                         textDecoration: row.reCommitCount > 0 ? "underline dashed" : "none"
                       }}
-                      data-tooltip={row.reCommitCount > 0 ? row.reCommitBugsList.map((b: any) => `[${b.bugId}] ${b.title} (${b.commitsCount} commits)`).join('\n') : "0 PR sửa bổ sung"}
+                      title={row.reCommitCount > 0 ? row.reCommitBugsList.map((b: any) => `[${b.bugId}] ${b.title} (${b.commitsCount} commits)`).join('\n') : "0 PR sửa bổ sung"}
                       onClick={() => row.reCommitCount > 0 && setSelectedPrBugs(row.reCommitBugsList)}
                     >
                       {row.reCommitCount > 0 ? `${row.reCommitCount} PR` : "0 PR"}
                     </td>
-                    <td className="td-num" style={{ verticalAlign: "middle", padding: "8px 6px" }}>
+                    <td className="td-num" style={{ verticalAlign: "middle", textAlign: "center", padding: "8px 6px" }}>
                       <input 
                         type="number" 
                         step="0.5" 
@@ -1197,9 +1209,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                           padding: "3px 4px", 
                           fontSize: "12px", 
                           fontWeight: "bold",
-                          border: "1.5px solid var(--accent)", 
-                          borderRadius: "6px",
-                          background: "rgba(99, 102, 241, 0.1)",
+                          border: "1px solid var(--border-2)", 
+                          borderRadius: "4px",
+                          background: "var(--surface-2)",
                           color: "var(--text-1)",
                           cursor: "text"
                         }}
@@ -1221,7 +1233,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         }}
                       />
                     </td>
-                    <td className="td-num" style={{ fontWeight: "bold", color: "var(--cyan)", verticalAlign: "middle" }}>
+                    <td className="td-num" style={{ fontWeight: "bold", textAlign: "center", color: "var(--blue)", verticalAlign: "middle" }}>
                       {row.bugsPerDay.toFixed(1)}
                     </td>
                   </tr>
@@ -1259,7 +1271,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         border: "1px solid var(--border-3)",
                         fontSize: "12px",
                         display: "flex",
-                        justify: "space-between",
+                        justifyContent: "space-between",
                         alignItems: "center",
                         cursor: "pointer"
                       }}
@@ -1294,27 +1306,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       </div>
 
       {/* Auto Evaluation Summary */}
-      <div className="card" style={{ marginTop: "16px", background: "rgba(99,102,241,0.05)", borderLeft: "4px solid var(--accent)" }}>
-        <div style={{ fontWeight: 700, fontSize: "14px", marginBottom: "12px", color: "var(--accent-2)" }}>
-          📝 Đánh giá Năng suất &amp; Chất lượng (Tự động)
-        </div>
-        {getAutoEvaluation()}
-      </div>
-      {/* Guide Card */}
-      <div className="card" style={{ marginTop: "20px", background: "linear-gradient(135deg, rgba(99,102,241,0.05), rgba(6,182,212,0.03))" }}>
-        <div style={{ fontSize: "14px", fontWeight: "700", marginBottom: "8px" }}>💡 Hướng dẫn Đọc Chỉ số Chất lượng:</div>
-        <div style={{ fontSize: "12px", color: "var(--text-2)", lineHeight: "1.6" }}>
-          - <strong>Đã Close:</strong> Số bug đã được review xong và deploy thành công (Closed, Deployed).
-          <br />
-          - <strong>Resolved:</strong> Số bug được dev sửa xong và gửi đi nhưng chưa hoàn thành review/deploy.
-          <br />
-          - <strong>Tỷ lệ Reopen:</strong> Tỷ lệ phần trạng thái bug bị mở lại sau khi báo sửa xong. Mục tiêu dưới <strong>15%</strong>.
-          <br />
-          - <strong>Comments/Task:</strong> Số lượng review comment trung bình nhận được từ anh T trên mỗi PR task. Review comment nhiều chứng tỏ code chưa trau chuốt kỹ.
-          <br />
-          - <strong>Lỗi Lặp:</strong> Số lỗi bị lặp lại các bài học kinh nghiệm trong danh sách <strong>Checklist</strong>. Việc lặp lại lỗi đã được comment trước đó là điểm trừ chất lượng lớn.
-        </div>
-      </div>
+
       {/* Reopened Bugs Detail Modal */}
       {selectedReopenedBugs && (
         <div className="modal-overlay" onClick={() => setSelectedReopenedBugs(null)}>
@@ -1349,7 +1341,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <tr key={idx} style={{ borderBottom: "1px solid var(--border-3)", background: "var(--bg-1)" }}>
                         <td style={{ padding: "10px", fontWeight: "bold" }}>
                           {b.url ? (
-                            <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+                            <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: "700", textDecoration: "underline" }}>
                               {b.bugId}
                             </a>
                           ) : (
@@ -1370,15 +1362,15 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       {/* PR Tasks & Comments Detail Modal */}
       {selectedPrBugs && (
         <div className="modal-overlay" onClick={() => { setSelectedPrBugs(null); setSelectedDevCode(""); }}>
-          <div className="modal" style={{ width: "850px", padding: "20px", borderRadius: "8px" }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ width: "850px", padding: "24px", borderRadius: "6px", background: "var(--surface)", border: "1px solid var(--border-2)" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
-                <span>💬</span> Chi tiết Task có PR trong kỳ {activePeriod?.label} ({selectedDevCode})
+              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "var(--text-1)" }}>
+                Chi tiết Task có PR trong kỳ {activePeriod?.label} ({selectedDevCode})
               </h3>
               <button 
                 type="button" 
                 className="ctrl" 
-                style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "4px" }} 
+                style={{ padding: "4px 12px", fontSize: "12px" }} 
                 onClick={() => { setSelectedPrBugs(null); setSelectedDevCode(""); }}
               >
                 Đóng
@@ -1388,44 +1380,38 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
             {/* Highlight Banner if there are duplicate child bugs resolved via PR */}
             {selectedPrBugs.some(b => b.isChild) && (
               <div style={{ 
-                background: "linear-gradient(135deg, rgba(147, 51, 234, 0.15), rgba(99, 102, 241, 0.15))", 
-                border: "1px solid rgba(147, 51, 234, 0.35)", 
-                borderRadius: "6px", 
+                background: "var(--blue-bg)", 
+                border: "1px solid var(--blue)", 
+                borderRadius: "4px", 
                 padding: "10px 14px", 
                 marginBottom: "14px", 
-                fontSize: "12.5px", 
-                color: "#e9d5ff",
-                display: "flex",
-                alignItems: "center",
-                gap: "8px"
+                fontSize: "12px", 
+                color: "var(--blue)",
+                fontWeight: "500"
               }}>
-                <span style={{ fontSize: "16px" }}>🔥</span>
-                <div>
-                  <strong>Thành quả xử lý Root Cause:</strong> 1 PR merged đã giải quyết triệt để vấn đề cốt lõi, kéo theo <strong>{selectedPrBugs.filter(b => b.isChild).length} bug trùng lặp (cùng case)</strong> tự động được nghiệm thu &amp; Closed!
-                </div>
+                <strong>Thành quả xử lý Root Cause:</strong> 1 PR merged đã giải quyết triệt để vấn đề cốt lõi, kéo theo <strong>{selectedPrBugs.filter(b => b.isChild).length} bug trùng lặp (cùng case)</strong> tự động được nghiệm thu & Closed!
               </div>
             )}
 
-            <div style={{ maxHeight: "380px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--bg-2)" }}>
+            <div style={{ maxHeight: "380px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "4px", background: "var(--surface)" }}>
               {selectedPrBugs.length === 0 ? (
                 <div style={{ padding: "16px", color: "var(--text-3)", textAlign: "center" }}>Không có task nào.</div>
               ) : (
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
                   <thead>
-                    <tr style={{ background: "var(--bg-3)", borderBottom: "1px solid var(--border-2)" }}>
-                      <th style={{ padding: "10px", textAlign: "left" }}>BUG ID</th>
-                      <th style={{ padding: "10px", textAlign: "left" }}>VỊ TRÍ LỖI</th>
-                      <th style={{ padding: "10px", textAlign: "center" }}>TRẠNG THÁI</th>
-                      <th style={{ padding: "10px", textAlign: "center" }}>TRẠNG THÁI PR &amp; CLUSTER</th>
-                      <th style={{ padding: "10px", textAlign: "left" }}>TIÊU ĐỀ LỖI</th>
-                      <th style={{ padding: "10px", textAlign: "right" }}>NGÀY TÍNH</th>
+                    <tr style={{ background: "var(--surface-2)", borderBottom: "1px solid var(--border-2)", color: "var(--text-1)", fontWeight: "700", fontSize: "11px" }}>
+                      <th style={{ padding: "10px 12px", textAlign: "left" }}>BUG ID</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left" }}>VỊ TRÍ LỖI</th>
+                      <th style={{ padding: "10px 12px", textAlign: "center" }}>TRẠNG THÁI</th>
+                      <th style={{ padding: "10px 12px", textAlign: "center" }}>TRẠNG THÁI PR & CLUSTER</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left" }}>TIÊU ĐỀ LỖI</th>
+                      <th style={{ padding: "10px 12px", textAlign: "right" }}>NGÀY TÍNH</th>
                     </tr>
                   </thead>
                   <tbody>
                     {selectedPrBugs.map((b, idx) => {
                       const isClosed = (b.status ?? "").toLowerCase().includes("close") || (b.status ?? "").toLowerCase().includes("deploy");
                       const isRes = (b.status ?? "").toLowerCase().includes("resolve");
-                      const hasPr = Boolean(b.prUrl || b.hasPR);
                       const isChild = Boolean(b.isChild);
 
                       return (
@@ -1433,34 +1419,34 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                           key={idx} 
                           style={{ 
                             borderBottom: "1px solid var(--border-3)", 
-                            background: isChild ? "rgba(147, 51, 234, 0.05)" : "var(--bg-1)" 
+                            background: isChild ? "var(--surface-2)" : "var(--surface)" 
                           }}
                         >
-                          <td style={{ padding: "10px", fontWeight: "bold", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "10px 12px", fontWeight: "700", whiteSpace: "nowrap" }}>
                             {b.url ? (
-                              <a href={b.url} target="_blank" rel="noreferrer" style={{ color: isChild ? "#c084fc" : "var(--accent)", textDecoration: "underline" }}>
+                              <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: "700", textDecoration: "underline" }}>
                                 {b.bugId}
                               </a>
                             ) : (
                               b.bugId
                             )}
                           </td>
-                          <td style={{ padding: "10px", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
                             <span
                               style={{
                                 padding: "2px 6px",
                                 borderRadius: "4px",
                                 fontSize: "11px",
                                 fontWeight: 600,
-                                background: isChild ? "rgba(147, 51, 234, 0.15)" : "rgba(99, 102, 241, 0.1)",
-                                color: isChild ? "#e9d5ff" : "var(--accent-2)",
-                                border: isChild ? "1px solid rgba(147, 51, 234, 0.3)" : "1px solid rgba(99, 102, 241, 0.2)",
+                                background: "var(--surface-2)",
+                                color: "var(--text-1)",
+                                border: "1px solid var(--border-2)",
                               }}
                             >
                               {b.location || "Chưa phân loại"}
                             </span>
                           </td>
-                          <td style={{ padding: "10px", textAlign: "center", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
                             <span
                               style={{
                                 padding: "2px 8px",
@@ -1468,17 +1454,22 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                 fontSize: "11px",
                                 fontWeight: 700,
                                 background: isClosed
-                                  ? "rgba(16, 185, 129, 0.15)"
+                                  ? "rgba(22, 163, 74, 0.12)"
                                   : isRes
-                                  ? "rgba(59, 130, 246, 0.15)"
-                                  : "var(--surface-3)",
+                                  ? "var(--blue-bg)"
+                                  : "var(--surface-2)",
                                 color: isClosed ? "var(--green)" : isRes ? "var(--blue)" : "var(--text-2)",
+                                border: isClosed
+                                  ? "1px solid var(--green)"
+                                  : isRes
+                                  ? "1px solid var(--blue)"
+                                  : "1px solid var(--border-2)",
                               }}
                             >
                               {b.status || (isClosed ? "CLOSED" : isRes ? "RESOLVED" : "DONE")}
                             </span>
                           </td>
-                          <td style={{ padding: "10px", textAlign: "center", whiteSpace: "nowrap" }}>
+                          <td style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
                             {b.prUrl ? (
                               <a
                                 href={b.prUrl}
@@ -1489,16 +1480,16 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                   borderRadius: "4px",
                                   fontSize: "11px",
                                   fontWeight: 600,
-                                  background: isChild ? "rgba(147, 51, 234, 0.2)" : "rgba(6, 182, 212, 0.12)",
-                                  color: isChild ? "#e9d5ff" : "var(--cyan)",
-                                  border: isChild ? "1px solid rgba(147, 51, 234, 0.4)" : "1px solid rgba(6, 182, 212, 0.3)",
+                                  background: "var(--blue-bg)",
+                                  color: "var(--blue)",
+                                  border: "1px solid var(--blue)",
                                   textDecoration: "none",
                                   display: "inline-flex",
                                   alignItems: "center",
                                   gap: "4px",
                                 }}
                               >
-                                {isChild ? `🔗 PR ${b.parentBugId || "Chung"}` : "CÓ PR 🔗"}
+                                {isChild ? `PR ${b.parentBugId || "Chung"} ↗` : "CÓ PR ↗"}
                               </a>
                             ) : isChild ? (
                               <span
@@ -1507,9 +1498,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                   borderRadius: "4px",
                                   fontSize: "11px",
                                   fontWeight: 600,
-                                  background: "rgba(147, 51, 234, 0.18)",
-                                  color: "#c084fc",
-                                  border: "1px solid rgba(147, 51, 234, 0.3)",
+                                  background: "var(--surface-2)",
+                                  color: "var(--text-2)",
+                                  border: "1px solid var(--border-2)",
                                 }}
                               >
                                 ↳ TRÙNG CASE [{b.parentBugId}]
@@ -1521,26 +1512,26 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                   borderRadius: "4px",
                                   fontSize: "11px",
                                   fontWeight: 600,
-                                  background: "rgba(249, 115, 22, 0.12)",
-                                  color: "#f97316",
-                                  border: "1px solid rgba(249, 115, 22, 0.3)",
+                                  background: "rgba(217, 119, 6, 0.12)",
+                                  color: "var(--yellow)",
+                                  border: "1px solid var(--yellow)",
                                 }}
                               >
-                                ⚠️ PR EMPTY
+                                PR EMPTY
                               </span>
                             )}
                           </td>
-                          <td style={{ padding: "10px", color: "var(--text-1)" }}>
+                          <td style={{ padding: "10px 12px", color: "var(--text-1)" }}>
                             {isChild ? (
                               <span>
-                                <span style={{ color: "#c084fc", fontWeight: 600, marginRight: "4px" }}>↳ Cùng Root Cause:</span>
+                                <span style={{ color: "var(--text-2)", fontWeight: 600, marginRight: "4px" }}>↳ Cùng Root Cause:</span>
                                 {b.title.replace(/ \(Task trùng lặp của \[.*\]\)/, "")}
                               </span>
                             ) : (
                               b.title
                             )}
                           </td>
-                          <td style={{ padding: "10px", textAlign: "right", whiteSpace: "nowrap", color: "var(--text-3)", fontSize: "12px" }}>
+                          <td style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap", color: "var(--text-3)", fontSize: "12px" }}>
                             {b.date || "—"}
                           </td>
                         </tr>
@@ -1595,7 +1586,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <tr key={idx} style={{ borderBottom: "1px solid var(--border-3)", background: "var(--bg-1)" }}>
                         <td style={{ padding: "10px", fontWeight: "bold" }}>
                           {b.url ? (
-                            <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+                            <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: "700", textDecoration: "underline" }}>
                               {b.bugId}
                             </a>
                           ) : (
@@ -1685,7 +1676,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                             <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
                               <span style={{ color: "var(--text-3)" }}>{child.date}</span>
                               {child.url && (
-                                <a href={child.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)", textDecoration: "underline" }}>
+                                <a href={child.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: "700", textDecoration: "underline" }}>
                                   Notion 🔗
                                 </a>
                               )}

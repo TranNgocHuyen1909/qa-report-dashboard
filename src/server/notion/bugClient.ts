@@ -55,6 +55,32 @@ function relationIds(prop: any): string[] {
   return [];
 }
 
+function dateProp(prop: any): string | undefined {
+  if (!prop) return undefined;
+  if (prop.type === "date" && prop.date?.start) return prop.date.start;
+  if (prop.date?.start) return prop.date.start;
+  if (prop.type === "rich_text" || prop.type === "title") return rich(prop, prop.type);
+  return undefined;
+}
+
+function parseKnowledge(p: Record<string, any>): string | undefined {
+  const prop =
+    p["Kiến thức"] ??
+    p["Kiến thức "] ??
+    p["Kiến thức rút ra"] ??
+    p["Bài học kinh nghiệm"] ??
+    p["Bài học"] ??
+    p["Knowledge"];
+  if (!prop) return undefined;
+  if (prop.type === "rich_text") return rich(prop, "rich_text");
+  if (prop.type === "title") return rich(prop, "title");
+  if (prop.type === "select") return sel(prop);
+  if (prop.type === "multi_select") return multi(prop).join(", ");
+  if (prop.type === "checkbox") return prop.checkbox ? "True" : undefined;
+  if (prop.type === "url") return url(prop);
+  return undefined;
+}
+
 function mapPage(page: NotionPage): BugRecord {
   const p = page.properties ?? {};
   return {
@@ -85,6 +111,24 @@ function mapPage(page: NotionPage): BugRecord {
     createdTime: page.created_time,
     lastEditedTime: page.last_edited_time,
     bugId: uid(p["BUG ID"]),
+    reviewStartDate:
+      dateProp(p["Ngày bắt đầu review"]) ||
+      dateProp(p["Ngày bắt đầu review "]) ||
+      dateProp(p["Ngày bắt đầu Review"]) ||
+      dateProp(p["Ngày bắt đầu Review "]) ||
+      dateProp(p["Ngày bắt đầu"]) ||
+      p["Ngày review"]?.date?.start ||
+      p["Review Date"]?.date?.start,
+    reviewEndDate:
+      dateProp(p["Ngày kết thúc review"]) ||
+      dateProp(p["Ngày kết thúc review "]) ||
+      dateProp(p["Ngày kết thúc Review"]) ||
+      dateProp(p["Ngày kết thúc Review "]) ||
+      dateProp(p["Ngày kết thúc"]) ||
+      p["Ngày bắt đầu review"]?.date?.end ||
+      p["Ngày review"]?.date?.end ||
+      p["Review Date"]?.date?.end,
+    knowledge: parseKnowledge(p),
     isPausedFix:
       chk(p["Tạm dừng fix"]) ||
       chk(p["Tạm dừng Fix"]) ||
@@ -109,12 +153,15 @@ function mapPage(page: NotionPage): BugRecord {
       chk(p["Duplicate"]) ||
       (p["Duplicates"]?.relation?.length ?? 0) > 0 ||
       (p["Duplicate"]?.relation?.length ?? 0) > 0,
-    duplicateIds:
-      relationIds(p["Duplicates"]).length > 0
-        ? relationIds(p["Duplicates"])
-        : relationIds(p["Duplicate"]).length > 0
-        ? relationIds(p["Duplicate"])
-        : relationIds(p["Task trùng"]),
+    duplicateIds: Array.from(new Set([
+      ...relationIds(p["Duplicates"]),
+      ...relationIds(p["Duplicate"]),
+      ...relationIds(p["Task trùng"]),
+      ...relationIds(p["Lỗi trùng"]),
+      ...relationIds(p["Lỗi trùng lặp"]),
+      ...relationIds(p["Duplicate Tasks"]),
+      ...relationIds(p["Duplicate Task"]),
+    ])),
   };
 }
 

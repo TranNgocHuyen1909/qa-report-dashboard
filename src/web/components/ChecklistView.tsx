@@ -1,4 +1,7 @@
 import { useState, useEffect } from "react";
+import { Button } from "./ui/button";
+import { Badge } from "./ui/badge";
+import { Card } from "./ui/card";
 
 export function parsePrUrl(pr: string): { url: string; label: string } {
   const trimmed = pr.trim();

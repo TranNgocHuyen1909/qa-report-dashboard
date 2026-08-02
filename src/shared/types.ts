@@ -43,6 +43,10 @@ export interface BugRecord {
   isPausedFix?: boolean;
   isDuplicate?: boolean;
   duplicateIds?: string[];
+  // Notion review fields
+  reviewStartDate?: string;
+  reviewEndDate?: string;
+  knowledge?: string;
   // GitHub enrichment
   ghReviewStatus?:
     | "Approved"

@@ -442,8 +442,17 @@ export function ReviewStats({
 
   // Find active period details from topbar filters
   const activePeriod = useMemo(() => {
-    if (periodKey) {
-      return view.availablePeriods.find((p) => p.key === periodKey);
+    if (periodKey && periodKey !== "all") {
+      const found = view.availablePeriods.find((p) => p.key === periodKey);
+      if (found) return found;
+    }
+    if (periodKey === "all") {
+      return {
+        key: "all",
+        label: "Tất cả các kỳ",
+        startDate: "2020-01-01",
+        endDate: "2099-12-31",
+      };
     }
     return undefined; // undefined = Tất cả các kỳ (All time)
   }, [view.availablePeriods, periodKey]);
@@ -777,9 +786,11 @@ export function ReviewStats({
   }, [view.bugs, activePeriod]);
 
   // Helper to determine exact review timestamp for Huyen
-  // Ưu tiên: Thời gian comment lần cuối (re-review/post-merge) -> Thời gian comment lần đầu -> Thời gian sửa card Notion mới nhất (lastEditedTime) -> confirmedDate -> prCreatedAt
+  // Helper to determine exact review timestamp for Huyen
   const huyenReviewDate = (b: BugRecord) => {
     return (
+      dateKey(b.reviewEndDate) ||
+      dateKey(b.reviewStartDate) ||
       dateKey(b.huyenLastCommentAt) ||
       dateKey(b.huyenFirstCommentAt) ||
       dateKey(b.lastEditedTime) ||
@@ -793,17 +804,64 @@ export function ReviewStats({
   const huyenReviewedBugs = useMemo(() => {
     return view.bugs.filter((b) => {
       if ((b.status ?? "").toLowerCase() === "cancel") return false;
+      const start = dateKey(b.reviewStartDate);
+      const end = dateKey(b.reviewEndDate);
+
+      // Nếu có cả 2 ngày ngày bắt đầu & kết thúc -> Đã review xong
+      if (start && end) {
+        return dateInRange(end, activePeriod?.startDate, activePeriod?.endDate) || dateInRange(start, activePeriod?.startDate, activePeriod?.endDate);
+      }
+      if (end) {
+        return dateInRange(end, activePeriod?.startDate, activePeriod?.endDate);
+      }
+
       if (!isReviewedByHuyen(b)) return false;
       const rDate = huyenReviewDate(b);
       return dateInRange(rDate, activePeriod?.startDate, activePeriod?.endDate);
     });
   }, [view.bugs, activePeriod]);
 
-  // Check if Huyen commented on this PR on GitHub (user TranNgocHuyen1909)
+  // Quy tắc từ QC Lead:
+  // 1. Review có comment: Ngày bắt đầu !== Ngày kết thúc (start !== end) HOẶC có Ngày bắt đầu mà CHƯA CÓ Ngày kết thúc (start && !end)
+  // 2. Pass ngay (Review không comment): Có đủ cả 2 ngày và Ngày bắt đầu === Ngày kết thúc (start === end)
+  // 3. Re-review: Có Ngày bắt đầu review nhưng CHƯA CÓ Ngày kết thúc review (start && !end)
   const isHuyenBugWithComment = (b: BugRecord) => {
-    if (!hasPR(b) || isNoRepro(b)) return false;
+    const start = dateKey(b.reviewStartDate);
+    const end = dateKey(b.reviewEndDate);
+
+    if (start && end) {
+      return start !== end; // 2 ngày khác nhau = Review có comment!
+    }
+    if (start && !end) {
+      return true; // Có bắt đầu nhưng chưa có kết thúc = Review có comment!
+    }
+
+    // Nếu không có cả 2 ngày review:
     const huyenComments = b.prCommentsByHuyen ?? 0;
-    return huyenComments > 0;
+    if (huyenComments > 0 || !!b.huyenFirstCommentAt || !!b.huyenLastCommentAt) return true;
+
+    return false;
+  };
+
+  const isHuyenBugReReview = (b: BugRecord) => {
+    const start = dateKey(b.reviewStartDate);
+    const end = dateKey(b.reviewEndDate);
+
+    if (start && !end) {
+      return true; // Có ngày bắt đầu nhưng chưa có ngày kết thúc = Re-review!
+    }
+    return (b.huyenReviewRounds ?? 0) > 1;
+  };
+
+  const isHuyenBugPassNgay = (b: BugRecord) => {
+    const start = dateKey(b.reviewStartDate);
+    const end = dateKey(b.reviewEndDate);
+
+    if (start && end) {
+      return start === end; // Bằng nhau = Pass ngay!
+    }
+
+    return !isHuyenBugWithComment(b) && !isHuyenBugReReview(b);
   };
 
   const huyenReviewedWithComments = useMemo(() => {
@@ -811,29 +869,40 @@ export function ReviewStats({
   }, [huyenReviewedBugs]);
 
   const huyenReviewedNoComments = useMemo(() => {
-    return huyenReviewedBugs.filter((b) => !isHuyenBugWithComment(b));
+    return huyenReviewedBugs.filter(isHuyenBugPassNgay);
   }, [huyenReviewedBugs]);
 
-  // PRs requiring >1 review round (Multi-turn recheck by TranNgocHuyen1909)
+  // PRs requiring re-review trong kỳ (Filter từ huyenReviewedBugs)
   const huyenMultiRoundBugs = useMemo(() => {
-    return huyenReviewedBugs.filter((b) => (b.huyenReviewRounds ?? 0) > 1);
+    return huyenReviewedBugs.filter(isHuyenBugReReview);
   }, [huyenReviewedBugs]);
 
-  // Filter bugs waiting for Huyen review (Must belong to team devs: HoangGV, HoNX, HuyDH)
+  // Filter bugs waiting for Huyen review (Must belong to team devs: HoangGV, HoNX, HuyDH in active period)
   const pendingHuyenReviewBugs = useMemo(() => {
     return view.bugs.filter((b) => {
-      if (!hasPR(b)) return false; // Không có PR -> Không thể chờ review!
-      if (isNoRepro(b)) return false;
-      if (isBugPausedFix(b)) return false; // Khớp với bộ lọc Tạm dừng fix: Unchecked trên Notion (chuẩn 22 bug)!
-
-      // Chỉ tính bug thuộc 3 Dev do Huyền quản lý (HoangGV, HoNX, HuyDH) để đồng bộ 100% với bảng phân phối
       const belongsToTeamDev = dev3People.some((p) => bugBelongsToPerson(b, p));
-      if (!belongsToTeamDev) return false;
+      if (!belongsToTeamDev) return false; // Must belong to team dev!
+
+      if (isNoRepro(b)) return false;
+      if (isBugPausedFix(b)) return false;
 
       const st = (b.status ?? "").toLowerCase();
-      const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
+      if (st === "cancel" || st === "new" || st === "in progress") return false;
 
-      // PR đã Merge / Closed / Deployed trên GitHub -> Đã xong bước chờ review
+      const start = dateKey(b.reviewStartDate);
+      const end = dateKey(b.reviewEndDate);
+
+      // Nếu đã có cả Ngày kết thúc review -> Đã review xong, không còn chờ nữa!
+      if (end) return false;
+
+      // Phải nằm trong kỳ active period (theo ngày bắt đầu review hoặc ngày dev báo sửa bug)
+      const fDate = bugFixedDate(b);
+      const isPeriodBug =
+        dateInRange(start, activePeriod?.startDate, activePeriod?.endDate) ||
+        dateInRange(fDate, activePeriod?.startDate, activePeriod?.endDate);
+      if (!isPeriodBug) return false;
+
+      const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
       const isClosedOrMerged =
         st.includes("close") ||
         st.includes("merge") ||
@@ -849,13 +918,10 @@ export function ReviewStats({
         );
 
       if (isClosedOrMerged) return false;
-      if (st === "cancel" || st === "new" || st === "in progress") return false;
-      if (!isFixed(b)) return false;
-      if (isReviewedByHuyen(b)) return false;
 
       return true;
     });
-  }, [view.bugs, dev3People]);
+  }, [view.bugs, dev3People, activePeriod]);
 
   // Bug chưa có PR (chưa hiện thực được) thuộc 3 Dev do Huyền quản lý
   const teamPendingNoPrBugs = useMemo(() => {
@@ -924,7 +990,7 @@ export function ReviewStats({
       const reviewedCount = devBugs.length;
       const withCommentCount = devBugs.filter(isHuyenBugWithComment).length;
       const noCommentCount = devBugs.length - withCommentCount;
-      const pendingCount = pendingHuyenReviewBugs.filter((b) =>
+      const pendingCount = teamResolvedPriorityBugs.filter((b) =>
         bugBelongsToPerson(b, dev),
       ).length;
       const reviewRate =
@@ -1304,9 +1370,8 @@ export function ReviewStats({
         if (!(b.location ?? []).includes(selectedLocFilter)) return false;
       }
       if (huyenCommentFilter === "comments") return isHuyenBugWithComment(b);
-      if (huyenCommentFilter === "nocomments") return !isHuyenBugWithComment(b);
-      if (huyenCommentFilter === "multiround")
-        return (b.huyenReviewRounds ?? 0) > 1;
+      if (huyenCommentFilter === "nocomments") return isHuyenBugPassNgay(b);
+      if (huyenCommentFilter === "multiround") return isHuyenBugReReview(b);
       if (huyenCommentFilter === "dev_replied") return isDevRepliedBug(b);
       if (huyenCommentFilter === "pending_reply")
         return isHuyenBugWithComment(b) && !isDevRepliedBug(b);
@@ -1654,21 +1719,21 @@ export function ReviewStats({
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                 <thead>
-                  <tr style={{ background: "var(--surface-3)", color: "var(--text-2)" }}>
-                    <th style={{ padding: "8px 12px", textAlign: "left" }}>TÁC GIẢ</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>TỔNG FIX</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>HUYỀN REVIEW</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>TRƯỜNG DUYỆT</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>TỶ LỆ LỖI VÒNG 1</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>TỶ LỆ CẦN SỬA VÒNG 2</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>HOÀN THÀNH</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>TIẾN ĐỘ CHUNG</th>
+                  <tr style={{ background: "var(--surface-2)", color: "var(--text-1)", fontWeight: "bold", borderBottom: "1px solid var(--border-2)" }}>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-1)" }}>TÁC GIẢ</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>TỔNG FIX</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>HUYỀN REVIEW</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>TRƯỜNG DUYỆT</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>TỶ LỆ LỖI VÒNG 1</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>TỶ LỆ CẦN SỬA VÒNG 2</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>HOÀN THÀNH</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>TIẾN ĐỘ CHUNG</th>
                   </tr>
                 </thead>
                 <tbody>
                   {allDevStats.map((row, idx) => (
-                    <tr key={idx} style={{ borderBottom: "1px solid var(--border-3)", background: idx % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent" }}>
-                      <td style={{ padding: "8px 12px", fontWeight: "600", cursor: "pointer", color: "var(--accent-2)", textDecoration: "underline" }}
+                    <tr key={idx} style={{ borderBottom: "1px solid var(--border-2)", background: idx % 2 === 0 ? "var(--surface-1)" : "var(--surface-2)" }}>
+                      <td style={{ padding: "10px 12px", fontWeight: "700", cursor: "pointer", color: "var(--text-1)" }}
                         onClick={() => { setSelectedDevFilter(row.dev.code); scrollToDetails(); }}
                         title={`Click để lọc tất cả bug của ${row.dev.code}`}
                       >
@@ -1892,14 +1957,14 @@ export function ReviewStats({
             <div style={{ overflowX: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px" }}>
                 <thead>
-                  <tr style={{ background: "var(--surface-3)", color: "var(--text-2)" }}>
-                    <th style={{ padding: "8px 12px", textAlign: "left" }}>TÁC GIẢ</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>TỔNG BUG FIX</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>APPROVED</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>CHANGES REQ</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>WAIT FOR DEV</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>CHƯA ĐỤNG TỚI</th>
-                    <th style={{ padding: "8px 12px", textAlign: "center" }}>TIẾN ĐỘ DUYỆT</th>
+                  <tr style={{ background: "var(--surface-2)", color: "var(--text-1)", fontWeight: "bold", borderBottom: "1px solid var(--border-2)" }}>
+                    <th style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-1)" }}>TÁC GIẢ</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>TỔNG BUG FIX</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>APPROVED</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>CHANGES REQ</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>WAIT FOR DEV</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>CHƯA ĐỤNG TỚI</th>
+                    <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}>TIẾN ĐỘ DUYỆT</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -1912,8 +1977,8 @@ export function ReviewStats({
                     const progress = devPrs.length > 0 ? ((approved / devPrs.length) * 100).toFixed(0) : "0";
 
                     return (
-                      <tr key={idx} style={{ borderBottom: "1px solid var(--border-3)", background: idx % 2 === 0 ? "rgba(255,255,255,0.01)" : "transparent" }}>
-                        <td style={{ padding: "8px 12px", fontWeight: "600", cursor: "pointer", color: "var(--accent-2)", textDecoration: "underline" }}
+                      <tr key={idx} style={{ borderBottom: "1px solid var(--border-2)", background: idx % 2 === 0 ? "var(--surface-1)" : "var(--surface-2)" }}>
+                        <td style={{ padding: "10px 12px", fontWeight: "700", cursor: "pointer", color: "var(--text-1)" }}
                           onClick={() => { setSelectedDevFilter(dev.code); setTruongCommentFilter("all"); scrollToDetails(); }}
                         >
                           {dev.code}
@@ -2177,7 +2242,7 @@ export function ReviewStats({
                 setHuyenCommentFilter("multiround");
                 scrollToDetails();
               }}
-              title={`[Công thức Tính toán]\n• RE-CHECK LẶP LẠI: Task mà Huyền phải vào comment/re-check từ 2 lần trở lên (khi Dev sửa chưa đạt).\n• Tỷ lệ re-check = (Số bug re-check >1 lần ${huyenMultiRoundBugs.length} / Tổng đã review ${huyenReviewedBugs.length}) × 100% = ${huyenReviewedBugs.length > 0 ? ((huyenMultiRoundBugs.length / huyenReviewedBugs.length) * 100).toFixed(0) : 0}%`}
+              title={`[Công thức Tính toán]\n• RE-REVIEW: Task mà Huyền phải vào comment/re-review từ 2 lần trở lên (khi Dev sửa chưa đạt).\n• Tỷ lệ re-review = (Số bug re-review >1 lần ${huyenMultiRoundBugs.length} / Tổng đã review ${huyenReviewedBugs.length}) × 100% = ${huyenReviewedBugs.length > 0 ? ((huyenMultiRoundBugs.length / huyenReviewedBugs.length) * 100).toFixed(0) : 0}%`}
             >
               <div
                 style={{
@@ -2186,7 +2251,7 @@ export function ReviewStats({
                   fontWeight: "bold",
                 }}
               >
-                RE-CHECK LẶP LẠI
+                RE-REVIEW
               </div>
               <div
                 style={{
@@ -2198,7 +2263,7 @@ export function ReviewStats({
                 {huyenMultiRoundBugs.length}
               </div>
               <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
-                Tỷ lệ re-check:{" "}
+                Tỷ lệ re-review:{" "}
                 <strong>
                   {huyenReviewedBugs.length > 0
                     ? `${((huyenMultiRoundBugs.length / huyenReviewedBugs.length) * 100).toFixed(0)}%`

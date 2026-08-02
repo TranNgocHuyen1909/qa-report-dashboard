@@ -44,52 +44,53 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
         <thead>
           <tr
             style={{
-              background: "var(--surface-3)",
+              background: "var(--surface-2)",
               borderBottom: "1px solid var(--border-2)",
-              color: "var(--text-2)",
+              color: "var(--text-1)",
+              fontWeight: "bold",
             }}
           >
-            <th style={{ padding: "8px 12px", textAlign: "left" }} title="Tên lập trình viên phụ trách">
-              Tác giả
+            <th style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-1)" }} title="Tên lập trình viên phụ trách">
+              TÁC GIẢ
             </th>
-            <th style={{ padding: "8px 12px", textAlign: "center" }} title="Tổng số bug có PR của Dev này mà QC Lead đã hoàn thành review">
-              Tổng Đã Review
+            <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Tổng số bug có PR của Dev này mà QC Lead đã hoàn thành review">
+              TỔNG ĐÃ REVIEW
             </th>
-            <th style={{ padding: "8px 12px", textAlign: "center" }} title="Số bug của Dev này test Pass 100% không cần comment lỗi">
-              Pass Ngay
+            <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Số bug của Dev này test Pass 100% không cần comment lỗi">
+              PASS NGAY
             </th>
-            <th style={{ padding: "8px 12px", textAlign: "center" }} title="Số bug của Dev này bị QC Lead comment ra lỗi trên GitHub PR">
-              Review Có Comment
+            <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Số bug của Dev này bị QC Lead comment ra lỗi trên GitHub PR">
+              REVIEW CÓ COMMENT
             </th>
             <th
-              style={{ padding: "8px 12px", textAlign: "center" }}
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
               title={`[Công thức Tỷ Lệ Lỗi Cá Nhân]\n• Phép tính = (Số bug có comment / Tổng số bug đã review của chính Dev này) × 100%\n• Đánh giá: >30% (Đỏ - Cao) | >15%-30% (Vàng) | ≤15% (Xanh)`}
             >
-              Tỷ Lệ Lỗi (Cá Nhân)
+              TỶ LỆ LỖI (CÁ NHÂN)
             </th>
             <th
-              style={{ padding: "8px 12px", textAlign: "center" }}
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
               title={`[Công thức Đóng Góp Lỗi Cả Team]\n• Phép tính = (Số bug có comment của Dev này / TỔNG BUG CÓ COMMENT CỦA CẢ TEAM) × 100%\n• Đánh giá mức độ đóng góp lỗi vào tổng lỗi team`}
             >
-              Đóng Góp Lỗi (Cả Team)
+              ĐÓNG GÓP LỖI (CẢ TEAM)
             </th>
-            <th style={{ padding: "8px 12px", textAlign: "center" }} title="Số PR của Dev này phải re-check / comment từ 2 lần trở lên">
-              Re-check
+            <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Số PR của Dev này phải re-review / comment từ 2 lần trở lên">
+              RE-REVIEW
             </th>
             <th
-              style={{ padding: "8px 12px", textAlign: "center" }}
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
               title={`[Sửa Bổ Sung / Re-commit]\n• Số PR mà Dev phải push thêm commit (2, 3... commits) sau khi đã tạo PR / đợt sửa đầu tiên`}
             >
-              Sửa Bổ Sung
+              SỬA BỔ SUNG
             </th>
-            <th style={{ padding: "8px 12px", textAlign: "center" }} title="Số bug của Dev này đã sửa/có PR nhưng chưa được QC Lead review (Tất cả thời gian)">
-              Đang Chờ Review
+            <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Số bug của Dev này đã sửa/có PR nhưng chưa được QC Lead review (Tất cả thời gian)">
+              ĐANG CHỜ REVIEW
             </th>
             <th
-              style={{ padding: "8px 12px", textAlign: "center" }}
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
               title={`[Công thức Tiến Độ Review]\n• Phép tính = (Số bug đã review của Dev này / Tổng số bug Dev này đã sửa trong kỳ) × 100%`}
             >
-              Tiến Độ Review
+              TIẾN ĐỘ REVIEW
             </th>
           </tr>
         </thead>
@@ -123,20 +124,21 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
               <tr
                 key={idx}
                 style={{
-                  borderBottom: "1px solid var(--border-3)",
+                  borderBottom: "1px solid var(--border-2)",
                   background:
                     idx % 2 === 0
-                      ? "rgba(255,255,255,0.01)"
-                      : "transparent",
+                      ? "var(--surface-1)"
+                      : "var(--surface-2)",
                 }}
               >
                 {/* Dev Code */}
-                <td style={{ padding: "8px 12px", fontWeight: "600" }}>
+                <td style={{ padding: "10px 12px", fontWeight: "700" }}>
                   <span
                     style={{
                       cursor: "pointer",
-                      color: "var(--accent)",
-                      textDecoration: "underline",
+                      color: "var(--text-1)",
+                      textDecoration: "none",
+                      fontWeight: "700",
                     }}
                     onClick={() => {
                       onSelectDevFilter(row.dev.code);

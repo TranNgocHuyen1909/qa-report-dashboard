@@ -3,6 +3,12 @@ import type { DashboardView } from "../../shared/types";
 import { saveConclusion, saveCustomTargetsApi } from "../api";
 
 export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdate: () => void }) {
+  const dateKey = (v?: string) => {
+    if (!v) return undefined;
+    const k = String(v).slice(0, 10);
+    return /^\d{4}-\d{2}-\d{2}$/.test(k) ? k : undefined;
+  };
+
   const getDisplayName = (code: string) => {
     return view.personnel.find(p => p.code === code)?.displayName || code;
   };
@@ -33,9 +39,10 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
   // 1. Closed Bugs with PR
   const closedBugs = validPrBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "closed").length;
 
-  // 2. Resolved (CHƯA REVIEW) -> Active bug with status = resolved, not reviewed by Huyen yet
+  // 2. IN REVIEW / RESOLVED (CHƯA REVIEW) -> Active bug with status = in review / resolved (chưa xong review)
   const resolvedPendingReviewBugs = activeExcludingPendingBugs.filter(b => {
     const st = (b.status ?? "").toLowerCase().trim();
+    if (st === "in review" || st === "in-review" || st === "doing") return true;
     if (st !== "resolved") return false;
     const ghLbls = (b.ghLabels ?? []).map(l => l.toLowerCase());
     const isWait = st.includes("wait") || ghLbls.some(l => l.includes("wait"));
@@ -44,9 +51,10 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     return !isWait && !hasHuyenReviewer && !hasComment;
   }).length;
 
-  // 3. Review Xong ➔ CHỜ DEPLOY -> Active bug where Huyen HAS reviewed or status/label is wait
+  // 3. REVIEWED (ĐÃ REVIEW / WAIT) -> Active bug where status is reviewed or wait for dev
   const reviewedWaitingDeployBugs = activeExcludingPendingBugs.filter(b => {
     const st = (b.status ?? "").toLowerCase().trim();
+    if (st === "reviewed") return true;
     const ghLbls = (b.ghLabels ?? []).map(l => l.toLowerCase());
     const isWait = st.includes("wait") || ghLbls.some(l => l.includes("wait"));
     const hasHuyenReviewer = (b.reviewerIds ?? []).includes(huyenNotionId);
@@ -289,7 +297,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
           return sum + (weeklyTargetTrajectory[week - 1]?.targetPerDev ?? weeklyTargetTrajectory.at(-1)?.targetPerDev ?? 0);
         }, 0) : weeklyTargetTrajectory[index].targetPerDev * activeDevsCount;
       if (matchedMetric) {
-        weekLabel = matchedMetric.period.label;
+        weekLabel = `Tuần ${index + 1}`;
         milestoneLabel = "Theo tuần lịch";
       }
     } else if (isLead) {
@@ -301,10 +309,33 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
       const customTrajectory = customTargets[selectedDevFilter] || customTargets["HuyenTN"] || [0, 10, 18, 25, 30, 35, 40, 42, 45, 45];
       displayTarget = customTrajectory[onboardingWeek - 1] ?? customTrajectory.at(-1) ?? 45;
       weekLabel = `Tuần ${onboardingWeek}`;
-      milestoneLabel = `👑 Target Review Lộ Trình: ${displayTarget} PRs/tuần`;
+      milestoneLabel = `Target Review Lộ Trình: ${displayTarget} PRs/tuần`;
     } else {
+      const devPerson = view.personnel.find(p => p.code === selectedDevFilter);
       const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
-      displayActual = personData ? personData.bugsFixed : 0;
+
+      if (devPerson && matchedMetric) {
+        const devBugsInPeriod = view.bugs.filter(b => {
+          if ((b.status ?? "").toLowerCase().trim() === "cancel") return false;
+          if (isInvalidBug(b)) return false;
+
+          const pList = [...(b.fixedByIds ?? []), ...(b.causedByIds ?? [])];
+          const isDev = devPerson.notionIds.some(id => pList.includes(id)) || 
+            ((b as any).assignee && devPerson.aliases.some(a => String((b as any).assignee).toLowerCase().includes(a)));
+          if (!isDev) return false;
+
+          const st = (b.status ?? "").toLowerCase().trim();
+          if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return false;
+
+          const prDate = dateKey(b.prCreatedAt);
+          if (!prDate) return false;
+          return prDate >= matchedMetric.period.startDate && prDate <= matchedMetric.period.endDate;
+        });
+
+        displayActual = devBugsInPeriod.length;
+      } else {
+        displayActual = personData ? personData.bugsFixed : 0;
+      }
       const onboardingWeek = matchedMetric && selectedDev
         ? getOnboardingWeek(selectedDev.startDate, matchedMetric.period.startDate)
         : index + 1;
@@ -388,9 +419,11 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
       {/* Streamlined Header */}
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <div>
-          <h1 className="section-title" style={{ margin: "0 0 4px 0" }}>📊 Báo cáo Quản lý &amp; Tiến độ Tuần</h1>
-          <p style={{ fontSize: "12px", color: "var(--text-3)", margin: 0 }}>
-            Tổng hợp các task bug có PR URL trên Notion (đã trừ lỗi Không tái hiện / Trùng): <strong>{latest?.period.label}</strong>
+          <h1 className="section-title" style={{ margin: "0 0 4px 0", fontSize: "24px", fontWeight: "800", letterSpacing: "-0.025em", color: "var(--text-1)" }}>
+            Báo cáo Quản lý & Tiến độ Tuần
+          </h1>
+          <p style={{ fontSize: "13px", color: "var(--text-2)", fontWeight: "500", margin: 0 }}>
+            Tổng hợp các task bug có PR URL trên Notion (đã trừ lỗi Không tái hiện / Trùng): <strong style={{ color: "var(--text-1)", fontWeight: "700" }}>{latest?.period.label}</strong>
           </p>
         </div>
         {activePeriodKey && (
@@ -399,40 +432,40 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
             style={{ fontSize: "12px", padding: "8px 16px", fontWeight: "bold" }}
             onClick={() => setIsEditing(true)}
           >
-            {activeConclusion ? "✏️ Sửa kết luận &amp; Giải trình" : "✍️ Viết kết luận &amp; Giải trình"}
+            {activeConclusion ? "Sửa kết luận & Giải trình" : "Viết kết luận & Giải trình"}
           </button>
         )}
       </div>
 
-      {/* Single Unified 5-Card KPI Row (Exact 5-column grid, no spillover to row 2) */}
+      {/* Single Unified 5-Card KPI Row */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px" }}>
-        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid var(--cyan)", background: "linear-gradient(135deg, rgba(6,182,212,0.06), transparent)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>📌 TỔNG HIỆN TẠI (ĐANG XỬ LÝ)</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--cyan)", marginTop: "2px" }}>{totalActiveExcludingPending}</div>
+        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid #2eaadc", background: "rgba(46, 170, 220, 0.05)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>TỔNG HIỆN TẠI (ĐANG XỬ LÝ)</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#2eaadc", marginTop: "2px" }}>{totalActiveExcludingPending}</div>
           <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Trừ Closed, Cancel &amp; Pending</div>
         </div>
 
-        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid var(--blue)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>🟡 RESOLVED (CHƯA REVIEW)</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--blue)", marginTop: "2px" }}>{resolvedPendingReviewBugs}</div>
-          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Chưa phân công / chưa test</div>
+        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid #e06c55", background: "rgba(224, 108, 85, 0.05)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>IN REVIEW / RESOLVED</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#ad4d3a", marginTop: "2px" }}>{resolvedPendingReviewBugs}</div>
+          <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Đang review / Chưa test xong</div>
         </div>
 
-        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid var(--green)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>🟢 RESOLVED (ĐÃ REVIEW / WAIT)</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--green)", marginTop: "2px" }}>{reviewedWaitingDeployBugs}</div>
+        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid #e06c55", background: "rgba(224, 108, 85, 0.05)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>REVIEWED / WAIT FOR DEV</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#ad4d3a", marginTop: "2px" }}>{reviewedWaitingDeployBugs}</div>
           <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Đã review / Wait for Dev/Deploy</div>
         </div>
 
-        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid var(--yellow)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>⚠️ RE-OPENED / LỖI LẶP</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--yellow)", marginTop: "2px" }}>{reopenedBugs}</div>
+        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid #9f6b53", background: "rgba(159, 107, 83, 0.05)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>RE-OPENED / LỖI LẶP</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#704838", marginTop: "2px" }}>{reopenedBugs}</div>
           <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Lỗi bị mở lại</div>
         </div>
 
-        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid var(--purple)", background: "linear-gradient(135deg, rgba(16,185,129,0.06), transparent)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>✅ ĐÃ CLOSE HOÀN TẤT</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "var(--purple)", marginTop: "2px" }}>{closedBugs}</div>
+        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid #448361", background: "rgba(68, 131, 97, 0.05)" }}>
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>ĐÃ CLOSE HOÀN TẤT</div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#2b593f", marginTop: "2px" }}>{closedBugs}</div>
           <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Tỷ lệ Close: {overallCloseRate}%</div>
         </div>
       </div>
@@ -442,17 +475,17 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
         className="card" 
         style={{ 
           padding: "24px", 
-          background: "var(--card-bg)",
-          border: "1px solid var(--border)",
-          borderRadius: "14px",
-          boxShadow: "var(--shadow-md)"
+          background: "var(--surface)",
+          border: "1px solid var(--border-2)",
+          borderRadius: "6px",
+          boxShadow: "var(--shadow)"
         }}
       >
         {/* Header with Selector */}
-        <div style={{ marginBottom: "20px", paddingBottom: "14px", borderBottom: "1px solid var(--border-2)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ marginBottom: "20px", paddingBottom: "14px", borderBottom: "1px solid var(--border-3)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <div>
-            <div style={{ fontSize: "18px", fontWeight: 800, color: "var(--accent-2)", display: "flex", alignItems: "center", gap: "10px" }}>
-              <span>🚀</span> Biểu Đồ Lộ Trình Target Tiến Độ Theo Tuần — <span style={{ color: "var(--cyan)" }}>{selectedDevName}</span>
+            <div style={{ fontSize: "16px", fontWeight: 700, color: "var(--text-1)", display: "flex", alignItems: "center", gap: "10px" }}>
+              Biểu Đồ Lộ Trình Target Tiến Độ Theo Tuần — <span style={{ color: "var(--blue)" }}>{selectedDevName}</span>
             </div>
             <div style={{ fontSize: "12px", color: "var(--text-3)", marginTop: "4px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <span>
@@ -461,8 +494,8 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                   : "Mốc lộ trình tăng trưởng năng suất sửa bug thực tế trên Notion vs Target thiết lập qua các tuần."}
               </span>
               {currentWeekItem && (
-                <span className="tag tag-cyan" style={{ fontSize: "11px", border: "1px solid var(--cyan)", fontWeight: "bold", boxShadow: "0 0 6px rgba(6,182,212,0.2)" }}>
-                  🔥 {currentWeekItem.weekLabel} (Tuần hiện tại: {currentWeekItem.dateRangeLabel})
+                <span className="tag" style={{ fontSize: "11px", background: "var(--blue-bg)", color: "var(--blue)", border: "1px solid var(--blue)", fontWeight: "bold" }}>
+                  {currentWeekItem.weekLabel} (Tuần hiện tại: {currentWeekItem.dateRangeLabel})
                 </span>
               )}
             </div>
@@ -475,11 +508,11 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
               className="ctrl"
               value={selectedDevFilter} 
               onChange={e => setSelectedDevFilter(e.target.value)}
-              style={{ fontSize: "12px", fontWeight: "bold", padding: "6px 12px", background: "var(--surface-3)", border: "1px solid var(--border-3)" }}
+              style={{ fontSize: "12px", fontWeight: "bold", padding: "6px 12px" }}
             >
-              <option value="all">👥 Tất cả thành viên (Tổng Cả Team)</option>
+              <option value="all">Tất cả thành viên (Tổng Cả Team)</option>
               {view.personnel.filter(p => p.role !== "benchmark").map(p => (
-                <option key={p.code} value={p.code}>👤 {p.displayName} ({p.code})</option>
+                <option key={p.code} value={p.code}>{p.displayName} ({p.code})</option>
               ))}
             </select>
 
@@ -495,23 +528,23 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                 setTempTargetValues([...current]);
                 setIsEditingTargetsModalOpen(true);
               }}
-              style={{ fontSize: "12px", fontWeight: "bold", padding: "6px 12px", display: "flex", alignItems: "center", gap: "6px" }}
+              style={{ fontSize: "12px", fontWeight: "bold", padding: "6px 12px" }}
             >
-              <span>🎯</span> Sửa Mốc Target Lộ Trình
+              Sửa Mốc Target Lộ Trình
             </button>
           </div>
         </div>
 
         {/* SVG Curve Visualization Top Layer */}
-        <div style={{ marginBottom: "20px", background: "var(--surface-2)", borderRadius: "12px", padding: "16px 20px", border: "1px solid var(--border-3)" }}>
+        <div style={{ marginBottom: "20px", background: "var(--surface-2)", borderRadius: "6px", padding: "16px 20px", border: "1px solid var(--border-3)" }}>
           <div style={{ fontSize: "12px", fontWeight: "bold", color: "var(--text-1)", marginBottom: "12px", display: "flex", justifyContent: "space-between" }}>
-            <span>📈 Đồ Thị Đường Tăng Trưởng Thực Tế vs Target Curve</span>
+            <span>Đồ Thị Đường Tăng Trưởng Thực Tế vs Target Curve</span>
             <div style={{ display: "flex", gap: "20px", fontSize: "11px" }}>
-              <span style={{ color: "var(--cyan)", fontWeight: "bold" }}>
-                ── 🎯 {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead" ? "Target Review Curve (100% PR Team)" : "Target Curve"}
+              <span style={{ color: "var(--blue)", fontWeight: "bold" }}>
+                ── Target Curve
               </span>
-              <span style={{ color: selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead" ? "var(--purple)" : "var(--green)", fontWeight: "bold" }}>
-                ── {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead" ? "🟣 Thực Tế PRs Reviewed" : "🟢 Thực Tế Progress"}
+              <span style={{ color: "var(--green)", fontWeight: "bold" }}>
+                ── Thực Tế Progress
               </span>
             </div>
           </div>
@@ -685,117 +718,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
           </svg>
         </div>
 
-        {/* Compact High-Contrast Meters */}
-        <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
-          {chartData.map((d) => (
-            <div 
-              key={d.weekLabel} 
-              style={{ 
-                background: d.isCurrentWeek ? "rgba(6,182,212,0.06)" : "var(--surface-2)", 
-                padding: "8px 12px", 
-                borderRadius: "8px", 
-                border: d.isCurrentWeek ? "1px solid var(--cyan)" : "1px solid var(--border-3)",
-                boxShadow: d.isCurrentWeek ? "0 0 10px rgba(6,182,212,0.12)" : "none",
-                display: "flex",
-                flexDirection: "column",
-                gap: "5px"
-              }}
-            >
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
-                  <span style={{ fontSize: "13px", fontWeight: "800", color: d.isCurrentWeek ? "var(--cyan)" : "var(--text-1)" }}>{d.weekLabel}</span>
-                  {d.isCurrentWeek && (
-                    <span className="tag tag-cyan" style={{ fontSize: "10px", padding: "1px 7px", fontWeight: "bold", border: "1px solid var(--cyan)", boxShadow: "0 0 6px rgba(6,182,212,0.3)" }}>
-                      🔥 Tuần hiện tại
-                    </span>
-                  )}
-                  {d.dateRangeLabel && (
-                    <span style={{ fontSize: "11px", color: "var(--text-2)", background: "var(--surface-3)", padding: "1px 7px", borderRadius: "4px", fontWeight: "600", border: "1px solid var(--border-3)" }}>
-                      📅 {d.dateRangeLabel}
-                    </span>
-                  )}
-                  <span style={{ color: "var(--text-3)" }}>|</span>
-                  <span style={{ fontSize: "11px", color: "var(--cyan)", fontWeight: "600" }}>{d.milestoneLabel}</span>
-                </div>
-                
-                <div style={{ display: "flex", alignItems: "center", gap: "8px", fontSize: "11px" }}>
-                  <span style={{ color: "var(--text-2)" }}>
-                    Target: <strong style={{ color: "var(--cyan)" }}>{d.displayTarget} {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead" ? "PRs review" : "bug/tuần"}</strong>
-                  </span>
-                  <span style={{ color: "var(--text-3)" }}>|</span>
-                  <span style={{ color: "var(--text-1)" }}>
-                    Thực tế: <strong style={{ color: d.isTargetMet ? "var(--green)" : "var(--accent-2)" }}>{d.displayActual} {selectedDevFilter === "HuyenTN" || selectedDev?.role === "lead" ? "PRs đã review" : "bug/tuần"}</strong>
-                  </span>
-                  <span 
-                    style={{ 
-                      padding: "2px 8px", 
-                      borderRadius: "10px", 
-                      fontSize: "10px", 
-                      fontWeight: "bold",
-                      background: d.isCurrentWeek
-                        ? "rgba(6,182,212,0.18)"
-                        : d.isTargetMet ? "rgba(16,185,129,0.15)" : "rgba(59,130,246,0.15)",
-                      color: d.isCurrentWeek
-                        ? "var(--cyan)"
-                        : d.isTargetMet ? "var(--green)" : "var(--blue)",
-                      border: `1px solid ${d.isCurrentWeek ? "rgba(6,182,212,0.4)" : d.isTargetMet ? "rgba(16,185,129,0.3)" : "rgba(59,130,246,0.3)"}`
-                    }}
-                  >
-                    {d.isCurrentWeek 
-                      ? `⏳ Đang thực hiện (${d.displayActual}/${d.displayTarget})` 
-                      : d.isTargetMet ? `✅ Vượt target (+${d.achieveRate - 100}%)` : `🔹 Đạt ${d.achieveRate}% target`}
-                  </span>
-                </div>
-              </div>
 
-              {/* Progress Track */}
-              <div 
-                style={{ 
-                  position: "relative", 
-                  height: "18px", 
-                  background: "var(--surface-3)", 
-                  borderRadius: "5px", 
-                  overflow: "hidden",
-                  border: "1px solid var(--border-3)"
-                }}
-              >
-                {/* Target Marker Pin Line */}
-                <div 
-                  style={{ 
-                    position: "absolute", 
-                    left: `${d.targetPct}%`, 
-                    top: 0, bottom: 0, 
-                    width: "3px", 
-                    background: "var(--cyan)", 
-                    zIndex: 10,
-                    boxShadow: "0 0 6px var(--cyan)"
-                  }} 
-                  title={`Target: ${d.displayTarget} bug/tuần`}
-                />
-
-                {/* Actual Fill Bar */}
-                <div 
-                  style={{ 
-                    width: `${d.actualPct}%`, 
-                    height: "100%", 
-                    background: d.isTargetMet 
-                      ? "linear-gradient(90deg, #10b981 0%, #059669 100%)" 
-                      : "linear-gradient(90deg, #3b82f6 0%, #1d4ed8 100%)", 
-                    borderRadius: "4px",
-                    display: "flex",
-                    alignItems: "center",
-                    paddingLeft: "8px",
-                    color: "#ffffff",
-                    fontWeight: "bold",
-                    fontSize: "10px"
-                  }}
-                >
-                  {d.displayActual > 0 && `${d.displayActual} bug/tuần`}
-                </div>
-              </div>
-            </div>
-          ))}
-        </div>
       </div>
 
 
@@ -805,23 +728,23 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
         <div className="modal-overlay">
           <div className="modal" style={{ width: "680px", maxHeight: "90vh", overflowY: "auto" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h2 style={{ margin: 0, fontSize: "16px" }}>✍️ Viết kết luận &amp; Giải trình năng suất tuần: {latest?.period.label}</h2>
+              <h2 style={{ margin: 0, fontSize: "15px", fontWeight: 700, color: "var(--text-1)" }}>Viết kết luận & Giải trình năng suất tuần: {latest?.period.label}</h2>
               <button 
                 type="button"
                 className="ctrl ctrl-primary" 
                 style={{ fontSize: "11px", padding: "6px 12px" }}
                 onClick={handleAutoDraft}
               >
-                🪄 Điền nháp tự động
+                Điền nháp tự động
               </button>
             </div>
             
             {/* Man-Days Overrides & Explanations per Dev */}
-            <div style={{ marginBottom: "16px", padding: "12px", background: "rgba(99,102,241,0.04)", borderRadius: "6px", border: "1px solid var(--border-2)" }}>
-              <div style={{ fontWeight: "bold", fontSize: "12px", marginBottom: "10px", color: "var(--accent-2)" }}>
-                ⚙️ Điều chỉnh ngày công Man-Days &amp; Giải trình năng suất tuần từng người:
+            <div style={{ marginBottom: "16px", padding: "12px", background: "var(--surface-2)", borderRadius: "4px", border: "1px solid var(--border-2)" }}>
+              <div style={{ fontWeight: "700", fontSize: "12px", marginBottom: "10px", color: "var(--text-1)" }}>
+                Điều chỉnh ngày công Man-Days & Giải trình năng suất tuần từng người:
               </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              <div style={{ display: "flex", flexDirection: "column", gap: "10px" }}>
                 {latest?.byPerson.map((p: any) => {
                   const devName = getDisplayName(p.personCode);
                   const currentVal = manDaysOverrides[p.personCode] !== undefined 
@@ -830,9 +753,9 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                   const currentExp = explanations[p.personCode] || "";
 
                   return (
-                    <div key={p.personCode} style={{ background: "var(--surface-2)", padding: "8px 12px", borderRadius: "6px", border: "1px solid var(--border)" }}>
+                    <div key={p.personCode} style={{ background: "var(--surface)", padding: "10px 12px", borderRadius: "4px", border: "1px solid var(--border-2)" }}>
                       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
-                        <span style={{ fontSize: "12px", fontWeight: "bold" }}>👤 {devName} ({p.personCode}):</span>
+                        <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-1)" }}>{devName} ({p.personCode}):</span>
                         <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                           <span style={{ fontSize: "11px", color: "var(--text-3)" }}>Man-Days tuần:</span>
                           <input 
@@ -850,11 +773,11 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                             }}
                             style={{ 
                               width: "60px", 
-                              padding: "2px 6px", 
+                              padding: "4px 6px", 
                               fontSize: "12px", 
-                              border: "1px solid var(--border-3)", 
+                              border: "1px solid var(--border-2)", 
                               borderRadius: "4px", 
-                              background: "var(--bg-1)", 
+                              background: "var(--surface-2)", 
                               color: "var(--text-1)",
                               textAlign: "right"
                             }}
@@ -863,7 +786,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                       </div>
                       <input 
                         type="text"
-                        placeholder={`Lý do/giải trình năng suất tuần của ${devName} (nếu dính task flow khó 1-2 ngày)...`}
+                        placeholder={`Lý do/giải trình năng suất tuần của ${devName}...`}
                         value={currentExp}
                         onChange={(e) => {
                           const val = e.target.value;
@@ -876,9 +799,9 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                           width: "100%",
                           padding: "6px 8px",
                           fontSize: "11px",
-                          border: "1px solid var(--border-3)",
+                          border: "1px solid var(--border-2)",
                           borderRadius: "4px",
-                          background: "var(--bg-1)",
+                          background: "var(--surface-2)",
                           color: "var(--text-1)"
                         }}
                       />
@@ -888,31 +811,31 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
               </div>
             </div>
 
-            <label style={{ fontSize: "12px", fontWeight: "bold", display: "block", marginBottom: "4px" }}>🟢 Điểm tốt / Đạt yêu cầu tuần:</label>
+            <label style={{ fontSize: "12px", fontWeight: "700", display: "block", marginBottom: "4px", color: "var(--text-1)" }}>Điểm tốt / Đạt yêu cầu tuần:</label>
             <textarea 
               value={good} 
               onChange={e => setGood(e.target.value)} 
               placeholder="Ví dụ: Team kiểm soát tốt tiến độ tuần..."
-              style={{ minHeight: "70px", marginBottom: "12px", width: "100%", fontSize: "12px" }}
+              style={{ minHeight: "65px", marginBottom: "12px", width: "100%", fontSize: "12px", background: "var(--surface-2)", color: "var(--text-1)", border: "1px solid var(--border-2)", borderRadius: "4px", padding: "8px" }}
             />
 
-            <label style={{ fontSize: "12px", fontWeight: "bold", display: "block", marginBottom: "4px" }}>🔴 Điểm xấu / Tồn tại &amp; Lỗi chất lượng tuần:</label>
+            <label style={{ fontSize: "12px", fontWeight: "700", display: "block", marginBottom: "4px", color: "var(--text-1)" }}>Điểm xấu / Tồn tại & Lỗi chất lượng tuần:</label>
             <textarea 
               value={bad} 
               onChange={e => setBad(e.target.value)} 
               placeholder="Ví dụ: Phân tích 11 lỗi chất lượng cơ bản..."
-              style={{ minHeight: "70px", marginBottom: "12px", width: "100%", fontSize: "12px" }}
+              style={{ minHeight: "65px", marginBottom: "12px", width: "100%", fontSize: "12px", background: "var(--surface-2)", color: "var(--text-1)", border: "1px solid var(--border-2)", borderRadius: "4px", padding: "8px" }}
             />
 
-            <label style={{ fontSize: "12px", fontWeight: "bold", display: "block", marginBottom: "4px" }}>⚠️ Action / Hành động chỉ đạo:</label>
+            <label style={{ fontSize: "12px", fontWeight: "700", display: "block", marginBottom: "4px", color: "var(--text-1)" }}>Action / Hành động chỉ đạo:</label>
             <textarea 
               value={risks} 
               onChange={e => setRisks(e.target.value)} 
               placeholder="Ví dụ: Áp dụng checklist trong PR template..."
-              style={{ minHeight: "70px", marginBottom: "12px", width: "100%", fontSize: "12px" }}
+              style={{ minHeight: "65px", marginBottom: "12px", width: "100%", fontSize: "12px", background: "var(--surface-2)", color: "var(--text-1)", border: "1px solid var(--border-2)", borderRadius: "4px", padding: "8px" }}
             />
 
-            <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "12px" }}>
+            <div className="modal-actions" style={{ display: "flex", justifyContent: "flex-end", gap: "8px", marginTop: "14px" }}>
               <button 
                 className="ctrl" 
                 onClick={() => setIsEditing(false)}
@@ -925,7 +848,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                 onClick={handleSaveConclusion}
                 disabled={saving}
               >
-                {saving ? "Đang lưu..." : "Lưu kết luận &amp; Giải trình"}
+                {saving ? "Đang lưu..." : "Lưu kết luận & Giải trình"}
               </button>
             </div>
           </div>
@@ -934,34 +857,25 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
 
       {/* Target Curve Customization Modal */}
       {isEditingTargetsModalOpen && (
-        <div style={{
-          position: "fixed",
-          top: 0, left: 0, right: 0, bottom: 0,
-          background: "rgba(0,0,0,0.65)",
-          display: "flex",
-          alignItems: "center",
-          justifyContent: "center",
-          zIndex: 9999,
-          backdropFilter: "blur(4px)"
-        }}>
-          <div className="card" style={{ width: "540px", padding: "24px", background: "var(--card-bg)", borderRadius: "14px", border: "1px solid var(--border)", boxShadow: "var(--shadow-lg)" }}>
-            <div style={{ fontSize: "16px", fontWeight: "800", color: "var(--accent-2)", marginBottom: "6px", display: "flex", alignItems: "center", gap: "8px" }}>
-              <span>🎯</span> Chỉnh Sửa Mốc Target Lộ Trình — <span style={{ color: "var(--cyan)" }}>{selectedDevName}</span>
+        <div className="modal-overlay">
+          <div className="modal" style={{ width: "520px", padding: "24px", background: "var(--surface)", borderRadius: "6px", border: "1px solid var(--border-2)", boxShadow: "0 10px 25px rgba(0,0,0,0.2)" }}>
+            <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-1)", marginBottom: "6px" }}>
+              Chỉnh Sửa Mốc Target Lộ Trình — <span style={{ color: "var(--blue)" }}>{selectedDevName}</span>
             </div>
             <div style={{ fontSize: "12px", color: "var(--text-3)", marginBottom: "16px", lineHeight: "1.5" }}>
-              Tùy chỉnh chỉ tiêu Target (số PRs/Bugs) từng tuần từ Tuần 1 đến Tuần 10. Giá trị sau khi bấm Lưu sẽ tự động lưu vĩnh viễn và vẽ lại đường Target Curve!
+              Tùy chỉnh chỉ tiêu Target (số PRs/Bugs) từng tuần từ Tuần 1 đến Tuần 10. Giá trị sau khi bấm Lưu sẽ tự động lưu vĩnh viễn và vẽ lại đường Target Curve.
             </div>
 
             <div style={{ display: "grid", gridTemplateColumns: "repeat(2, 1fr)", gap: "10px", maxHeight: "320px", overflowY: "auto", marginBottom: "18px", paddingRight: "4px" }}>
               {Array.from({ length: 10 }).map((_, i) => (
-                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--surface-2)", padding: "8px 12px", borderRadius: "8px", border: "1px solid var(--border-3)" }}>
-                  <span style={{ fontSize: "12px", fontWeight: "bold", color: "var(--text-1)" }}>Tuần {i + 1}:</span>
+                <div key={i} style={{ display: "flex", alignItems: "center", justifyContent: "space-between", background: "var(--surface-2)", padding: "8px 12px", borderRadius: "4px", border: "1px solid var(--border-2)" }}>
+                  <span style={{ fontSize: "12px", fontWeight: "700", color: "var(--text-1)" }}>Tuần {i + 1}:</span>
                   <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
                     <input
                       type="number"
                       min="0"
                       className="ctrl"
-                      style={{ width: "70px", padding: "4px 8px", fontSize: "13px", fontWeight: "bold", textAlign: "center" }}
+                      style={{ width: "65px", padding: "4px 8px", fontSize: "12px", fontWeight: "700", textAlign: "center", background: "var(--surface)", color: "var(--text-1)", border: "1px solid var(--border-2)" }}
                       value={tempTargetValues[i] ?? 0}
                       onChange={e => {
                         const val = parseInt(e.target.value) || 0;
@@ -972,24 +886,23 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                         });
                       }}
                     />
-                    <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>PRs</span>
+                    <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "600" }}>PRs</span>
                   </div>
                 </div>
               ))}
             </div>
 
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: "1px solid var(--border-2)", paddingTop: "14px" }}>
-              <div style={{ display: "flex", gap: "6px" }}>
-                <button 
-                  type="button" 
-                  className="ctrl" 
-                  style={{ fontSize: "11px", padding: "4px 10px" }}
-                  onClick={() => setTempTargetValues([0, 10, 18, 25, 30, 35, 40, 42, 45, 45])}
-                >
-                  ⚡ Mẫu Lead (Tuần 1 = 0)
-                </button>
-              </div>
-              <div style={{ display: "flex", gap: "10px" }}>
+              <button 
+                type="button" 
+                className="ctrl" 
+                style={{ fontSize: "11px", padding: "4px 10px" }}
+                onClick={() => setTempTargetValues([0, 10, 18, 25, 30, 35, 40, 42, 45, 45])}
+              >
+                Mẫu Lead (Tuần 1 = 0)
+              </button>
+
+              <div style={{ display: "flex", gap: "8px" }}>
                 <button type="button" className="ctrl" onClick={() => setIsEditingTargetsModalOpen(false)}>Hủy</button>
                 <button 
                   type="button" 
@@ -1009,9 +922,9 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
                     setIsEditingTargetsModalOpen(false);
                     onUpdate();
                   }}
-                  style={{ fontWeight: "bold" }}
+                  style={{ fontWeight: "700" }}
                 >
-                  💾 Lưu Target Lộ Trình (Vào Server &amp; Database)
+                  Lưu Target Lộ Trình
                 </button>
               </div>
             </div>

@@ -101,7 +101,7 @@ export const ReviewMetricCards: React.FC<ReviewMetricCardsProps> = ({
         </div>
       </div>
 
-      {/* 3. RE-CHECK LẶP LẠI */}
+      {/* 3. RE-REVIEW */}
       <div
         className="card"
         style={{
@@ -114,16 +114,16 @@ export const ReviewMetricCards: React.FC<ReviewMetricCardsProps> = ({
           onSelectSubTab?.("reviewed");
           onSelectCommentFilter?.("multiround");
         }}
-        title="Bấm để xem danh sách bug re-check nhiều lần"
+        title="Bấm để xem danh sách bug re-review nhiều lần"
       >
         <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--text-3)", textTransform: "uppercase" }}>
-          RE-CHECK LẶP LẠI
+          RE-REVIEW
         </div>
         <div style={{ fontSize: "28px", fontWeight: 800, color: "#f59e0b", margin: "4px 0" }}>
           {multiRoundCount}
         </div>
         <div style={{ fontSize: "11px", color: "var(--text-3)" }}>
-          Tỷ lệ re-check: <strong>{recheckRate}%</strong>
+          Tỷ lệ re-review: <strong>{recheckRate}%</strong>
         </div>
       </div>
 

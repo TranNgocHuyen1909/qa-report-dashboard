@@ -229,12 +229,12 @@ export const ReviewBugsTable: React.FC<ReviewBugsTableProps> = ({
             </td>
 
             {/* BUG ID */}
-            <td style={{ padding: "10px 12px", fontWeight: "600", whiteSpace: "nowrap" }}>
+            <td style={{ padding: "10px 12px", fontWeight: "700", whiteSpace: "nowrap" }}>
               <a
                 href={b.url}
                 target="_blank"
                 rel="noreferrer"
-                style={{ color: "var(--accent)", textDecoration: "underline" }}
+                style={{ color: "var(--blue)", fontWeight: "700", textDecoration: "underline" }}
               >
                 {b.bugId || b.id}
               </a>
@@ -255,21 +255,21 @@ export const ReviewBugsTable: React.FC<ReviewBugsTableProps> = ({
                         rel="noreferrer"
                         className="btn btn-sm btn-ghost"
                         style={{
-                          fontSize: "10px",
-                          padding: "2px 6px",
+                          fontSize: "11px",
+                          padding: "3px 8px",
                           borderRadius: "4px",
                           border: "1px solid var(--border-2)",
-                          background: "var(--surface-3)",
-                          color: "var(--accent)",
+                          background: "var(--surface-2)",
+                          color: "var(--text-1)",
                           display: "inline-flex",
                           alignItems: "center",
-                          gap: "3px",
-                          fontWeight: 600,
+                          gap: "4px",
+                          fontWeight: 700,
                           textDecoration: "none",
                         }}
                         title={p.url}
                       >
-                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor">
+                        <svg width="12" height="12" viewBox="0 0 16 16" fill="currentColor" style={{ opacity: 0.7 }}>
                           <path d="M5 3.25a.75.75 0 11-1.5 0 .75.75 0 011.5 0zm0 2.122a2.25 2.25 0 10-1.5 0v5.256a2.25 2.25 0 101.5 0V5.372zM4.25 12a.75.75 0 100 1.5.75.75 0 000-1.5zm8-7a.75.75 0 100-1.5.75.75 0 000 1.5zm-1.5 5.372v-1.622a2.25 2.25 0 00-2.25-2.25h-1.5v1.5h1.5a.75.75 0 01.75.75v1.622a2.25 2.25 0 101.5 0zm.75 2.128a.75.75 0 100-1.5.75.75 0 000 1.5z" />
                         </svg>
                         {p.prNum ? `${p.repoLabel} #${p.prNum} ↗` : `${p.repoLabel} ↗`}

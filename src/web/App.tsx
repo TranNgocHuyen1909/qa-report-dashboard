@@ -190,20 +190,19 @@ export function App() {
   }
 
   const tabs: { key: MainTab; label: string }[] = [
-    { key: "report", label: "🎯 Target" },
-    { key: "roles", label: "👥 Vai Trò" },
-    { key: "workflow", label: "⚡ Quy Trình" },
-    { key: "checklist", label: "📋 Checklist" },
-    { key: "review", label: "🔍 Review" },
-    { key: "comparison", label: "📊 Tiến Độ" },
-    { key: "lessons", label: "💡 Bài Học" },
+    { key: "report", label: "Target" },
+    { key: "roles", label: "Vai Trò" },
+    { key: "workflow", label: "Quy Trình" },
+    { key: "checklist", label: "Checklist" },
+    { key: "review", label: "Review" },
+    { key: "comparison", label: "Tiến Độ" },
+    { key: "lessons", label: "Bài Học" },
   ];
 
   return (
     <div className="app">
       <header className="topbar">
         <div className="topbar-brand">
-          <div className="logo" />
           <span>QA Report Dashboard</span>
         </div>
         <div className="topbar-controls">
@@ -230,14 +229,14 @@ export function App() {
             {view.personnel.map(p => <option key={p.code} value={p.code}>{p.displayName}</option>)}
           </select>
           <button className="ctrl" onClick={toggleTheme} title="Đổi giao diện Sáng / Tối">
-            {theme === "dark" ? "☀️ Sáng" : "🌙 Tối"}
+            {theme === "dark" ? "Sáng" : "Tối"}
           </button>
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <span style={{ fontSize: "11px", color: "var(--text-3)", whiteSpace: "nowrap", fontFamily: "monospace" }} title="Thời gian đếm ngược tự động đồng bộ từ Notion">
-              ⏱️ Auto-sync: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
+              Auto-sync: {Math.floor(timeLeft / 60)}:{(timeLeft % 60).toString().padStart(2, "0")}
             </span>
             <button className="ctrl ctrl-primary" onClick={handleRefresh} disabled={refreshing}>
-              {refreshing ? "Đang sync..." : "🔄 Refresh"}
+              {refreshing ? "Đang sync..." : "Refresh"}
             </button>
           </div>
         </div>
@@ -262,29 +261,9 @@ export function App() {
           <ReviewStats view={view} periodType={periodType} periodKey={periodKey} />
         )}
 
-        {/* TAB 2: CHẤT LƯỢNG & ĐỘI NGŨ (WITH INTEGRATED SUB-TABS) */}
+        {/* TAB 2: CHẤT LƯỢNG & ĐỘI NGŨ */}
         {tab === "comparison" && (
-          <div style={{ display: "flex", flexDirection: "column", gap: "16px" }}>
-            <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid var(--border-2)", paddingBottom: "8px" }}>
-              <button 
-                className={`ctrl ctrl-sm ${comparisonSubTab === "matrix" ? "ctrl-primary" : ""}`}
-                onClick={() => setComparisonSubTab("matrix")}
-                style={{ fontSize: "12px", padding: "6px 14px", fontWeight: "bold" }}
-              >
-                ⚖️ Bảng So Sánh Năng Suất &amp; Tỷ Lệ Reopen
-              </button>
-              <button 
-                className={`ctrl ctrl-sm ${comparisonSubTab === "personal" ? "ctrl-primary" : ""}`}
-                onClick={() => setComparisonSubTab("personal")}
-                style={{ fontSize: "12px", padding: "6px 14px", fontWeight: "bold" }}
-              >
-                👤 Thống Kê Chi Tiết Cá Nhân
-              </button>
-            </div>
-
-            {comparisonSubTab === "matrix" && <DevComparison view={view} periodType={periodType} periodKey={periodKey} onUpdate={load} />}
-            {comparisonSubTab === "personal" && <PersonalStats view={view} personCode={personCode} periodType={periodType} />}
-          </div>
+          <DevComparison view={view} periodType={periodType} periodKey={periodKey} onUpdate={load} />
         )}
 
         {/* TAB 3: CHECKLIST TỰ KIỂM TRA (CHECKBOXES) */}

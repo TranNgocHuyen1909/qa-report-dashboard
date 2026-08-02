@@ -63,7 +63,18 @@ function getPrimaryBenchmark(months: BenchmarkMonthSummary[]): BenchmarkMonthSum
 }
 
 function getPersonActual(metric: PersonPeriodMetric | undefined): number {
-  return metric?.bugsFixed ?? 0;
+  if (!metric) return 0;
+  if (!metric.bugsList || metric.bugsList.length === 0) {
+    return metric.bugsFixed ?? 0;
+  }
+  // Thống nhất 100% công thức với tab Tiến Độ: Đếm theo Resolved/Fixed trong kỳ
+  const resolvedCount = metric.bugsList.filter(b => {
+    const st = (b.status ?? "").toLowerCase().trim();
+    if (st === "cancel") return false;
+    return st === "resolved" || st === "closed" || st === "deployed" || st === "reviewed" || st === "in review";
+  }).length;
+
+  return resolvedCount > 0 ? resolvedCount : (metric.bugsFixed ?? 0);
 }
 
 function formatDate(date: Date): string {

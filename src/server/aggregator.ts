@@ -224,7 +224,7 @@ function buildPersonPeriodMetric(person: Person, bugs: BugRecord[], period: Peri
   const newOpen = newInPeriod.filter(b => !isCompletedOrNoRepro(b));
   const reviewed = trackable.filter(b => {
     if (!bugReviewedBy(b, person)) return false;
-    const rDate = dateKey(b.huyenLastCommentAt) || dateKey(b.lastEditedTime) || b.confirmedDate || dateKey(b.prCreatedAt);
+    const rDate = dateKey(b.reviewEndDate) || dateKey(b.reviewStartDate) || dateKey(b.huyenLastCommentAt) || dateKey(b.lastEditedTime) || b.confirmedDate || dateKey(b.prCreatedAt);
     return dateInRange(rDate, period.startDate, period.endDate);
   });
   const reopened = activeBugs.filter(b => isReopened(b) && dateInRange(dateKey(b.reopenedDate) ?? dateKey(b.lastEditedTime), period.startDate, period.endDate));

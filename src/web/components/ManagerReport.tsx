@@ -467,31 +467,9 @@ export function ManagerReport({
       weekLabel = `Tuần ${onboardingWeek}`;
       milestoneLabel = `Target Review Lộ Trình: ${displayTarget} PRs/tuần`;
     } else {
-      const devPerson = view.personnel.find(p => p.code === selectedDevFilter);
       const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
+      displayActual = personData ? personData.bugsFixed : 0;
 
-      if (devPerson && matchedMetric) {
-        const devBugsInPeriod = view.bugs.filter(b => {
-          if ((b.status ?? "").toLowerCase().trim() === "cancel") return false;
-          if (isInvalidBug(b)) return false;
-
-          const pList = [...(b.fixedByIds ?? []), ...(b.causedByIds ?? [])];
-          const isDev = devPerson.notionIds.some(id => pList.includes(id)) || 
-            ((b as any).assignee && devPerson.aliases.some(a => String((b as any).assignee).toLowerCase().includes(a)));
-          if (!isDev) return false;
-
-          const st = (b.status ?? "").toLowerCase().trim();
-          if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return false;
-
-          const prDate = dateKey(b.prCreatedAt);
-          if (!prDate) return false;
-          return prDate >= matchedMetric.period.startDate && prDate <= matchedMetric.period.endDate;
-        });
-
-        displayActual = devBugsInPeriod.length;
-      } else {
-        displayActual = personData ? personData.bugsFixed : 0;
-      }
       const onboardingWeek = matchedMetric && selectedDev
         ? getOnboardingWeek(selectedDev.startDate, matchedMetric.period.startDate)
         : index + 1;

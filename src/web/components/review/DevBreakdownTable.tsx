@@ -77,12 +77,7 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
             <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Số PR của Dev này phải re-review / comment từ 2 lần trở lên">
               RE-REVIEW
             </th>
-            <th
-              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
-              title={`[Sửa Bổ Sung / Re-commit]\n• Số PR mà Dev phải push thêm commit (2, 3... commits) sau khi đã tạo PR / đợt sửa đầu tiên`}
-            >
-              SỬA BỔ SUNG
-            </th>
+
             <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Số bug của Dev này đã sửa/có PR nhưng chưa được QC Lead review (Tất cả thời gian)">
               ĐANG CHỜ REVIEW
             </th>
@@ -264,40 +259,7 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
                 >
                   {multiRoundCount} PR
                 </td>
-                {/* Sửa Bổ Sung */}
-                <td
-                  style={{
-                    padding: "8px 12px",
-                    textAlign: "center",
-                    color: (() => {
-                      const reCommitBugs = devBugs.filter((b) => {
-                        const st = (b.status ?? "").toLowerCase();
-                        const isResolvedOrClosed = ["resolved", "closed", "deployed"].includes(st);
-                        const hasMultipleCommitsOrRounds =
-                          (b.ghCommitsCount ?? 1) > 1 ||
-                          (b.prCommentsByHuyen ?? 0) > 0 ||
-                          (b.huyenReviewRounds ?? 0) > 1;
-                        return isResolvedOrClosed && hasMultipleCommitsOrRounds;
-                      }).length;
-                      return reCommitBugs > 0 ? "#f59e0b" : "var(--text-2)";
-                    })(),
-                    fontWeight: "600",
-                  }}
-                  title={`Số PR của ${row.dev.code} đã Resolved nhưng có > 1 commit bổ sung sau lượt đầu`}
-                >
-                  {(() => {
-                    const reCommitBugs = devBugs.filter((b) => {
-                      const st = (b.status ?? "").toLowerCase();
-                      const isResolvedOrClosed = ["resolved", "closed", "deployed"].includes(st);
-                      const hasMultipleCommitsOrRounds =
-                        (b.ghCommitsCount ?? 1) > 1 ||
-                        (b.prCommentsByHuyen ?? 0) > 0 ||
-                        (b.huyenReviewRounds ?? 0) > 1;
-                      return isResolvedOrClosed && hasMultipleCommitsOrRounds;
-                    }).length;
-                    return `${reCommitBugs} PR`;
-                  })()}
-                </td>
+
                 {/* Đang chờ review */}
                 <td
                   style={{

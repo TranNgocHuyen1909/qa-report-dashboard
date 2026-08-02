@@ -223,8 +223,8 @@ export function ManagerReport({
     }
     return {
       HuyenTN: [10, 18, 25, 30, 32, 35, 38, 40, 42, 45],
-      HoangGV: [4, 6, 8, 8, 9, 10, 11, 12, 13, 14],
-      HoNX: [4, 6, 8, 8, 9, 10, 11, 12, 13, 14],
+      HoangGV: [4, 6, 8, 4, 5, 6, 7, 8, 9, 10],
+      HoNX: [4, 6, 8, 3, 4, 5, 6, 7, 8, 9],
       HuyDH: [3, 5, 7, 7, 8, 9, 10, 11, 12, 13]
     };
   });
@@ -259,8 +259,12 @@ export function ManagerReport({
   const activeConclusion = activePeriodKey && view.conclusions ? view.conclusions[activePeriodKey] : null;
 
   useEffect(() => {
-    if (view.customTargets && Object.keys(view.customTargets).length > 0) {
-      setCustomTargets(prev => ({ ...prev, ...view.customTargets }));
+    try {
+      const saved = localStorage.getItem("qa_custom_targets");
+      const localCustom = saved ? JSON.parse(saved) : {};
+      setCustomTargets(prev => ({ ...prev, ...(view.customTargets || {}), ...localCustom }));
+    } catch (e) {
+      console.error("Failed to load local custom targets", e);
     }
   }, [view.customTargets]);
 

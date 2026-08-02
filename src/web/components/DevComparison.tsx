@@ -382,17 +382,25 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       });
 
       const closedBugs = Array.from(closedBugsMap.values());
+      const getBugPrUrl = (b: any) => {
+        if (b.pullRequestUrl && b.pullRequestUrl.trim()) return b.pullRequestUrl.trim();
+        const note = b.note ?? "";
+        const match = note.match(/https:\/\/github\.com\/[^\s\)]+\/pull\/\d+/i);
+        return match ? match[0] : undefined;
+      };
+
       const resolvedBugsMap = new Map<string, any>();
       devBugs.forEach(b => {
         const st = (b.status ?? "").toLowerCase();
-        if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return;
+        if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed" && st !== "in review" && !st.includes("wait")) return;
         if (isNoRepro(b)) return;
-        if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
+        const prUrl = getBugPrUrl(b);
+        if (!prUrl) return;
 
         const prDate = bugFixedDate(b);
         if (prDate && dateInRange(prDate, activePeriod.startDate, activePeriod.endDate)) {
           const taskId = b.bugId || b.id;
-          resolvedBugsMap.set(taskId, b);
+          resolvedBugsMap.set(taskId, { ...b, pullRequestUrl: prUrl });
         }
       });
       const resolvedBugs = Array.from(resolvedBugsMap.values());

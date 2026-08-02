@@ -553,19 +553,27 @@ export function ManagerReport({
 
         const devBugs = view.bugs.filter(b => bugBelongsToDev(b) && (b.status ?? "").toLowerCase() !== "cancel");
 
+        const getBugPrUrl = (b: any) => {
+          if (b.pullRequestUrl && b.pullRequestUrl.trim()) return b.pullRequestUrl.trim();
+          const note = b.note ?? "";
+          const match = note.match(/https:\/\/github\.com\/[^\s\)]+\/pull\/\d+/i);
+          return match ? match[0] : undefined;
+        };
+
         // Calculate Unique Notion Task Cards belonging to Dev with PR creation date strictly in period (1 Task with multiple PRs = 1 Task)
         const uniquePrTaskCards = new Map<string, any>();
 
         devBugs.forEach(b => {
           const st = (b.status ?? "").toLowerCase();
-          if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return;
+          if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed" && st !== "in review" && !st.includes("wait")) return;
           if (isNoRepro(b)) return;
-          if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
+          const prUrl = getBugPrUrl(b);
+          if (!prUrl) return;
 
           const prDate = bugFixedDate(b);
           if (prDate && dateInRange(prDate, startDate, endDate)) {
             const taskId = b.bugId || b.id;
-            uniquePrTaskCards.set(taskId, b);
+            uniquePrTaskCards.set(taskId, { ...b, pullRequestUrl: prUrl });
           }
         });
 

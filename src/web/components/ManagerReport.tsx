@@ -539,7 +539,7 @@ export function ManagerReport({
           if (isNoRepro(b)) return;
           if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
 
-          const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt);
+          const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt) || dateKey(b.confirmedDate) || dateKey(b.lastEditedTime);
           if (prDate && dateInRange(prDate, startDate, endDate)) {
             const taskId = b.bugId || b.id;
             uniquePrTaskCards.set(taskId, b);

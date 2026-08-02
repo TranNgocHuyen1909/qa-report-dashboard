@@ -380,7 +380,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         if (isNoRepro(b)) return;
         if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
 
-        const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt);
+        const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt) || dateKey(b.confirmedDate) || dateKey(b.lastEditedTime);
         if (prDate && dateInRange(prDate, activePeriod.startDate, activePeriod.endDate)) {
           const taskId = b.bugId || b.id;
           resolvedBugsMap.set(taskId, b);

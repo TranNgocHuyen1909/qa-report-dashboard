@@ -254,7 +254,15 @@ export function App() {
         </div>
 
         {/* TAB 1: BÁO CÁO & TIẾN ĐỘ */}
-        {tab === "report" && <ManagerReport view={view} onUpdate={load} />}
+        {tab === "report" && (
+          <ManagerReport
+            view={view}
+            periodType={periodType}
+            periodKey={periodKey}
+            personCode={personCode}
+            onUpdate={load}
+          />
+        )}
 
         {/* TAB: HOẠT ĐỘNG CODE REVIEW (STANDALONE TAB) */}
         {tab === "review" && (

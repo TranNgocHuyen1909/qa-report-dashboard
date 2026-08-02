@@ -1,8 +1,20 @@
-import { useState, useEffect } from "react";
-import type { DashboardView } from "../../shared/types";
+import { useState, useEffect, useMemo } from "react";
+import type { DashboardView, PeriodType } from "../../shared/types";
 import { saveConclusion, saveCustomTargetsApi } from "../api";
 
-export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdate: () => void }) {
+export function ManagerReport({
+  view,
+  periodType,
+  periodKey,
+  personCode,
+  onUpdate
+}: {
+  view: DashboardView;
+  periodType?: PeriodType;
+  periodKey?: string;
+  personCode?: string;
+  onUpdate: () => void;
+}) {
   const dateKey = (v?: string) => {
     if (!v) return undefined;
     const k = String(v).slice(0, 10);
@@ -26,8 +38,54 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
   const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
   const bugs = view.bugs;
 
+  const activeDev = useMemo(() => {
+    if (personCode && personCode !== "all") {
+      return view.personnel.find(p => p.code === personCode);
+    }
+    return undefined;
+  }, [view.personnel, personCode]);
+
+  const activePeriod = useMemo(() => {
+    if (periodKey && periodKey !== "all") {
+      const found = view.availablePeriods.find(p => p.key === periodKey);
+      if (found) return found;
+    }
+    if (periodKey === "all") {
+      return {
+        key: "all",
+        label: "Tất cả các kỳ",
+        startDate: "2020-01-01",
+        endDate: "2099-12-31"
+      };
+    }
+    return view.availablePeriods[0];
+  }, [view.availablePeriods, periodKey]);
+
   // Filter ONLY valid bugs WITH Pull Request URL (excluding no repro / duplicate / cancel)
-  const validPrBugs = bugs.filter(b => !isInvalidBug(b) && (b.status ?? "").toLowerCase().trim() !== "cancel");
+  const validPrBugs = useMemo(() => {
+    return bugs.filter(b => {
+      if ((b.status ?? "").toLowerCase().trim() === "cancel") return false;
+      if (isInvalidBug(b)) return false;
+
+      // Filter by active dev if selected in topbar
+      if (activeDev) {
+        const pList = [...(b.fixedByIds ?? []), ...(b.causedByIds ?? [])];
+        const isDev = activeDev.notionIds.some(id => pList.includes(id)) || 
+          ((b as any).assignee && activeDev.aliases.some(a => String((b as any).assignee).toLowerCase().includes(a)));
+        if (!isDev) return false;
+      }
+
+      // Filter by period if selected in topbar and not "all"
+      if (periodKey && periodKey !== "all" && activePeriod) {
+        const prDate = dateKey(b.prCreatedAt) || dateKey(b.lastEditedTime) || dateKey(b.confirmedDate);
+        if (!prDate || prDate < activePeriod.startDate || prDate > activePeriod.endDate) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [bugs, activeDev, activePeriod, periodKey]);
 
   // Active Bugs on Notion WITH PR EXCEPT Closed, Cancel, and Pending
   const activeExcludingPendingBugs = validPrBugs.filter(b => {
@@ -37,7 +95,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
   const totalActiveExcludingPending = activeExcludingPendingBugs.length;
 
   // 1. Closed Bugs with PR
-  const closedBugs = validPrBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "closed").length;
+  const closedBugs = validPrBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "closed");
 
   // 2. IN REVIEW / RESOLVED (CHƯA REVIEW) -> Active bug with status = in review / resolved (chưa xong review)
   const resolvedPendingReviewBugs = activeExcludingPendingBugs.filter(b => {
@@ -49,7 +107,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     const hasHuyenReviewer = (b.reviewerIds ?? []).includes(huyenNotionId);
     const hasComment = (b.prCommentsByHuyen ?? 0) > 0;
     return !isWait && !hasHuyenReviewer && !hasComment;
-  }).length;
+  });
 
   // 3. REVIEWED (ĐÃ REVIEW / WAIT) -> Active bug where status is reviewed or wait for dev
   const reviewedWaitingDeployBugs = activeExcludingPendingBugs.filter(b => {
@@ -60,16 +118,16 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     const hasHuyenReviewer = (b.reviewerIds ?? []).includes(huyenNotionId);
     const hasComment = (b.prCommentsByHuyen ?? 0) > 0;
     return isWait || (st === "resolved" && (hasHuyenReviewer || hasComment || ghLbls.includes("wait for deployment")));
-  }).length;
+  });
 
   // 4. Deployed (Đã up Prod, chờ OP nghiệm thu Close)
-  const deployedBugs = activeExcludingPendingBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "deployed").length;
+  const deployedBugs = activeExcludingPendingBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "deployed");
 
   // 5. Reopened
-  const reopenedBugs = activeExcludingPendingBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "reopened").length;
+  const reopenedBugs = activeExcludingPendingBugs.filter(b => (b.status ?? "").toLowerCase().trim() === "reopened");
 
-  const totalAllTrackable = closedBugs + totalActiveExcludingPending;
-  const overallCloseRate = totalAllTrackable > 0 ? ((closedBugs / totalAllTrackable) * 100).toFixed(1) : "0";
+  const totalAllTrackable = closedBugs.length + totalActiveExcludingPending;
+  const overallCloseRate = totalAllTrackable > 0 ? ((closedBugs.length / totalAllTrackable) * 100).toFixed(1) : "0";
 
   // Latest period summary
   const latest = view.teamMetrics[0];
@@ -102,6 +160,28 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
   const [isEditingTargetsModalOpen, setIsEditingTargetsModalOpen] = useState(false);
   const [tempTargetValues, setTempTargetValues] = useState<number[]>([]);
 
+  // Selected KPI card for drilldown filtering
+  const [selectedKpiFilter, setSelectedKpiFilter] = useState<"all" | "active" | "in_review" | "reviewed" | "reopened" | "closed" | null>(null);
+
+  const kpiFilteredBugs = useMemo(() => {
+    if (!selectedKpiFilter) return [];
+    if (selectedKpiFilter === "active") return activeExcludingPendingBugs;
+    if (selectedKpiFilter === "in_review") return resolvedPendingReviewBugs;
+    if (selectedKpiFilter === "reviewed") return reviewedWaitingDeployBugs;
+    if (selectedKpiFilter === "reopened") return reopenedBugs;
+    if (selectedKpiFilter === "closed") return closedBugs;
+    return [];
+  }, [selectedKpiFilter, activeExcludingPendingBugs, resolvedPendingReviewBugs, reviewedWaitingDeployBugs, reopenedBugs, closedBugs]);
+
+  const kpiFilterTitle = useMemo(() => {
+    if (selectedKpiFilter === "active") return "Tổng hiện tại (Đang xử lý)";
+    if (selectedKpiFilter === "in_review") return "In Review / Resolved";
+    if (selectedKpiFilter === "reviewed") return "Reviewed / Wait for Dev";
+    if (selectedKpiFilter === "reopened") return "Re-opened / Lỗi lặp";
+    if (selectedKpiFilter === "closed") return "Đã Close hoàn tất";
+    return "";
+  }, [selectedKpiFilter]);
+
   // Load existing conclusion when active period changes
   const activePeriodKey = latest?.period.key;
   const activeConclusion = activePeriodKey && view.conclusions ? view.conclusions[activePeriodKey] : null;
@@ -128,18 +208,18 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
     }
   }, [activePeriodKey, activeConclusion]);
 
-  // Weekly Targets Trajectory for Developers (Realistic Capacity Milestone Curve)
+  // Weekly Targets Trajectory for Developers (Realistic Capacity Milestone Curve with Progressive Growth)
   const weeklyTargetTrajectory = [
-    { weekLabel: "Tuần 1", targetPerDev: 4, milestoneLabel: "Mức 0: Làm quen codebase & quy trình (3-5 bug/tuần)" },
-    { weekLabel: "Tuần 2", targetPerDev: 6, milestoneLabel: "Mức Onboarding: Tự chủ fix bug độc lập (5-7 bug/tuần)" },
-    { weekLabel: "Tuần 3", targetPerDev: 8, milestoneLabel: "Mốc T1: Đạt chuẩn tiến độ người mới (7-9 bug/tuần)" },
-    { weekLabel: "Tuần 4", targetPerDev: 10, milestoneLabel: "Mốc T2: Tự làm các task luồng khó (9-11 bug/tuần)" },
-    { weekLabel: "Tuần 5", targetPerDev: 12, milestoneLabel: "Mốc T3: Tiệm cận năng suất tối đa (11-13 bug/tuần)" },
-    { weekLabel: "Tuần 6", targetPerDev: 14, milestoneLabel: "Mốc 100%: Năng suất thực tế tiêu chuẩn (~12-15 Bug/Tuần)" },
-    { weekLabel: "Tuần 7", targetPerDev: 14, milestoneLabel: "Duy trì năng suất tiêu chuẩn (~14 Bug/Tuần)" },
-    { weekLabel: "Tuần 8", targetPerDev: 14, milestoneLabel: "Duy trì năng suất tiêu chuẩn (~14 Bug/Tuần)" },
-    { weekLabel: "Tuần 9", targetPerDev: 14, milestoneLabel: "Duy trì năng suất tiêu chuẩn (~14 Bug/Tuần)" },
-    { weekLabel: "Tuần 10", targetPerDev: 14, milestoneLabel: "Duy trì năng suất tiêu chuẩn (~14 Bug/Tuần)" },
+    { weekLabel: "Tuần 1", targetPerDev: 4, milestoneLabel: "Mức 0: Làm quen codebase & quy trình (4 bug/tuần)" },
+    { weekLabel: "Tuần 2", targetPerDev: 6, milestoneLabel: "Mức Onboarding: Tự chủ fix bug độc lập (6 bug/tuần)" },
+    { weekLabel: "Tuần 3", targetPerDev: 8, milestoneLabel: "Mốc T1: Đạt chuẩn tiến độ người mới (8 bug/tuần)" },
+    { weekLabel: "Tuần 4", targetPerDev: 10, milestoneLabel: "Mốc T2: Tự làm các task luồng khó (10 bug/tuần)" },
+    { weekLabel: "Tuần 5", targetPerDev: 12, milestoneLabel: "Mốc T3: Tiệm cận năng suất tối đa (12 bug/tuần)" },
+    { weekLabel: "Tuần 6", targetPerDev: 14, milestoneLabel: "Mốc 100%: Năng suất thực tế tiêu chuẩn (14 Bug/Tuần)" },
+    { weekLabel: "Tuần 7", targetPerDev: 16, milestoneLabel: "Mốc Tăng Trưởng: Nâng cao năng suất sản lượng (16 Bug/Tuần)" },
+    { weekLabel: "Tuần 8", targetPerDev: 18, milestoneLabel: "Mốc Cao Điểm: Tăng tốc hoàn thành mục tiêu (18 Bug/Tuần)" },
+    { weekLabel: "Tuần 9", targetPerDev: 20, milestoneLabel: "Mốc Tối Đa: Hiệu năng phát triển đỉnh cao (20 Bug/Tuần)" },
+    { weekLabel: "Tuần 10", targetPerDev: 22, milestoneLabel: "Mốc Tối Đa: Hiệu năng phát triển đỉnh cao (22 Bug/Tuần)" },
   ];
 
   // Weekly Targets Trajectory for Lead Reviewer (100% PR Team Capacity Target Curve)
@@ -339,27 +419,14 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
       const onboardingWeek = matchedMetric && selectedDev
         ? getOnboardingWeek(selectedDev.startDate, matchedMetric.period.startDate)
         : index + 1;
-      const targetStep = weeklyTargetTrajectory[onboardingWeek - 1] ?? weeklyTargetTrajectory.at(-1);
-      const floorTarget = targetStep?.targetPerDev ?? 0;
-
-      // Dynamic target calculation based on previous week's performance
-      const prev1Slot = chartSlots[index - 1];
-      const prev2Slot = chartSlots[index - 2];
-      const prev1Data = prev1Slot?.byPerson.find(p => p.personCode === selectedDevFilter);
-      const prev2Data = prev2Slot?.byPerson.find(p => p.personCode === selectedDevFilter);
-
-      const actualPrev1 = prev1Data?.bugsFixed;
-      const actualPrev2 = prev2Data?.bugsFixed;
-
-      if (actualPrev1 !== undefined) {
-        const avgTwo = actualPrev2 !== undefined ? (actualPrev1 + actualPrev2) / 2 : actualPrev1;
-        const basePrev = Math.max(actualPrev1, avgTwo);
-        const movingTarget = Math.ceil(basePrev * 1.1); // +10% over recent high/average
-        displayTarget = Math.max(movingTarget, floorTarget);
-        milestoneLabel = `Target động: ${displayTarget} bug (Tuần trước ${actualPrev1} bug +10%)`;
+      const customTrajectory = customTargets[selectedDevFilter];
+      if (customTrajectory && customTrajectory[onboardingWeek - 1] !== undefined) {
+        displayTarget = customTrajectory[onboardingWeek - 1];
+        milestoneLabel = `Target Tùy Chỉnh: ${displayTarget} bug/tuần`;
       } else {
-        displayTarget = floorTarget;
-        milestoneLabel = targetStep?.milestoneLabel ?? "Năng suất ổn định";
+        const targetStep = weeklyTargetTrajectory[onboardingWeek - 1] ?? weeklyTargetTrajectory.at(-1);
+        displayTarget = targetStep?.targetPerDev ?? 14;
+        milestoneLabel = targetStep?.milestoneLabel ?? "Năng suất tiêu chuẩn (~14 Bug/Tuần)";
       }
       weekLabel = `Tuần ${onboardingWeek}`;
     }
@@ -423,7 +490,7 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
             Báo cáo Quản lý & Tiến độ Tuần
           </h1>
           <p style={{ fontSize: "13px", color: "var(--text-2)", fontWeight: "500", margin: 0 }}>
-            Tổng hợp các task bug có PR URL trên Notion (đã trừ lỗi Không tái hiện / Trùng): <strong style={{ color: "var(--text-1)", fontWeight: "700" }}>{latest?.period.label}</strong>
+            Tổng hợp các task bug có PR URL trên Notion (đã trừ lỗi Không tái hiện / Trùng): <strong style={{ color: "var(--text-1)", fontWeight: "700" }}>{activePeriod && activePeriod.key !== "all" ? `${activePeriod.startDate} — ${activePeriod.endDate}` : "Tất cả các kỳ"}{activeDev ? ` • Nhân sự: ${activeDev.displayName}` : " • Tất cả nhân sự"}</strong>
           </p>
         </div>
         {activePeriodKey && (
@@ -437,38 +504,171 @@ export function ManagerReport({ view, onUpdate }: { view: DashboardView; onUpdat
         )}
       </div>
 
-      {/* Single Unified 5-Card KPI Row */}
+      {/* Single Unified 5-Card KPI Row (Clickable & Filterable) */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: "10px" }}>
-        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid #2eaadc", background: "rgba(46, 170, 220, 0.05)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>TỔNG HIỆN TẠI (ĐANG XỬ LÝ)</div>
+        <div 
+          className="card" 
+          onClick={() => setSelectedKpiFilter(prev => prev === "active" ? null : "active")}
+          style={{ 
+            padding: "12px 14px", 
+            borderLeft: "4px solid #2eaadc", 
+            background: selectedKpiFilter === "active" ? "rgba(46, 170, 220, 0.18)" : "rgba(46, 170, 220, 0.05)",
+            outline: selectedKpiFilter === "active" ? "2px solid #2eaadc" : "none",
+            cursor: "pointer",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold", display: "flex", justifyContent: "space-between" }}>
+            <span>TỔNG HIỆN TẠI (ĐANG XỬ LÝ)</span>
+            {selectedKpiFilter === "active" && <span style={{ color: "#2eaadc" }}>✓</span>}
+          </div>
           <div style={{ fontSize: "22px", fontWeight: "800", color: "#2eaadc", marginTop: "2px" }}>{totalActiveExcludingPending}</div>
           <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Trừ Closed, Cancel &amp; Pending</div>
         </div>
 
-        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid #e06c55", background: "rgba(224, 108, 85, 0.05)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>IN REVIEW / RESOLVED</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "#ad4d3a", marginTop: "2px" }}>{resolvedPendingReviewBugs}</div>
+        <div 
+          className="card" 
+          onClick={() => setSelectedKpiFilter(prev => prev === "in_review" ? null : "in_review")}
+          style={{ 
+            padding: "12px 14px", 
+            borderLeft: "4px solid #e06c55", 
+            background: selectedKpiFilter === "in_review" ? "rgba(224, 108, 85, 0.18)" : "rgba(224, 108, 85, 0.05)",
+            outline: selectedKpiFilter === "in_review" ? "2px solid #e06c55" : "none",
+            cursor: "pointer",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold", display: "flex", justifyContent: "space-between" }}>
+            <span>IN REVIEW / RESOLVED</span>
+            {selectedKpiFilter === "in_review" && <span style={{ color: "#ad4d3a" }}>✓</span>}
+          </div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#ad4d3a", marginTop: "2px" }}>{resolvedPendingReviewBugs.length}</div>
           <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Đang review / Chưa test xong</div>
         </div>
 
-        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid #e06c55", background: "rgba(224, 108, 85, 0.05)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>REVIEWED / WAIT FOR DEV</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "#ad4d3a", marginTop: "2px" }}>{reviewedWaitingDeployBugs}</div>
+        <div 
+          className="card" 
+          onClick={() => setSelectedKpiFilter(prev => prev === "reviewed" ? null : "reviewed")}
+          style={{ 
+            padding: "12px 14px", 
+            borderLeft: "4px solid #e06c55", 
+            background: selectedKpiFilter === "reviewed" ? "rgba(224, 108, 85, 0.18)" : "rgba(224, 108, 85, 0.05)",
+            outline: selectedKpiFilter === "reviewed" ? "2px solid #e06c55" : "none",
+            cursor: "pointer",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold", display: "flex", justifyContent: "space-between" }}>
+            <span>REVIEWED / WAIT FOR DEV</span>
+            {selectedKpiFilter === "reviewed" && <span style={{ color: "#ad4d3a" }}>✓</span>}
+          </div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#ad4d3a", marginTop: "2px" }}>{reviewedWaitingDeployBugs.length}</div>
           <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Đã review / Wait for Dev/Deploy</div>
         </div>
 
-        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid #9f6b53", background: "rgba(159, 107, 83, 0.05)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>RE-OPENED / LỖI LẶP</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "#704838", marginTop: "2px" }}>{reopenedBugs}</div>
+        <div 
+          className="card" 
+          onClick={() => setSelectedKpiFilter(prev => prev === "reopened" ? null : "reopened")}
+          style={{ 
+            padding: "12px 14px", 
+            borderLeft: "4px solid #9f6b53", 
+            background: selectedKpiFilter === "reopened" ? "rgba(159, 107, 83, 0.18)" : "rgba(159, 107, 83, 0.05)",
+            outline: selectedKpiFilter === "reopened" ? "2px solid #9f6b53" : "none",
+            cursor: "pointer",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold", display: "flex", justifyContent: "space-between" }}>
+            <span>RE-OPENED / LỖI LẶP</span>
+            {selectedKpiFilter === "reopened" && <span style={{ color: "#704838" }}>✓</span>}
+          </div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#704838", marginTop: "2px" }}>{reopenedBugs.length}</div>
           <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Lỗi bị mở lại</div>
         </div>
 
-        <div className="card" style={{ padding: "12px 14px", borderLeft: "4px solid #448361", background: "rgba(68, 131, 97, 0.05)" }}>
-          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold" }}>ĐÃ CLOSE HOÀN TẤT</div>
-          <div style={{ fontSize: "22px", fontWeight: "800", color: "#2b593f", marginTop: "2px" }}>{closedBugs}</div>
+        <div 
+          className="card" 
+          onClick={() => setSelectedKpiFilter(prev => prev === "closed" ? null : "closed")}
+          style={{ 
+            padding: "12px 14px", 
+            borderLeft: "4px solid #448361", 
+            background: selectedKpiFilter === "closed" ? "rgba(68, 131, 97, 0.18)" : "rgba(68, 131, 97, 0.05)",
+            outline: selectedKpiFilter === "closed" ? "2px solid #448361" : "none",
+            cursor: "pointer",
+            transition: "all 0.15s ease"
+          }}
+        >
+          <div style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "bold", display: "flex", justifyContent: "space-between" }}>
+            <span>ĐÃ CLOSE HOÀN TẤT</span>
+            {selectedKpiFilter === "closed" && <span style={{ color: "#2b593f" }}>✓</span>}
+          </div>
+          <div style={{ fontSize: "22px", fontWeight: "800", color: "#2b593f", marginTop: "2px" }}>{closedBugs.length}</div>
           <div style={{ fontSize: "10px", color: "var(--text-2)", marginTop: "2px" }}>Tỷ lệ Close: {overallCloseRate}%</div>
         </div>
       </div>
+
+      {/* KPI Card Drilldown Bug List Table */}
+      {selectedKpiFilter && (
+        <div className="card" style={{ padding: "16px", border: "1px solid var(--accent)", background: "var(--surface)", animation: "fadeIn 0.2s ease" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "12px", borderBottom: "1px solid var(--border-3)", paddingBottom: "8px" }}>
+            <div style={{ fontSize: "14px", fontWeight: "bold", color: "var(--text-1)", display: "flex", alignItems: "center", gap: "8px" }}>
+              <span>📋 Danh sách Task Bug thuộc mục</span>
+              <span style={{ color: "var(--accent)" }}>{kpiFilterTitle}</span>
+              <span className="tag" style={{ fontSize: "11px", background: "rgba(59, 130, 246, 0.12)", color: "var(--accent)", fontWeight: "bold" }}>
+                {kpiFilteredBugs.length} tasks
+              </span>
+            </div>
+            <button className="ctrl ctrl-sm" style={{ fontSize: "12px", padding: "4px 10px", fontWeight: "bold" }} onClick={() => setSelectedKpiFilter(null)}>Đóng danh sách ✕</button>
+          </div>
+
+          {kpiFilteredBugs.length === 0 ? (
+            <div style={{ padding: "20px", textAlign: "center", color: "var(--text-3)", fontSize: "13px" }}>
+              Không có bug nào trong nhóm này với bộ lọc hiện tại.
+            </div>
+          ) : (
+            <div style={{ maxHeight: "350px", overflowY: "auto" }}>
+              <table className="table" style={{ width: "100%", fontSize: "12px" }}>
+                <thead>
+                  <tr style={{ background: "var(--surface-2)" }}>
+                    <th style={{ textAlign: "left", padding: "8px 10px" }}>Mã Bug</th>
+                    <th style={{ textAlign: "left", padding: "8px 10px" }}>Tiêu đề Bug</th>
+                    <th style={{ textAlign: "center", padding: "8px 10px" }}>Trạng thái</th>
+                    <th style={{ textAlign: "center", padding: "8px 10px" }}>Link PR</th>
+                    <th style={{ textAlign: "center", padding: "8px 10px" }}>Ngày tạo PR</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {kpiFilteredBugs.map((b, idx) => (
+                    <tr key={b.id || idx}>
+                      <td style={{ padding: "8px 10px", fontWeight: "bold", whiteSpace: "nowrap" }}>
+                        <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--accent)" }}>
+                          {b.bugId || b.id.slice(0, 8)}
+                        </a>
+                      </td>
+                      <td style={{ padding: "8px 10px" }}>{b.title}</td>
+                      <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                        <span className="tag" style={{ fontSize: "11px", padding: "2px 8px", background: "rgba(59, 130, 246, 0.1)", color: "var(--accent)", fontWeight: "600" }}>
+                          {b.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: "8px 10px", textAlign: "center" }}>
+                        {b.pullRequestUrl ? (
+                          <a href={b.pullRequestUrl} target="_blank" rel="noreferrer" style={{ color: "#2563eb", textDecoration: "underline", fontWeight: "500" }}>
+                            Link PR ↗
+                          </a>
+                        ) : "—"}
+                      </td>
+                      <td style={{ padding: "8px 10px", textAlign: "center", whiteSpace: "nowrap", color: "var(--text-2)" }}>
+                        {dateKey(b.prCreatedAt) || "—"}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* FULL-WIDTH CHART CARD */}
       <div 

@@ -379,7 +379,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         if (isNoRepro(b)) return false;
         if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return false;
 
-        const prDate = dateKey(b.prCreatedAt);
+        const prDate = dateKey(b.prCreatedAt) || bugFixedDate(b);
         return dateInRange(prDate, activePeriod.startDate, activePeriod.endDate);
       });
 

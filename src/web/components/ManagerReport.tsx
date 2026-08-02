@@ -430,6 +430,51 @@ export function ManagerReport({
   const chartSlots = Array.from({ length: 10 }, (_, index) => chartMetrics[index]);
   const todayStr = new Date().toISOString().slice(0, 10);
 
+  const computedTargetsMap = useMemo(() => {
+    if (selectedDevFilter === "all") return {};
+
+    const customTrajectory = customTargets[selectedDevFilter];
+    if (customTrajectory && customTrajectory.length === 10) {
+      return { [selectedDevFilter]: customTrajectory };
+    }
+    if (selectedDevFilter === "HuyenTN") {
+      return { HuyenTN: [10, 18, 25, 30, 32, 35, 38, 40, 42, 45] };
+    }
+
+    const pastActuals: number[] = [];
+    chartSlots.forEach((m) => {
+      if (m) {
+        const personData = m.byPerson.find((p) => p.personCode === selectedDevFilter);
+        pastActuals.push(personData ? personData.bugsFixed : 0);
+      }
+    });
+
+    const currentWeekIdx = 3;
+    const baseMilestones = [4, 6, 8, 8, 10, 12, 14, 15, 16, 17];
+    const targets: number[] = [];
+
+    const recentWindow = pastActuals.slice(0, currentWeekIdx + 1).slice(-3);
+    const avgActual = recentWindow.length > 0
+      ? recentWindow.reduce((a, b) => a + b, 0) / recentWindow.length
+      : 8;
+
+    const baselineCapacity = Math.max(6, Math.round(avgActual));
+
+    for (let i = 0; i < 10; i++) {
+      if (i <= currentWeekIdx) {
+        targets.push(baseMilestones[i] || 8);
+      } else {
+        const weeksAhead = i - currentWeekIdx;
+        const calculatedTarget = Math.min(20, Math.round(baselineCapacity * (1 + 0.15 * weeksAhead)));
+        const prevTarget = targets[i - 1];
+        const nextTarget = Math.max(prevTarget + 1, calculatedTarget);
+        targets.push(nextTarget);
+      }
+    }
+
+    return { [selectedDevFilter]: targets };
+  }, [selectedDevFilter, customTargets, chartSlots]);
+
   const chartData = chartSlots.map((matchedMetric, index) => {
     let displayActual = 0;
     let displayTarget = 0;
@@ -490,45 +535,18 @@ export function ManagerReport({
 
         const devBugs = view.bugs.filter(b => bugBelongsToDev(b) && (b.status ?? "").toLowerCase() !== "cancel");
 
-        const closedBugsMap = new Map<string, any>();
-        view.bugs.forEach(b => {
+        // Calculate Resolved/Closed bugs belonging to Dev in period (MUST HAVE PR LINK ON NOTION, EXCLUDE DUPLICATE CHILD TASKS)
+        const uniquePrBugs = devBugs.filter(b => {
           const st = (b.status ?? "").toLowerCase();
-          if (st !== "closed" && st !== "deployed") return;
-          if (isNoRepro(b)) return;
-          if (!bugBelongsToDev(b)) return;
-
-          const closedDate = dateKey(b.confirmedDate);
-          if (!closedDate || !dateInRange(closedDate, startDate, endDate)) return;
-          if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
-
-          const key = b.bugId || b.id;
-          closedBugsMap.set(key, b);
-
-          if (b.duplicateIds && b.duplicateIds.length > 0) {
-            b.duplicateIds.forEach((childId: string) => {
-              const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
-              const childKey = childObj ? (childObj.bugId || childObj.id) : childId;
-              if (!closedBugsMap.has(childKey)) {
-                const childSt = (childObj?.status ?? "").toLowerCase();
-                if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
-                  closedBugsMap.set(childKey, childObj || { id: childId });
-                }
-              }
-            });
-          }
-        });
-
-        const resolvedBugs = devBugs.filter(b => {
-          const st = (b.status ?? "").toLowerCase();
-          if (st !== "resolved" && st !== "reviewed") return false;
+          if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return false;
           if (isNoRepro(b)) return false;
           if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return false;
 
-          const prDate = dateKey(b.prCreatedAt) || dateKey(b.prLastCommitAt) || dateKey(b.createdTime);
+          const prDate = dateKey(b.prCreatedAt) || dateKey(b.confirmedDate) || dateKey(b.prLastCommitAt) || dateKey(b.createdTime);
           return dateInRange(prDate, startDate, endDate);
         });
 
-        displayActual = closedBugsMap.size + resolvedBugs.length;
+        displayActual = uniquePrBugs.length;
       } else {
         const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
         displayActual = personData ? personData.bugsFixed : 0;
@@ -537,10 +555,10 @@ export function ManagerReport({
       const onboardingWeek = matchedMetric && selectedDev
         ? getOnboardingWeek(selectedDev.startDate, matchedMetric.period.startDate)
         : index + 1;
-      const customTrajectory = customTargets[selectedDevFilter];
-      if (customTrajectory && customTrajectory[onboardingWeek - 1] !== undefined) {
-        displayTarget = customTrajectory[onboardingWeek - 1];
-        milestoneLabel = `Target Tùy Chỉnh: ${displayTarget} bug/tuần`;
+      const dynamicTrajectory = (computedTargetsMap as Record<string, number[]>)[selectedDevFilter] || customTargets[selectedDevFilter];
+      if (dynamicTrajectory && dynamicTrajectory[onboardingWeek - 1] !== undefined) {
+        displayTarget = dynamicTrajectory[onboardingWeek - 1];
+        milestoneLabel = `Target Công Thức (TB 3 Tuần + 15%/tuần): ${displayTarget} bug/tuần`;
       } else {
         const targetStep = weeklyTargetTrajectory[onboardingWeek - 1] ?? weeklyTargetTrajectory.at(-1);
         displayTarget = targetStep?.targetPerDev ?? 14;

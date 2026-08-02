@@ -116,12 +116,22 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     }
   };
 
+  const isDevGithubAuthor = (devCode: string, prAuthor?: string) => {
+    if (!prAuthor) return false;
+    const a = prAuthor.toLowerCase();
+    if (devCode === "HuyDH") return a === "hoanghuy04" || a === "huydh-04" || a === "huydh";
+    if (devCode === "HoNX") return a === "nguyenxuanho-02" || a === "honx";
+    if (devCode === "HoangGV") return a === "hoanggiapviet" || a === "hoanggv";
+    if (devCode === "HuyenTN") return a === "tranngochuyen1909" || a === "huyentn";
+    return false;
+  };
+
   // Helper to match a bug to a developer (with PR priority)
   const bugBelongsToDev = (bug: BugRecord, dev: typeof developers[0]) => {
     const prAuthor = bug.prAuthor?.toLowerCase();
     if (bug.pullRequestUrl && prAuthor) {
-      if (dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase()) return true;
-      if (developers.some(p => p.code !== dev.code && p.githubUsername && p.githubUsername.toLowerCase() === prAuthor)) return false;
+      if (isDevGithubAuthor(dev.code, prAuthor) || (dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase())) return true;
+      if (developers.some(p => p.code !== dev.code && (isDevGithubAuthor(p.code, prAuthor) || (p.githubUsername && p.githubUsername.toLowerCase() === prAuthor)))) return false;
     }
     const notionIds = dev.notionIds || [];
     return (bug.fixedByIds ?? []).some(id => notionIds.includes(id));
@@ -334,7 +344,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
         const isFixedByDev = (b.fixedByIds ?? []).some(id => dev.notionIds.includes(id));
         const prAuthor = b.prAuthor?.toLowerCase();
-        const isPrDev = dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase();
+        const isPrDev = isDevGithubAuthor(dev.code, prAuthor) || (dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase());
         if (!isFixedByDev && !isPrDev) return;
 
         // Strict filter: Must have b.confirmedDate or b.lastEditedTime in active period AND non-empty Pull Request link!

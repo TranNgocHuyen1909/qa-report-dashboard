@@ -531,12 +531,24 @@ export function ManagerReport({
     } else {
       const devPerson = view.personnel.find(p => p.code === selectedDevFilter);
       if (devPerson && startDate && endDate) {
-        const bugBelongsToDev = (b: any) => {
-          const pList = [...(b.fixedByIds ?? []), ...(b.causedByIds ?? [])];
-          const isFixedByDev = devPerson.notionIds.some(id => pList.includes(id));
-          const prAuthor = b.prAuthor?.toLowerCase();
-          const isPrDev = devPerson.githubUsername && prAuthor === devPerson.githubUsername.toLowerCase();
-          return isFixedByDev || isPrDev;
+        const isDevGithubAuthor = (devCode: string, prAuthor?: string) => {
+          if (!prAuthor) return false;
+          const a = prAuthor.toLowerCase();
+          if (devCode === "HuyDH") return a === "hoanghuy04" || a === "huydh-04" || a === "huydh";
+          if (devCode === "HoNX") return a === "nguyenxuanho-02" || a === "honx";
+          if (devCode === "HoangGV") return a === "hoanggiapviet" || a === "hoanggv";
+          if (devCode === "HuyenTN") return a === "tranngochuyen1909" || a === "huyentn";
+          return false;
+        };
+
+        const bugBelongsToDev = (bug: any) => {
+          const prAuthor = bug.prAuthor?.toLowerCase();
+          if (bug.pullRequestUrl && prAuthor) {
+            if (isDevGithubAuthor(devPerson.code, prAuthor) || (devPerson.githubUsername && prAuthor === devPerson.githubUsername.toLowerCase())) return true;
+            if (view.personnel.some(p => p.code !== devPerson.code && (isDevGithubAuthor(p.code, prAuthor) || (p.githubUsername && p.githubUsername.toLowerCase() === prAuthor)))) return false;
+          }
+          const notionIds = devPerson.notionIds || [];
+          return (bug.fixedByIds ?? []).some((id: string) => notionIds.includes(id));
         };
 
         const devBugs = view.bugs.filter(b => bugBelongsToDev(b) && (b.status ?? "").toLowerCase() !== "cancel");

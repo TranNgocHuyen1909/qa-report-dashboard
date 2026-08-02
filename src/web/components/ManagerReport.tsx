@@ -223,9 +223,9 @@ export function ManagerReport({
     }
     return {
       HuyenTN: [10, 18, 25, 30, 32, 35, 38, 40, 42, 45],
-      HoangGV: [4, 6, 8, 4, 5, 6, 7, 8, 9, 10],
-      HoNX: [4, 6, 8, 3, 4, 5, 6, 7, 8, 9],
-      HuyDH: [3, 5, 7, 7, 8, 9, 10, 11, 12, 13]
+      HoangGV: [4, 6, 8, 10, 12, 14, 15, 16, 17, 18],
+      HoNX: [4, 6, 8, 10, 11, 12, 13, 14, 15, 16],
+      HuyDH: [5, 7, 8, 10, 12, 14, 15, 16, 17, 18]
     };
   });
 
@@ -284,18 +284,18 @@ export function ManagerReport({
     }
   }, [activePeriodKey, activeConclusion]);
 
-  // Weekly Targets Trajectory for Developers (Realistic & Progressive Capacity Milestone Curve from 4 to 14 Bugs/Week)
+  // Weekly Targets Trajectory for Developers (Ambitious Capacity Milestone Curve from 5 to 18 Bugs/Week)
   const weeklyTargetTrajectory = [
-    { weekLabel: "Tuần 1", targetPerDev: 4, milestoneLabel: "Mức 0: Làm quen codebase & quy trình (4 bug/tuần)" },
-    { weekLabel: "Tuần 2", targetPerDev: 6, milestoneLabel: "Mức Onboarding: Tự chủ fix bug độc lập (6 bug/tuần)" },
+    { weekLabel: "Tuần 1", targetPerDev: 5, milestoneLabel: "Mức 0: Làm quen codebase & quy trình (5 bug/tuần)" },
+    { weekLabel: "Tuần 2", targetPerDev: 7, milestoneLabel: "Mức Onboarding: Tự chủ fix bug độc lập (7 bug/tuần)" },
     { weekLabel: "Tuần 3", targetPerDev: 8, milestoneLabel: "Mốc T1: Đạt chuẩn tiến độ người mới (8 bug/tuần)" },
-    { weekLabel: "Tuần 4", targetPerDev: 8, milestoneLabel: "Mốc T2: Tự làm các task luồng khó (8 bug/tuần)" },
-    { weekLabel: "Tuần 5", targetPerDev: 9, milestoneLabel: "Mốc T3: Nâng cao sản lượng ổn định (9 bug/tuần)" },
-    { weekLabel: "Tuần 6", targetPerDev: 10, milestoneLabel: "Mốc 100%: Năng suất thực tế tiêu chuẩn (10 Bug/Tuần)" },
-    { weekLabel: "Tuần 7", targetPerDev: 11, milestoneLabel: "Mốc Tăng Trưởng: Nâng cao sản lượng (11 Bug/Tuần)" },
-    { weekLabel: "Tuần 8", targetPerDev: 12, milestoneLabel: "Mốc Cao Điểm: Hoàn thiện năng suất (12 Bug/Tuần)" },
-    { weekLabel: "Tuần 9", targetPerDev: 13, milestoneLabel: "Mốc Tối Đa: Hiệu năng đỉnh cao (13 Bug/Tuần)" },
-    { weekLabel: "Tuần 10", targetPerDev: 14, milestoneLabel: "Mốc Tối Đa: Hiệu năng đỉnh cao (14 Bug/Tuần)" },
+    { weekLabel: "Tuần 4", targetPerDev: 10, milestoneLabel: "Mốc T2: Tự làm các task luồng khó (10 bug/tuần)" },
+    { weekLabel: "Tuần 5", targetPerDev: 12, milestoneLabel: "Mốc T3: Nâng cao sản lượng ổn định (12 bug/tuần)" },
+    { weekLabel: "Tuần 6", targetPerDev: 14, milestoneLabel: "Mốc 100%: Năng suất thực tế tiêu chuẩn (14 Bug/Tuần)" },
+    { weekLabel: "Tuần 7", targetPerDev: 15, milestoneLabel: "Mốc Tăng Trưởng: Nâng cao sản lượng (15 Bug/Tuần)" },
+    { weekLabel: "Tuần 8", targetPerDev: 16, milestoneLabel: "Mốc Cao Điểm: Hoàn thiện năng suất (16 Bug/Tuần)" },
+    { weekLabel: "Tuần 9", targetPerDev: 17, milestoneLabel: "Mốc Tối Đa: Hiệu năng đỉnh cao (17 Bug/Tuần)" },
+    { weekLabel: "Tuần 10", targetPerDev: 18, milestoneLabel: "Mốc Tối Đa: Hiệu năng đỉnh cao (18 Bug/Tuần)" },
   ];
 
   // Weekly Targets Trajectory for Lead Reviewer (100% PR Team Capacity Target Curve)

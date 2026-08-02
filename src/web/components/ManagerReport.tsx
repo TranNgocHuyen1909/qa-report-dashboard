@@ -21,6 +21,17 @@ export function ManagerReport({
     return /^\d{4}-\d{2}-\d{2}$/.test(k) ? k : undefined;
   };
 
+  const dateInRange = (d?: string, start?: string, end?: string) => {
+    if (!d || !start || !end) return false;
+    return d >= start && d <= end;
+  };
+
+  const isNoRepro = (b: any) => {
+    const note = (b.note ?? "").toLowerCase();
+    const st = (b.status ?? "").toLowerCase();
+    return note.includes("không tái hiện") || note.includes("ko tái hiện") || note.includes("no repro") || note.includes("không phải lỗi") || st.includes("không tái hiện") || st.includes("ko tái hiện");
+  };
+
   const getDisplayName = (code: string) => {
     return view.personnel.find(p => p.code === code)?.displayName || code;
   };
@@ -223,9 +234,9 @@ export function ManagerReport({
     }
     return {
       HuyenTN: [10, 18, 25, 30, 32, 35, 38, 40, 42, 45],
-      HoangGV: [4, 6, 8, 10, 12, 14, 15, 16, 17, 18],
-      HoNX: [4, 6, 8, 10, 11, 12, 13, 14, 15, 16],
-      HuyDH: [5, 7, 8, 10, 12, 14, 15, 16, 17, 18]
+      HoangGV: [4, 6, 8, 8, 10, 12, 14, 15, 16, 17],
+      HoNX: [4, 6, 6, 4, 6, 8, 10, 11, 12, 13],
+      HuyDH: [5, 7, 8, 8, 10, 12, 14, 15, 16, 17]
     };
   });
 
@@ -467,8 +478,61 @@ export function ManagerReport({
       weekLabel = `Tuần ${onboardingWeek}`;
       milestoneLabel = `Target Review Lộ Trình: ${displayTarget} PRs/tuần`;
     } else {
-      const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
-      displayActual = personData ? personData.bugsFixed : 0;
+      const devPerson = view.personnel.find(p => p.code === selectedDevFilter);
+      if (devPerson && startDate && endDate) {
+        const bugBelongsToDev = (b: any) => {
+          const pList = [...(b.fixedByIds ?? []), ...(b.causedByIds ?? [])];
+          const isFixedByDev = devPerson.notionIds.some(id => pList.includes(id));
+          const prAuthor = b.prAuthor?.toLowerCase();
+          const isPrDev = devPerson.githubUsername && prAuthor === devPerson.githubUsername.toLowerCase();
+          return isFixedByDev || isPrDev;
+        };
+
+        const devBugs = view.bugs.filter(b => bugBelongsToDev(b) && (b.status ?? "").toLowerCase() !== "cancel");
+
+        const closedBugsMap = new Map<string, any>();
+        view.bugs.forEach(b => {
+          const st = (b.status ?? "").toLowerCase();
+          if (st !== "closed" && st !== "deployed") return;
+          if (isNoRepro(b)) return;
+          if (!bugBelongsToDev(b)) return;
+
+          const closedDate = dateKey(b.confirmedDate);
+          if (!closedDate || !dateInRange(closedDate, startDate, endDate)) return;
+          if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
+
+          const key = b.bugId || b.id;
+          closedBugsMap.set(key, b);
+
+          if (b.duplicateIds && b.duplicateIds.length > 0) {
+            b.duplicateIds.forEach((childId: string) => {
+              const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
+              const childKey = childObj ? (childObj.bugId || childObj.id) : childId;
+              if (!closedBugsMap.has(childKey)) {
+                const childSt = (childObj?.status ?? "").toLowerCase();
+                if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
+                  closedBugsMap.set(childKey, childObj || { id: childId });
+                }
+              }
+            });
+          }
+        });
+
+        const resolvedBugs = devBugs.filter(b => {
+          const st = (b.status ?? "").toLowerCase();
+          if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed") return false;
+          if (isNoRepro(b)) return false;
+          if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return false;
+
+          const prDate = dateKey(b.prCreatedAt) || dateKey(b.lastEditedTime) || dateKey(b.confirmedDate);
+          return dateInRange(prDate, startDate, endDate);
+        });
+
+        displayActual = closedBugsMap.size + resolvedBugs.length;
+      } else {
+        const personData = matchedMetric?.byPerson.find(p => p.personCode === selectedDevFilter);
+        displayActual = personData ? personData.bugsFixed : 0;
+      }
 
       const onboardingWeek = matchedMetric && selectedDev
         ? getOnboardingWeek(selectedDev.startDate, matchedMetric.period.startDate)

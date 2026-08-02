@@ -89,9 +89,9 @@ export function ManagerReport({
 
   const totalActiveExcludingPending = activeExcludingPendingBugs.length;
 
-  // 1. Closed Bugs with PR (Lọc BẮT BUỘC theo b.confirmedDate - Ngày xác nhận)
+  // 1. Closed Bugs with PR & Child Duplicate Tasks (Lọc BẮT BUỘC theo b.confirmedDate - Ngày xác nhận)
   const closedBugs = useMemo(() => {
-    return baseDevPrBugs.filter(b => {
+    const directClosed = baseDevPrBugs.filter(b => {
       const st = (b.status ?? "").toLowerCase().trim();
       if (st !== "closed" && st !== "deployed") return false;
       if (periodKey && periodKey !== "all" && activePeriod) {
@@ -102,7 +102,45 @@ export function ManagerReport({
       }
       return true;
     });
-  }, [baseDevPrBugs, periodKey, activePeriod]);
+
+    const resultList: any[] = [];
+    const seenKeys = new Set<string>();
+
+    directClosed.forEach(b => {
+      const key = b.bugId || b.id;
+      if (!seenKeys.has(key)) {
+        seenKeys.add(key);
+        resultList.push(b);
+      }
+
+      if (b.duplicateIds && b.duplicateIds.length > 0) {
+        b.duplicateIds.forEach((childId: string) => {
+          const childObj = bugs.find(orig => orig.id === childId || orig.bugId === childId);
+          const childKey = childObj ? (childObj.bugId || childObj.id) : childId;
+          if (!seenKeys.has(childKey)) {
+            const childSt = (childObj?.status ?? "").toLowerCase();
+            if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
+              seenKeys.add(childKey);
+              resultList.push({
+                ...(childObj || {}),
+                bugId: childObj?.bugId || childId.slice(0, 8),
+                id: childId,
+                status: (childObj?.status || "CLOSED").toUpperCase(),
+                isChild: true,
+                parentBugId: key,
+                pullRequestUrl: childObj?.pullRequestUrl || b.pullRequestUrl,
+                location: childObj?.location && childObj.location.length > 0 ? childObj.location : b.location,
+                title: childObj ? `${childObj.title} (Task trùng lặp của [${key}])` : `Task trùng lặp của [${key}]`,
+                confirmedDate: b.confirmedDate
+              });
+            }
+          }
+        });
+      }
+    });
+
+    return resultList;
+  }, [baseDevPrBugs, bugs, periodKey, activePeriod]);
 
   // 2. IN REVIEW / RESOLVED (CHƯA REVIEW) -> Active bug with status = in review / resolved (chưa xong review)
   const resolvedPendingReviewBugs = useMemo(() => {

@@ -423,10 +423,13 @@ export function ManagerReport({
   const selectedDev = selectedDevFilter !== "all"
     ? view.personnel.find(p => p.code === selectedDevFilter)
     : undefined;
-  const chartMetrics = [...view.weeklyMetrics]
-    .filter(metric => !selectedDev || metric.period.endDate >= selectedDev.startDate)
-    .slice(0, 10)
-    .reverse();
+  const chartMetrics = useMemo(() => {
+    return [...view.weeklyMetrics]
+      .filter(metric => !selectedDev || metric.period.endDate >= selectedDev.startDate)
+      .sort((a, b) => a.period.startDate.localeCompare(b.period.startDate))
+      .slice(0, 10);
+  }, [view.weeklyMetrics, selectedDev]);
+
   const chartSlots = Array.from({ length: 10 }, (_, index) => chartMetrics[index]);
   const todayStr = new Date().toISOString().slice(0, 10);
 

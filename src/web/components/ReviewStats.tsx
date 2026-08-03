@@ -828,13 +828,23 @@ export function ReviewStats({
         (b.reviewerIds ?? []).includes(huyenNotionId) ||
         (b.prCommentsByHuyen ?? 0) > 0 ||
         Boolean(b.huyenFirstCommentAt) ||
-        b.reviewStartDate !== undefined;
+        b.reviewStartDate !== undefined ||
+        b.reviewEndDate !== undefined;
       if (!hasHuyenReviewer) return false;
 
-      const start = dateKey(b.reviewStartDate);
-      if (!start) return false;
+      const rStart = dateKey(b.reviewStartDate);
+      const rEnd = dateKey(b.reviewEndDate);
+      const fCmt = dateKey(b.huyenFirstCommentAt);
+      const lCmt = dateKey(b.huyenLastCommentAt);
+      const conf = dateKey(b.confirmedDate);
 
-      return dateInRange(start, activePeriod?.startDate, activePeriod?.endDate);
+      return (
+        dateInRange(rStart, activePeriod?.startDate, activePeriod?.endDate) ||
+        dateInRange(rEnd, activePeriod?.startDate, activePeriod?.endDate) ||
+        dateInRange(fCmt, activePeriod?.startDate, activePeriod?.endDate) ||
+        dateInRange(lCmt, activePeriod?.startDate, activePeriod?.endDate) ||
+        dateInRange(conf, activePeriod?.startDate, activePeriod?.endDate)
+      );
     });
   }, [view.bugs, activePeriod]);
 

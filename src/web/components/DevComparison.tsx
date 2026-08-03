@@ -529,11 +529,22 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         bugList: any[];
       }>();
 
-      const allReportBugs = [...closedBugsList, ...resolvedBugsList];
+      // Deduplicate bugs between closedBugsList and resolvedBugsList by bugId
+      const uniqueBugsMap = new Map<string, any>();
+      resolvedBugsList.forEach(b => uniqueBugsMap.set(b.bugId, { ...b }));
+      closedBugsList.forEach(b => {
+        if (uniqueBugsMap.has(b.bugId)) {
+          const exist = uniqueBugsMap.get(b.bugId)!;
+          exist.isClosed = true;
+        } else {
+          uniqueBugsMap.set(b.bugId, { ...b, isClosed: true });
+        }
+      });
+
+      const allReportBugs = dev.role === "lead" ? [] : Array.from(uniqueBugsMap.values());
       allReportBugs.forEach(b => {
         const loc = b.location;
-        const isClosed = b.status !== "RESOLVED";
-        const isRes = b.status === "RESOLVED";
+        const isClosed = b.isClosed === true || (b.status !== "RESOLVED" && b.status !== "IN PROGRESS");
         const hasPr = b.hasPR;
 
         if (!locDetailsMap.has(loc)) {
@@ -549,8 +560,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const item = locDetailsMap.get(loc)!;
         if (isClosed) {
           if (hasPr) item.closedWithPr++; else item.closedNoPr++;
-        }
-        if (isRes) {
+        } else {
           if (hasPr) item.resolvedWithPr++; else item.resolvedNoPr++;
         }
         if (!item.bugList.some(exist => exist.bugId === b.bugId)) {

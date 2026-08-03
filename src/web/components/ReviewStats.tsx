@@ -481,21 +481,31 @@ export function ReviewStats({
     );
   }, [view.personnel, activePeriod]);
 
+  const isDevGithubAuthor = (devCode: string, prAuthor?: string) => {
+    if (!prAuthor) return false;
+    const a = prAuthor.toLowerCase();
+    if (devCode === "HuyDH") return a === "hoanghuy04" || a === "huydh-04" || a === "huydh";
+    if (devCode === "HoNX") return a === "xuanho1710" || a === "nguyenxuanho-02" || a === "honx" || a === "xuanho";
+    if (devCode === "HoangGV") return a === "mirindaq" || a === "hoanggiapviet" || a === "hoanggv" || a === "hoang.gv314" || a === "viet.hoang";
+    if (devCode === "HuyenTN") return a === "tranngochuyen1909" || a === "huyentn";
+    return false;
+  };
+
   // Helper to match a bug to a person
   const bugBelongsToPerson = (bug: BugRecord, person: Person) => {
     if (bug.pullRequestUrl && bug.prAuthor) {
       const prAuthorLower = bug.prAuthor.toLowerCase();
       if (
-        person.githubUsername &&
-        prAuthorLower === person.githubUsername.toLowerCase()
+        isDevGithubAuthor(person.code, prAuthorLower) ||
+        (person.githubUsername && prAuthorLower === person.githubUsername.toLowerCase())
       )
         return true;
       if (
         view.personnel.some(
           (p) =>
             p.code !== person.code &&
-            p.githubUsername &&
-            p.githubUsername.toLowerCase() === prAuthorLower,
+            (isDevGithubAuthor(p.code, prAuthorLower) ||
+              (p.githubUsername && p.githubUsername.toLowerCase() === prAuthorLower))
         )
       )
         return false;
@@ -528,9 +538,12 @@ export function ReviewStats({
 
   const isFixed = (b: BugRecord) => {
     const st = (b.status ?? "").toLowerCase();
+    if (st === "cancel" || st.includes("không lỗi") || st.includes("wontfix")) return false;
+    if (isNoRepro(b)) return false;
+    if (hasPR(b)) return true;
     const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
     return (
-      ([
+      [
         "closed",
         "deployed",
         "resolved",
@@ -541,11 +554,10 @@ export function ReviewStats({
         "change requested",
         "changes requested",
       ].includes(st) ||
-        st.includes("wait") ||
-        st.includes("ready") ||
-        st.includes("change") ||
-        ghLbls.length > 0) &&
-      !isNoRepro(b)
+      st.includes("wait") ||
+      st.includes("ready") ||
+      st.includes("change") ||
+      ghLbls.length > 0
     );
   };
 

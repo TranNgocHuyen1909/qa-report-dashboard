@@ -536,8 +536,8 @@ export function ManagerReport({
           if (!prAuthor) return false;
           const a = prAuthor.toLowerCase();
           if (devCode === "HuyDH") return a === "hoanghuy04" || a === "huydh-04" || a === "huydh";
-          if (devCode === "HoNX") return a === "nguyenxuanho-02" || a === "honx";
-          if (devCode === "HoangGV") return a === "hoanggiapviet" || a === "hoanggv";
+          if (devCode === "HoNX") return a === "xuanho1710" || a === "nguyenxuanho-02" || a === "honx" || a === "xuanho";
+          if (devCode === "HoangGV") return a === "mirindaq" || a === "hoanggiapviet" || a === "hoanggv" || a === "hoang.gv314" || a === "viet.hoang";
           if (devCode === "HuyenTN") return a === "tranngochuyen1909" || a === "huyentn";
           return false;
         };
@@ -566,7 +566,7 @@ export function ManagerReport({
 
         devBugs.forEach(b => {
           const st = (b.status ?? "").toLowerCase();
-          if (st !== "resolved" && st !== "closed" && st !== "deployed" && st !== "reviewed" && st !== "in review" && !st.includes("wait")) return;
+          if (st === "cancel" || st === "không lỗi" || st === "wontfix") return;
           if (isNoRepro(b)) return;
           const prUrl = getBugPrUrl(b);
           if (!prUrl) return;

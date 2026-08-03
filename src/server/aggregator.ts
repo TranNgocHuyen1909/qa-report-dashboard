@@ -72,8 +72,14 @@ function matchesPerson(person: Person, id: string | undefined): boolean {
 }
 
 function matchesGithub(person: Person, ghLogin: string | undefined): boolean {
-  if (!ghLogin || !person.githubUsername) return false;
-  return person.githubUsername.toLowerCase() === ghLogin.toLowerCase();
+  if (!ghLogin) return false;
+  const l = ghLogin.toLowerCase();
+  if (person.githubUsername && person.githubUsername.toLowerCase() === l) return true;
+  if (person.code === "HoangGV" && (l === "mirindaq" || l === "hoanggiapviet" || l === "hoanggv" || l === "hoang.gv314" || l === "viet.hoang")) return true;
+  if (person.code === "HuyDH" && (l === "hoanghuy04" || l === "huydh-04" || l === "huydh")) return true;
+  if (person.code === "HoNX" && (l === "xuanho1710" || l === "nguyenxuanho-02" || l === "honx" || l === "xuanho")) return true;
+  if (person.code === "HuyenTN" && (l === "tranngochuyen1909" || l === "huyentn")) return true;
+  return false;
 }
 
 function bugBelongsTo(bug: BugRecord, person: Person): boolean {

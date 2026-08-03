@@ -3,8 +3,12 @@ import type { BugRecord } from "../../shared/types";
 interface GHReview { author: string; state: string; submittedAt: string; }
 
 export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promise<BugRecord> {
-  if (!bug.pullRequestUrl) return { ...bug, ghReviewStatus: "No PR" as const, ghReviewCount: 0, ghReviews: [] };
-  const matches = Array.from(bug.pullRequestUrl.matchAll(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/gi));
+  const prUrl = bug.pullRequestUrl || (() => {
+    const match = (bug.note ?? "").match(/https:\/\/github\.com\/[^\s\)]+\/pull\/\d+/i);
+    return match ? match[0] : undefined;
+  })();
+  if (!prUrl) return { ...bug, ghReviewStatus: "No PR" as const, ghReviewCount: 0, ghReviews: [] };
+  const matches = Array.from(prUrl.matchAll(/github\.com\/([^/]+)\/([^/]+)\/pull\/(\d+)/gi));
   if (matches.length === 0) return { ...bug, ghReviewStatus: "No PR" as const, ghReviewCount: 0, ghReviews: [] };
   if (!token) return { ...bug, ghReviewStatus: "Error" as const, ghReviewCount: 0, ghReviews: [] };
 

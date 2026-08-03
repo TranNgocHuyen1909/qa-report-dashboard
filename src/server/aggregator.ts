@@ -51,17 +51,27 @@ function isNoRepro(b: BugRecord): boolean {
 function isClosed(b: BugRecord): boolean { return (b.status ?? "").toLowerCase() === "closed" && !isNoRepro(b); }
 function isDeployed(b: BugRecord): boolean { return (b.status ?? "").toLowerCase() === "deployed" && !isNoRepro(b); }
 function isResolved(b: BugRecord): boolean { return (b.status ?? "").toLowerCase() === "resolved" && !isNoRepro(b); }
-function isFixed(b: BugRecord): boolean { return isClosed(b) || isDeployed(b) || isResolved(b); }
 function isCompletedOrNoRepro(b: BugRecord): boolean {
   const s = (b.status ?? "").toLowerCase();
   return ["closed", "deployed", "resolved"].includes(s);
 }
 function isReopened(b: BugRecord): boolean { return (b.status ?? "").toLowerCase() === "reopened"; }
+
 function bugFixedDate(b: BugRecord): string | undefined {
-  if (b.pullRequestUrl && b.prCreatedAt) {
+  if (b.prCreatedAt) {
     return dateKey(b.prCreatedAt);
   }
-  return dateKey(b.lastEditedTime) ?? dateKey(b.confirmedDate);
+  return dateKey(b.confirmedDate) ?? dateKey(b.lastEditedTime);
+}
+
+function isFixed(b: BugRecord): boolean {
+  if (isCanceled(b)) return false;
+  const st = (b.status ?? "").toLowerCase();
+  if (st === "cancel" || st.includes("không lỗi") || st.includes("wontfix")) return false;
+  const note = (b.note ?? "").toLowerCase();
+  if (note.includes("không tái hiện") || note.includes("ko tái hiện")) return false;
+  if (b.pullRequestUrl || (b.note && b.note.includes("github.com"))) return true;
+  return isClosed(b) || isDeployed(b) || isResolved(b);
 }
 
 function matchesPerson(person: Person, id: string | undefined): boolean {

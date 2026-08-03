@@ -86,7 +86,34 @@ async function refreshBugs() {
     console.log("Fetching bugs from Notion...");
     const client = new NotionBugClient(config.notionToken, config.notionVersion, config.notionBugDataSourceId);
     let bugs = await client.listBugs();
-    console.log(`Fetched ${bugs.length} bugs. Saving to cache immediately...`);
+    console.log(`Fetched ${bugs.length} bugs. Merging cached GitHub fields...`);
+
+    const existingMap = new Map<string, BugRecord>();
+    cachedBugs.forEach(b => existingMap.set(b.id, b));
+    bugs = bugs.map(b => {
+      const prev = existingMap.get(b.id);
+      if (prev) {
+        return {
+          ...b,
+          pullRequestUrl: b.pullRequestUrl || prev.pullRequestUrl,
+          prAuthor: prev.prAuthor || b.prAuthor,
+          prCreatedAt: prev.prCreatedAt || b.prCreatedAt,
+          ghReviewStatus: prev.ghReviewStatus || b.ghReviewStatus,
+          ghReviewCount: prev.ghReviewCount ?? b.ghReviewCount,
+          ghReviews: prev.ghReviews || b.ghReviews,
+          ghCommitsCount: prev.ghCommitsCount ?? b.ghCommitsCount,
+          prCommentsByAuthor: prev.prCommentsByAuthor ?? b.prCommentsByAuthor,
+          prCommentsByTruong: prev.prCommentsByTruong ?? b.prCommentsByTruong,
+          prCommentsByHuyen: prev.prCommentsByHuyen ?? b.prCommentsByHuyen,
+          huyenFirstCommentAt: prev.huyenFirstCommentAt || b.huyenFirstCommentAt,
+          huyenLastCommentAt: prev.huyenLastCommentAt || b.huyenLastCommentAt,
+          huyenReviewRounds: prev.huyenReviewRounds ?? b.huyenReviewRounds,
+          ghLabels: prev.ghLabels || b.ghLabels,
+        };
+      }
+      return b;
+    });
+
     cachedBugs = bugs;
     saveCache(bugs);
 

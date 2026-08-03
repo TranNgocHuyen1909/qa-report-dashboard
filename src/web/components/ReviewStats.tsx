@@ -836,19 +836,20 @@ export function ReviewStats({
   }, [view.bugs, activePeriod]);
 
   // Quy tắc từ QC Lead:
-  // 1. Review có comment: Ngày bắt đầu !== Ngày kết thúc (start !== end) HOẶC có Ngày bắt đầu mà CHƯA CÓ Ngày kết thúc (start && !end)
-  // 2. Pass ngay (Review không comment): Có đủ cả 2 ngày và Ngày bắt đầu === Ngày kết thúc (start === end)
-  // 3. Re-review: Có Ngày bắt đầu review nhưng CHƯA CÓ Ngày kết thúc review (start && !end)
+  // 1. Review có comment: ngày bắt đầu review != ngày kết thúc review (cả 2 đều có giá trị nhưng khác) HOẶC không có ngày kết thúc
+  // 2. Re-review: những cái chưa có ngày kết thúc review
+  // 3. Pass ngay (Review không comment): Có đủ cả 2 ngày và Ngày bắt đầu === Ngày kết thúc (start === end)
   const isHuyenBugWithComment = (b: BugRecord) => {
+    const start = dateKey(b.reviewStartDate);
+    const end = dateKey(b.reviewEndDate);
+
+    if (start && end && start !== end) return true;
+    if (!end) return true;
+
     const huyenComments = b.prCommentsByHuyen ?? 0;
     const totalComments = (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0) + (b.prCommentsByAuthor ?? 0);
     const ghRevSt = (b.ghReviewStatus ?? "").toLowerCase();
     if (huyenComments > 0 || totalComments > 0 || !!b.huyenFirstCommentAt || !!b.huyenLastCommentAt || ghRevSt.includes("comment") || ghRevSt.includes("change")) return true;
-
-    const start = dateKey(b.reviewStartDate);
-    const end = dateKey(b.reviewEndDate);
-    if (start && end && start !== end) return true;
-    if (start && !end) return true;
 
     const st = (b.status ?? "").toLowerCase();
     const note = (b.note ?? "").toLowerCase();
@@ -859,6 +860,11 @@ export function ReviewStats({
   };
 
   const isHuyenBugReReview = (b: BugRecord) => {
+    const end = dateKey(b.reviewEndDate);
+
+    // Qúy tắc Re-review: Chưa có Ngày kết thúc review
+    if (!end) return true;
+
     const rounds = b.huyenReviewRounds ?? 1;
     const ghRevSt = (b.ghReviewStatus ?? "").toLowerCase();
     if (rounds > 1 || ghRevSt.includes("change")) return true;
@@ -866,14 +872,13 @@ export function ReviewStats({
     const st = (b.status ?? "").toLowerCase();
     if (st.includes("reopen") || st.includes("change")) return true;
 
-    const start = dateKey(b.reviewStartDate);
-    const end = dateKey(b.reviewEndDate);
-    if (start && !end) return true;
-
     return (b.prCommentsByHuyen ?? 0) > 1;
   };
 
   const isHuyenBugPassNgay = (b: BugRecord) => {
+    const start = dateKey(b.reviewStartDate);
+    const end = dateKey(b.reviewEndDate);
+    if (start && end && start === end && !isHuyenBugWithComment(b)) return true;
     return !isHuyenBugWithComment(b) && !isHuyenBugReReview(b);
   };
 

@@ -814,72 +814,45 @@ export function ReviewStats({
   };
 
   // ── HUYEN REVIEW TAB DATA ──
-  // Filter bugs reviewed by HuyenTN in active period
+  // Quy tắc từ QC Lead (User):
+  // 1. Tổng đã review: Notion có Reviewers là Huyền, có Ngày bắt đầu review (reviewStartDate) thuộc khoảng thời gian filter
+  // 2. Review có comment: Ngày bắt đầu review !== Ngày kết thúc review (start && end && start !== end, 2 ngày khác giá trị nhau)
+  // 3. Re-review: Ngày bắt đầu CÓ giá trị, nhưng Ngày kết thúc TRỐNG (empty) (start && !end)
+  // 4. Review không comment (Pass ngay): Ngày bắt đầu review === Ngày kết thúc review (start && end && start === end)
+
   const huyenReviewedBugs = useMemo(() => {
     return view.bugs.filter((b) => {
       if ((b.status ?? "").toLowerCase() === "cancel") return false;
+      const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
+      const hasHuyenReviewer =
+        (b.reviewerIds ?? []).includes(huyenNotionId) ||
+        (b.prCommentsByHuyen ?? 0) > 0 ||
+        b.reviewStartDate !== undefined;
+      if (!hasHuyenReviewer) return false;
+
       const start = dateKey(b.reviewStartDate);
-      const end = dateKey(b.reviewEndDate);
+      if (!start) return false;
 
-      // Nếu có cả 2 ngày ngày bắt đầu & kết thúc -> Đã review xong
-      if (start && end) {
-        return dateInRange(end, activePeriod?.startDate, activePeriod?.endDate) || dateInRange(start, activePeriod?.startDate, activePeriod?.endDate);
-      }
-      if (end) {
-        return dateInRange(end, activePeriod?.startDate, activePeriod?.endDate);
-      }
-
-      if (!isReviewedByHuyen(b)) return false;
-      const rDate = huyenReviewDate(b);
-      return dateInRange(rDate, activePeriod?.startDate, activePeriod?.endDate);
+      return dateInRange(start, activePeriod?.startDate, activePeriod?.endDate);
     });
   }, [view.bugs, activePeriod]);
 
-  // Quy tắc từ QC Lead:
-  // 1. Review có comment: ngày bắt đầu review != ngày kết thúc review (cả 2 đều có giá trị nhưng khác) HOẶC không có ngày kết thúc
-  // 2. Re-review: những cái chưa có ngày kết thúc review
-  // 3. Pass ngay (Review không comment): Có đủ cả 2 ngày và Ngày bắt đầu === Ngày kết thúc (start === end)
   const isHuyenBugWithComment = (b: BugRecord) => {
     const start = dateKey(b.reviewStartDate);
     const end = dateKey(b.reviewEndDate);
-
-    if (start && end && start !== end) return true;
-    if (!end) return true;
-
-    const huyenComments = b.prCommentsByHuyen ?? 0;
-    const totalComments = (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0) + (b.prCommentsByAuthor ?? 0);
-    const ghRevSt = (b.ghReviewStatus ?? "").toLowerCase();
-    if (huyenComments > 0 || totalComments > 0 || !!b.huyenFirstCommentAt || !!b.huyenLastCommentAt || ghRevSt.includes("comment") || ghRevSt.includes("change")) return true;
-
-    const st = (b.status ?? "").toLowerCase();
-    const note = (b.note ?? "").toLowerCase();
-    if (st.includes("reopen") || st.includes("change") || st.includes("wait")) return true;
-    if (note.includes("lỗi") || note.includes("sửa") || note.includes("thêm") || note.includes("cập nhật")) return true;
-
-    return false;
+    return Boolean(start && end && start !== end);
   };
 
   const isHuyenBugReReview = (b: BugRecord) => {
+    const start = dateKey(b.reviewStartDate);
     const end = dateKey(b.reviewEndDate);
-
-    // Qúy tắc Re-review: Chưa có Ngày kết thúc review
-    if (!end) return true;
-
-    const rounds = b.huyenReviewRounds ?? 1;
-    const ghRevSt = (b.ghReviewStatus ?? "").toLowerCase();
-    if (rounds > 1 || ghRevSt.includes("change")) return true;
-
-    const st = (b.status ?? "").toLowerCase();
-    if (st.includes("reopen") || st.includes("change")) return true;
-
-    return (b.prCommentsByHuyen ?? 0) > 1;
+    return Boolean(start && !end);
   };
 
   const isHuyenBugPassNgay = (b: BugRecord) => {
     const start = dateKey(b.reviewStartDate);
     const end = dateKey(b.reviewEndDate);
-    if (start && end && start === end && !isHuyenBugWithComment(b)) return true;
-    return !isHuyenBugWithComment(b) && !isHuyenBugReReview(b);
+    return Boolean(start && end && start === end);
   };
 
   const huyenReviewedWithComments = useMemo(() => {
@@ -2902,13 +2875,6 @@ export function ReviewStats({
                         extractAllPrUrls={extractAllPrUrls}
                         renderLabelBadge={renderLabelBadge}
                         renderResultBadge={(b) => {
-                          const stLower = (b.status ?? "").toLowerCase();
-                          const isClosedOrDeployed =
-                            stLower === "closed" ||
-                            stLower === "deployed" ||
-                            stLower.includes("close") ||
-                            stLower.includes("deploy");
-
                           if (isNoRepro(b)) {
                             return (
                               <span
@@ -2929,46 +2895,7 @@ export function ReviewStats({
                             );
                           }
 
-                          if (isClosedOrDeployed) {
-                            return (
-                              <span
-                                className="tag"
-                                style={{
-                                  background: "#dcfce7",
-                                  color: "#15803d",
-                                  border: "1px solid #86efac",
-                                  fontSize: "11px",
-                                  fontWeight: "700",
-                                  padding: "3px 8px",
-                                  borderRadius: "4px",
-                                }}
-                                title="Bug đã hoàn thành & closed/deployed"
-                              >
-                                Pass
-                              </span>
-                            );
-                          }
-
                           if (isHuyenBugWithComment(b)) {
-                            if (isDevRepliedBug(b)) {
-                              return (
-                                <span
-                                  className="tag"
-                                  style={{
-                                    background: "#e0f2fe",
-                                    color: "#0369a1",
-                                    border: "1px solid #7dd3fc",
-                                    fontSize: "11px",
-                                    fontWeight: "700",
-                                    padding: "3px 8px",
-                                    borderRadius: "4px",
-                                  }}
-                                  title="Dev đã comment trả lời dưới comment review"
-                                >
-                                  Dev đã phản hồi
-                                </span>
-                              );
-                            }
                             return (
                               <span
                                 className="tag"
@@ -2981,9 +2908,49 @@ export function ReviewStats({
                                   padding: "3px 8px",
                                   borderRadius: "4px",
                                 }}
-                                title="Huyền đã comment ra lỗi - Đang chờ Dev comment phản hồi"
+                                title="Huyền đã comment ra lỗi (Ngày bắt đầu !== Ngày kết thúc)"
                               >
-                                Chờ Dev phản hồi
+                                Review có comment
+                              </span>
+                            );
+                          }
+
+                          if (isHuyenBugReReview(b)) {
+                            return (
+                              <span
+                                className="tag"
+                                style={{
+                                  background: "#fef3c7",
+                                  color: "#92400e",
+                                  border: "1px solid #fde68a",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
+                                }}
+                                title="Đã bắt đầu review nhưng chưa có ngày kết thúc review"
+                              >
+                                Re-review
+                              </span>
+                            );
+                          }
+
+                          if (isHuyenBugPassNgay(b)) {
+                            return (
+                              <span
+                                className="tag"
+                                style={{
+                                  background: "#dcfce7",
+                                  color: "#15803d",
+                                  border: "1px solid #86efac",
+                                  fontSize: "11px",
+                                  fontWeight: "700",
+                                  padding: "3px 8px",
+                                  borderRadius: "4px",
+                                }}
+                                title="Ngày bắt đầu review === Ngày kết thúc review (Pass ngay)"
+                              >
+                                Pass
                               </span>
                             );
                           }

@@ -824,35 +824,51 @@ export function ReviewStats({
     return view.bugs.filter((b) => {
       if ((b.status ?? "").toLowerCase() === "cancel") return false;
       const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
+      const huyenComments = b.prCommentsByHuyen ?? 0;
       const hasHuyenReviewer =
         (b.reviewerIds ?? []).includes(huyenNotionId) ||
-        (b.prCommentsByHuyen ?? 0) > 0 ||
-        b.reviewStartDate !== undefined;
+        huyenComments > 0 ||
+        Boolean(b.huyenFirstCommentAt) ||
+        b.reviewStartDate !== undefined ||
+        b.reviewEndDate !== undefined;
       if (!hasHuyenReviewer) return false;
 
-      const start = dateKey(b.reviewStartDate);
-      if (!start) return false;
+      const rEnd = dateKey(b.reviewEndDate);
+      const rStart = dateKey(b.reviewStartDate);
+      const fCmt = dateKey(b.huyenFirstCommentAt);
+      const rDate = rEnd || rStart || fCmt || dateKey(b.lastEditedTime);
 
-      return dateInRange(start, activePeriod?.startDate, activePeriod?.endDate);
+      return dateInRange(rDate, activePeriod?.startDate, activePeriod?.endDate);
     });
   }, [view.bugs, activePeriod]);
 
   const isHuyenBugWithComment = (b: BugRecord) => {
     const start = dateKey(b.reviewStartDate);
     const end = dateKey(b.reviewEndDate);
-    return Boolean(start && end && start !== end);
+    const huyenComments = b.prCommentsByHuyen ?? 0;
+    const ghRevSt = (b.ghReviewStatus ?? "").toLowerCase();
+
+    if (start && end && start !== end) return true;
+    if (start && !end) return true;
+    if (huyenComments > 0 || Boolean(b.huyenFirstCommentAt) || ghRevSt.includes("change")) return true;
+
+    return false;
   };
 
   const isHuyenBugReReview = (b: BugRecord) => {
     const start = dateKey(b.reviewStartDate);
     const end = dateKey(b.reviewEndDate);
-    return Boolean(start && !end);
+    const huyenComments = b.prCommentsByHuyen ?? 0;
+    const ghRevSt = (b.ghReviewStatus ?? "").toLowerCase();
+
+    if (start && !end) return true;
+    if (huyenComments > 1 || (b.huyenReviewRounds ?? 1) > 1 || ghRevSt.includes("change")) return true;
+
+    return false;
   };
 
   const isHuyenBugPassNgay = (b: BugRecord) => {
-    const start = dateKey(b.reviewStartDate);
-    const end = dateKey(b.reviewEndDate);
-    return Boolean(start && end && start === end);
+    return !isHuyenBugWithComment(b);
   };
 
   const huyenReviewedWithComments = useMemo(() => {

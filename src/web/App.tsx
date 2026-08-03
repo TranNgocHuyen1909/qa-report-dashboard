@@ -225,7 +225,6 @@ export function App() {
             })}
           </select>
           <select className="ctrl" value={personCode ?? ""} onChange={e => setPersonCode(e.target.value || undefined)}>
-            <option value="">Tất cả thành viên</option>
             {view.personnel.map(p => <option key={p.code} value={p.code}>{p.displayName}</option>)}
           </select>
           <button className="ctrl" onClick={toggleTheme} title="Đổi giao diện Sáng / Tối">

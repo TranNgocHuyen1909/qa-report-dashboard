@@ -224,8 +224,8 @@ export function ManagerReport({
   const [explanations, setExplanations] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
 
-  // Selected Dev Filter for Chart ("all" for total team, or specific person code)
-  const [selectedDevFilter, setSelectedDevFilter] = useState<string>(personCode || "all");
+  // Selected Dev Filter for Chart (defaults to first dev HoangGV)
+  const [selectedDevFilter, setSelectedDevFilter] = useState<string>(personCode && personCode !== "all" ? personCode : "HoangGV");
 
   useEffect(() => {
     if (personCode && personCode !== "") {
@@ -874,11 +874,10 @@ export function ManagerReport({
             <span style={{ fontSize: "12px", color: "var(--text-2)", fontWeight: "bold" }}>Xem biểu đồ theo:</span>
             <select 
               className="ctrl"
-              value={selectedDevFilter} 
+              value={selectedDevFilter === "all" ? "HoangGV" : selectedDevFilter} 
               onChange={e => setSelectedDevFilter(e.target.value)}
               style={{ fontSize: "12px", fontWeight: "bold", padding: "6px 12px" }}
             >
-              <option value="all">Tất cả thành viên (Tổng Cả Team)</option>
               {view.personnel.filter(p => p.role !== "benchmark").map(p => (
                 <option key={p.code} value={p.code}>{p.displayName} ({p.code})</option>
               ))}

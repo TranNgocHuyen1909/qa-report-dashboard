@@ -586,12 +586,14 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       const getPrRealActivityDate = (b: BugRecord) => {
         const dates: string[] = [];
         if (b.prLastCommitAt) dates.push(dateKey(b.prLastCommitAt)!);
+        if (b.confirmedDate) dates.push(dateKey(b.confirmedDate)!);
         
-        // Only include reviews submitted by the PR author (the dev themselves)
+        // Include GitHub reviews submitted by Tech Lead (truongtc) or by PR author
         const prAuthor = (b.prAuthor || "").toLowerCase();
         if (b.ghReviews && Array.isArray(b.ghReviews)) {
           b.ghReviews.forEach((r: any) => {
-            if (r.submittedAt && (r.author || "").toLowerCase() === prAuthor) {
+            const rAuthor = (r.author || "").toLowerCase();
+            if (r.submittedAt && (rAuthor === "truongtc" || rAuthor === prAuthor)) {
               dates.push(dateKey(r.submittedAt)!);
             }
           });

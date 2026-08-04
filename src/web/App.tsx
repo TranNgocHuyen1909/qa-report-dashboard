@@ -12,8 +12,9 @@ import { ReviewStats } from "./components/ReviewStats";
 import { RoleView } from "./components/RoleView";
 import { BugWorkflowView } from "./components/BugWorkflowView";
 import { ReviewProtocolView } from "./components/ReviewProtocolView";
+import { RepeatedBugsAnalysisView } from "./components/RepeatedBugsAnalysisView";
 
-type MainTab = "report" | "roles" | "workflow" | "checklist" | "review" | "comparison" | "lessons";
+type MainTab = "report" | "roles" | "workflow" | "checklist" | "review" | "comparison" | "lessons" | "repeated";
 type ComparisonSubTab = "matrix" | "reviews" | "personal";
 type ChecklistSubTab = "master" | "process";
 
@@ -197,6 +198,7 @@ export function App() {
     { key: "review", label: "Review" },
     { key: "comparison", label: "Tiến Độ" },
     { key: "lessons", label: "Bài Học" },
+    { key: "repeated", label: "⚠️ Thống Kê Lỗi Lặp" },
   ];
 
   return (
@@ -284,6 +286,9 @@ export function App() {
 
         {/* TAB 6: PHÂN RÃ VAI TRÒ & TRÁCH NHIỆM */}
         {tab === "roles" && <RoleView />}
+
+        {/* TAB 8: THỐNG KÊ & PHÂN LOẠI LỖI LẶP THEO 9 BÀI HỌC KINH NGHIỆM */}
+        {tab === "repeated" && <RepeatedBugsAnalysisView view={view} activePeriodKey={periodKey} />}
       </main>
     </div>
   );

@@ -590,12 +590,24 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const isCreatedEarlier = !!createdDate && createdDate < activePeriod.startDate;
         if (!isCreatedEarlier) return false;
 
-        // Strict Dev Commit check: MUST have prLastCommitAt from GitHub in active period and commits > 1
         const commitsCount = b.ghCommitsCount ?? 1;
         if (commitsCount <= 1) return false;
 
         const devCommitDate = dateKey(b.prLastCommitAt);
-        return !!devCommitDate && dateInRange(devCommitDate, activePeriod.startDate, activePeriod.endDate);
+        if (devCommitDate) {
+          return dateInRange(devCommitDate, activePeriod.startDate, activePeriod.endDate);
+        }
+
+        const lastEditedDate = dateKey(b.lastEditedTime);
+        if (!lastEditedDate || !dateInRange(lastEditedDate, activePeriod.startDate, activePeriod.endDate)) return false;
+
+        // Exclude pure QC review finish events where author did not commit or comment in period
+        const reviewEndDate = dateKey(b.reviewEndDate);
+        if (reviewEndDate && reviewEndDate === lastEditedDate && (b.prCommentsByAuthor ?? 0) === 0) {
+          return false;
+        }
+
+        return true;
       }).map(b => ({
         bugId: b.bugId || b.id,
         title: b.title,

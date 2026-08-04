@@ -613,6 +613,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         title: b.title,
         url: b.url,
         prUrl: b.pullRequestUrl || (b.note && b.note.includes("github.com") ? b.note : undefined),
+        status: (b.status ?? "RESOLVED").toUpperCase(),
+        location: getPrimaryLocation(b.location),
         commitsCount: b.ghCommitsCount ?? 1,
         commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
         date: dateKey(b.prLastCommitAt) || dateKey(b.lastEditedTime) || dateKey(b.prCreatedAt) || "—",

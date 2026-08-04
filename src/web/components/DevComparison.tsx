@@ -1483,15 +1483,15 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       {/* PR Tasks & Comments Detail Modal */}
       {selectedPrBugs && (
         <div className="modal-overlay" onClick={() => { setSelectedPrBugs(null); setSelectedDevCode(""); }}>
-          <div className="modal" style={{ width: "850px", padding: "24px", borderRadius: "6px", background: "var(--surface)", border: "1px solid var(--border-2)" }} onClick={e => e.stopPropagation()}>
+          <div className="modal" style={{ width: "1050px", maxWidth: "95vw", padding: "24px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border-2)" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-              <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "var(--text-1)" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "var(--text-1)" }}>
                 Chi tiết Task có PR trong kỳ {activePeriod?.label} ({selectedDevCode})
               </h3>
               <button
                 type="button"
                 className="ctrl"
-                style={{ padding: "4px 12px", fontSize: "12px" }}
+                style={{ padding: "4px 12px", fontSize: "12px", cursor: "pointer" }}
                 onClick={() => { setSelectedPrBugs(null); setSelectedDevCode(""); }}
               >
                 Đóng
@@ -1501,32 +1501,38 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
             {/* Highlight Banner if there are duplicate child bugs resolved via PR */}
             {selectedPrBugs.some(b => b.isChild) && (
               <div style={{
-                background: "var(--blue-bg)",
-                border: "1px solid var(--blue)",
-                borderRadius: "4px",
+                background: "rgba(168, 85, 247, 0.08)",
+                border: "1px solid rgba(168, 85, 247, 0.3)",
+                borderRadius: "6px",
                 padding: "10px 14px",
                 marginBottom: "14px",
                 fontSize: "12px",
-                color: "var(--blue)",
-                fontWeight: "500"
+                color: "var(--purple)",
+                fontWeight: "500",
+                display: "flex",
+                alignItems: "center",
+                gap: "8px"
               }}>
-                <strong>Thành quả xử lý Root Cause:</strong> 1 PR merged đã giải quyết triệt để vấn đề cốt lõi, kéo theo <strong>{selectedPrBugs.filter(b => b.isChild).length} bug trùng lặp (cùng case)</strong> tự động được nghiệm thu & Closed!
+                <span style={{ fontSize: "15px" }}>💡</span>
+                <span>
+                  <strong>Thành quả xử lý Root Cause:</strong> 1 PR merged đã giải quyết triệt để vấn đề cốt lõi, kéo theo <strong>{selectedPrBugs.filter(b => b.isChild).length} bug trùng lặp (cùng case)</strong> tự động được nghiệm thu & Closed!
+                </span>
               </div>
             )}
 
-            <div style={{ maxHeight: "380px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "4px", background: "var(--surface)" }}>
+            <div style={{ maxHeight: "460px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--surface)" }}>
               {selectedPrBugs.length === 0 ? (
-                <div style={{ padding: "16px", color: "var(--text-3)", textAlign: "center" }}>Không có task nào.</div>
+                <div style={{ padding: "20px", color: "var(--text-3)", textAlign: "center" }}>Không có task nào.</div>
               ) : (
-                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "13px" }}>
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", tableLayout: "fixed" }}>
                   <thead>
-                    <tr style={{ background: "var(--surface-2)", borderBottom: "1px solid var(--border-2)", color: "var(--text-1)", fontWeight: "700", fontSize: "11px" }}>
-                      <th style={{ padding: "10px 12px", textAlign: "left" }}>BUG ID</th>
-                      <th style={{ padding: "10px 12px", textAlign: "left" }}>VỊ TRÍ LỖI</th>
-                      <th style={{ padding: "10px 12px", textAlign: "center" }}>TRẠNG THÁI</th>
-                      <th style={{ padding: "10px 12px", textAlign: "center" }}>TRẠNG THÁI PR & CLUSTER</th>
-                      <th style={{ padding: "10px 12px", textAlign: "left" }}>TIÊU ĐỀ LỖI</th>
-                      <th style={{ padding: "10px 12px", textAlign: "right" }}>NGÀY TÍNH</th>
+                    <tr style={{ background: "var(--surface-2)", borderBottom: "2px solid var(--border-2)", color: "var(--text-1)", fontWeight: "700", fontSize: "11px" }}>
+                      <th style={{ padding: "10px 12px", textAlign: "left", width: "15%" }}>BUG ID</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", width: "12%" }}>VỊ TRÍ LỖI</th>
+                      <th style={{ padding: "10px 12px", textAlign: "center", width: "12%" }}>TRẠNG THÁI</th>
+                      <th style={{ padding: "10px 12px", textAlign: "center", width: "23%" }}>TRẠNG THÁI PR & CLUSTER</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", width: "28%" }}>TIÊU ĐỀ LỖI</th>
+                      <th style={{ padding: "10px 12px", textAlign: "right", width: "10%" }}>NGÀY TÍNH</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1551,12 +1557,13 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                             key={idx}
                             style={{
                               borderBottom: "1px solid var(--border-3)",
-                              background: isChild ? "rgba(168, 85, 247, 0.04)" : "var(--surface)"
+                              background: isChild ? "rgba(168, 85, 247, 0.03)" : "var(--surface)",
+                              borderLeft: isChild ? "3px solid var(--purple)" : "3px solid transparent"
                             }}
                           >
-                            <td style={{ padding: "10px 12px", fontWeight: "700", whiteSpace: "nowrap", paddingLeft: isChild ? "28px" : "12px" }}>
+                            <td style={{ padding: "10px 12px", fontWeight: "700", whiteSpace: "nowrap", paddingLeft: isChild ? "20px" : "12px" }}>
                               {isChild ? (
-                                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "5px" }}>
                                   <span style={{ color: "var(--purple)", fontWeight: "bold" }}>↳</span>
                                   {b.url ? (
                                     <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--purple)", fontWeight: "700", textDecoration: "underline" }}>
@@ -1583,7 +1590,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                   fontWeight: 600,
                                   background: isChild ? "rgba(168, 85, 247, 0.08)" : "var(--surface-2)",
                                   color: isChild ? "var(--purple)" : "var(--text-1)",
-                                  border: isChild ? "1px solid rgba(168, 85, 247, 0.3)" : "1px solid var(--border-2)",
+                                  border: isChild ? "1px solid rgba(168, 85, 247, 0.25)" : "1px solid var(--border-2)",
                                 }}
                               >
                                 {b.location || "Chưa phân loại"}
@@ -1620,9 +1627,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                     borderRadius: "4px",
                                     fontSize: "11px",
                                     fontWeight: 600,
-                                    background: "rgba(168, 85, 247, 0.1)",
+                                    background: "rgba(168, 85, 247, 0.08)",
                                     color: "var(--purple)",
-                                    border: "1px solid rgba(168, 85, 247, 0.3)",
+                                    border: "1px solid rgba(168, 85, 247, 0.25)",
                                     display: "inline-flex",
                                     alignItems: "center",
                                     gap: "4px",
@@ -1681,7 +1688,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                             <td style={{ padding: "10px 12px", color: isChild ? "var(--text-2)" : "var(--text-1)" }}>
                               {isChild ? (
                                 <span>
-                                  <span style={{ color: "var(--purple)", fontWeight: 600, marginRight: "4px" }}>↳ Cùng Root Cause:</span>
+                                  <span style={{ color: "var(--purple)", fontWeight: "600", marginRight: "4px" }}>↳ Trùng case:</span>
                                   {b.title.replace(/ \(Task trùng lặp của \[.*\]\)/, "")}
                                 </span>
                               ) : (

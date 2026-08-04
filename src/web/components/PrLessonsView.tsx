@@ -258,13 +258,6 @@ export function PrLessonsView({ view, onUpdate }: { view: DashboardView; onUpdat
       lesson: "Mỗi câu một intent, có nhãn ('Ví dụ:'), cắt token thừa; sửa ở COT_HINTS/yaml, không đụng COLUMN_PROMPTS finetune."
     },
     {
-      code: "L8", star: false, highlighted: false,
-      title: "Ẩu quy trình — hygiene & convention",
-      desc: 'Comment "giải trình chỉnh sửa AI" thừa; thiếu mã ticket BSVA trong fixture; báo "đã test" chung chung không kèm ảnh.',
-      prs: ["https://github.com/truongtc/lisa-ai-agent/pull/142", "https://github.com/truongtc/tool-100/pull/18", "https://github.com/truongtc/tool-100/pull/19", "https://github.com/truongtc/tool-100/pull/22", "https://github.com/truongtc/tool-100/pull/23"],
-      lesson: "Gắn ticket; hiểu vì sao code tồn tại rồi mới bỏ (Chesterton's fence); 'đã test' phải kèm ảnh/output."
-    },
-    {
       code: "L9", star: false, highlighted: false,
       title: "An toàn input & vận hành",
       desc: 'Search ghép f"%{q}%" vào ILIKE → "50%" khớp mọi thứ (wildcard injection); migration CREATE EXTENSION cần superuser, dễ nổ trên prod least-privilege.',

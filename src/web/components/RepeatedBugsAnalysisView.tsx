@@ -14,7 +14,6 @@ export const MASTER_LESSONS = [
     category: "Tầng Kiến Trúc & Logic Base",
     desc: 'Sửa prompt AI cho bug nhưng lỗi thật ở tool extract sai. PR vá prompt khi chưa kiểm tra docs/tool nào được load ra.',
     lesson: "Trace đúng tầng trước khi sửa: tool → group-rule → COLUMN_PROMPTS → COT_HINTS → docs → prompt. Nhớ nguyên tắc 'Tool > AI'.",
-    keywords: ["sai tầng", "vá triệu chứng", "prompt AI", "tool extract", "wrong layer"],
     prs: ["https://github.com/truongtc/lisa-ai-agent/pull/171", "https://github.com/truongtc/lisa-ai-agent/pull/154", "https://github.com/truongtc/lisa-ai-agent/pull/148", "https://github.com/truongtc/lisa-ai-agent/pull/165"],
     color: "#ef4444"
   },
@@ -24,7 +23,6 @@ export const MASTER_LESSONS = [
     category: "Chất Lượng Test Case",
     desc: 'Assert nguyên văn string nằm trong prompt (đổi wording là vỡ); test backend chỉ so chuỗi SQL; eval equals hạ lowercase làm lọt lỗi.',
     lesson: "Test phải fail khi nghiệp vụ sai, không phải khi câu chữ đổi. Cần đúng casing thì dùng contains/regex phù hợp.",
-    keywords: ["xanh giả", "fake pass", "equals", "lowercase", "casing"],
     prs: ["https://github.com/truongtc/lisa-ai-agent/pull/150", "https://github.com/truongtc/lisa-ai-agent/pull/146", "https://github.com/truongtc/lisa-ai-agent/pull/160", "https://github.com/truongtc/lisa-ai-agent/pull/126", "https://github.com/truongtc/lisa-visa-web-backend/pull/32"],
     color: "#f59e0b"
   },
@@ -34,7 +32,6 @@ export const MASTER_LESSONS = [
     category: "Độ Phủ Test Case",
     desc: 'Fix đúng case bug gốc mà không cover các nhánh liên quan (happy path + absent case + các biến thể cùng nhóm).',
     lesson: "Sửa 1 nhánh → cover cả nhánh: happy + absent (kèm present-mirror) + biến thể, không chỉ mỗi câu bug gốc.",
-    keywords: ["thiếu test", "chỉ vá", "absent", "cover", "missing test"],
     prs: ["https://github.com/truongtc/lisa-ai-agent/pull/146", "https://github.com/truongtc/lisa-ai-agent/pull/160", "https://github.com/truongtc/lisa-ai-agent/pull/166"],
     color: "#3b82f6"
   },
@@ -44,7 +41,6 @@ export const MASTER_LESSONS = [
     category: "Xử Lý Regex & Boundary",
     desc: 'Guard chặn regex quá rộng làm xoá oan dữ liệu thật của người dùng hoặc bắt nhầm các câu hỏi khác intent.',
     lesson: "Denylist hẹp — chặn đúng cái sai đã kiểm chứng, mặc định tin model; thiết kế theo intent, đừng hứa hẹn bao phủ 'mọi câu'.",
-    keywords: ["guard", "regex", "allowlist", "xoá oan", "chặn rộng"],
     prs: ["https://github.com/truongtc/lisa-ai-agent/pull/162", "https://github.com/truongtc/tool-100/pull/17"],
     color: "#10b981"
   },
@@ -54,7 +50,6 @@ export const MASTER_LESSONS = [
     category: "Nghiệp Vụ Nguồn Chuẩn",
     desc: 'Hiểu sai phạm vi scope nghiệp vụ (ví dụ: gán sai scope nước đích Schengen với nước khác), dẫn tới viết expected test bị sai.',
     lesson: "Bám nguồn chuẩn (COLUMN_PROMPTS 'for destination country', tool-100 nhận destinations) trước khi viết expected.",
-    keywords: ["hiểu sai", "nghiệp vụ", "scope", "định nghĩa", "field definition"],
     prs: ["https://github.com/truongtc/lisa-ai-agent/pull/162"],
     color: "#8b5cf6"
   },
@@ -64,7 +59,6 @@ export const MASTER_LESSONS = [
     category: "Đồng Bộ Pattern Codebase",
     desc: 'Fix mapping ở 1 quốc gia / module nhưng quên đồng bộ ở các nước hoặc module khác có cùng cấu trúc pattern.',
     lesson: "Fix hệ thống — Grep toàn project quét hết vị trí cùng pattern, ghi rõ 'đã rà soát X, Y, Z' vào PR.",
-    keywords: ["sót", "pattern", "cùng pattern", "chưa đồng bộ", "copy-paste"],
     prs: ["https://github.com/truongtc/lisa-ai-agent/pull/143"],
     color: "#ec4899"
   },
@@ -74,19 +68,8 @@ export const MASTER_LESSONS = [
     category: "Tối Ưu Prompt AI",
     desc: 'Prompt thiếu nhãn ví dụ rõ ràng hoặc quá dài dòng làm model hiểu nhầm hoặc bị trôi thông tin quan trọng.',
     lesson: "Mỗi câu một intent, có nhãn ('Ví dụ:'), cắt token thừa; sửa ở COT_HINTS/yaml, không đụng COLUMN_PROMPTS finetune.",
-    keywords: ["prompt", "mơ hồ", "dài dòng", "token thừa", "vague prompt"],
     prs: ["https://github.com/truongtc/lisa-ai-agent/pull/126", "https://github.com/truongtc/lisa-ai-agent/pull/122", "https://github.com/truongtc/lisa-ai-agent/pull/166", "https://github.com/truongtc/lisa-ai-agent/pull/137"],
     color: "#06b6d4"
-  },
-  {
-    code: "L8",
-    title: "Ẩu quy trình — hygiene & convention",
-    category: "Quy Trình & Chuyện Nghiệp",
-    desc: 'Comment thừa, thiếu mã ticket BSVA trong commit/PR/fixture, hoặc báo "đã test" chung chung không đính kèm minh chứng.',
-    lesson: "Gắn ticket BSVA; hiểu vì sao code tồn tại rồi mới bỏ; câu 'đã test' bắt buộc phải kèm ảnh/output log.",
-    keywords: ["ẩu quy trình", "hygiene", "convention", "thiếu ticket", "không ảnh"],
-    prs: ["https://github.com/truongtc/lisa-ai-agent/pull/142", "https://github.com/truongtc/tool-100/pull/18", "https://github.com/truongtc/tool-100/pull/19", "https://github.com/truongtc/tool-100/pull/22", "https://github.com/truongtc/tool-100/pull/23"],
-    color: "#f97316"
   },
   {
     code: "L9",
@@ -94,7 +77,6 @@ export const MASTER_LESSONS = [
     category: "Bảo Mật & Vận Hành Prod",
     desc: 'Thiếu sanitize input khi query SQL (ILIKE wildcard injection) hoặc migration yêu cầu quyền cao gây nổ trên prod.',
     lesson: "Escape input ILIKE (% _ \\) + khai báo ESCAPE; tách thao tác superuser khỏi migration app, note runbook.",
-    keywords: ["sanitize", "ilike", "wildcard injection", "an toàn", "permission"],
     prs: ["https://github.com/truongtc/lisa-visa-web-backend/pull/32"],
     color: "#6366f1"
   }
@@ -165,7 +147,7 @@ export function RepeatedBugsAnalysisView({ view, activePeriodKey, onLockTab }: R
       // Match against 9 Master Lessons & Checklist
       const matchedLessonsSet = new Set<(typeof MASTER_LESSONS)[0]>();
 
-      // 1. Direct PR link matching against Master Lesson PRs
+      // 1. Direct PR link matching against Master Lesson PRs & view.checklist
       if (prUrl) {
         MASTER_LESSONS.forEach(les => {
           if (les.prs.some(p => prUrl.toLowerCase().includes(p.toLowerCase()))) {
@@ -173,7 +155,6 @@ export function RepeatedBugsAnalysisView({ view, activePeriodKey, onLockTab }: R
           }
         });
 
-        // 2. Direct PR link matching against view.checklist
         view.checklist.forEach(chk => {
           if (chk.prs.some(p => prUrl.toLowerCase().includes(p.toLowerCase()))) {
             const foundLes = MASTER_LESSONS.find(m => m.code === chk.code || chk.code.includes(m.code));
@@ -182,10 +163,10 @@ export function RepeatedBugsAnalysisView({ view, activePeriodKey, onLockTab }: R
         });
       }
 
-      // 3. Keyword / Title pattern matching
-      const fullText = `${b.title} ${b.note ?? ''} ${b.solution ?? ''}`.toLowerCase();
+      // 2. Explicit lesson code matching in title/note (e.g. [L1], [L2], [LH-01])
+      const titleNote = `${b.title} ${b.note ?? ''}`.toUpperCase();
       MASTER_LESSONS.forEach(les => {
-        if (les.keywords.some(kw => fullText.includes(kw))) {
+        if (titleNote.includes(`[${les.code}]`) || titleNote.includes(`LH-0${les.code.slice(1)}`)) {
           matchedLessonsSet.add(les);
         }
       });

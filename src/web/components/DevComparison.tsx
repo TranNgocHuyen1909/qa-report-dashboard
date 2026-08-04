@@ -88,12 +88,14 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
   const [selectedReopenedBugs, setSelectedReopenedBugs] = useState<any[] | null>(null);
   const [selectedPrBugs, setSelectedPrBugs] = useState<any[] | null>(null);
+  const [selectedRepeatedBugs, setSelectedRepeatedBugs] = useState<{ devName: string; list: any[] } | null>(null);
   const [selectedReviewsList, setSelectedReviewsList] = useState<any[] | null>(null);
   const [selectedDuplicateGroup, setSelectedDuplicateGroup] = useState<{
     totalCount: number;
     groups: Array<{ parentBugId: string; parentTitle: string; childTasks: any[] }>;
   } | null>(null);
   const [selectedDevCode, setSelectedDevCode] = useState<string>("");
+  const [showOnlyMultiReviewers, setShowOnlyMultiReviewers] = useState<boolean>(false);
 
   const [manDaysOverrides, setManDaysOverrides] = useState<Record<string, number>>({});
   const [savingMd, setSavingMd] = useState(false);
@@ -177,6 +179,41 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     const note = b.note ?? "";
     const match = note.match(/https:\/\/github\.com\/[^\s\)]+\/pull\/\d+/i);
     return match ? match[0] : undefined;
+  };
+
+  const getBugReviewersSummary = (b: any) => {
+    const reviewers: { author: string; label: string; state?: string; color: string }[] = [];
+    const revAuthors = new Set<string>();
+
+    if (b.ghReviews && Array.isArray(b.ghReviews)) {
+      b.ghReviews.forEach((r: any) => {
+        const a = (r.author || "").toLowerCase();
+        if (a && !revAuthors.has(a)) {
+          revAuthors.add(a);
+          let label = r.author;
+          let color = "var(--blue)";
+          if (a === "truongtc") { label = "Anh Trường (TechLead)"; color = "var(--purple)"; }
+          else if (a === "tranngochuyen1909" || a === "huyentn") { label = "Huyền (QC)"; color = "var(--green)"; }
+          else if (a === "dract" || a === "duynv") { label = "dract (Duy)"; color = "var(--cyan)"; }
+          reviewers.push({ author: r.author, label, state: r.state, color });
+        }
+      });
+    }
+
+    if ((b.commentsCount ?? 0) > 0 || (b.prCommentsByHuyen ?? 0) > 0) {
+      if (!revAuthors.has("tranngochuyen1909") && !revAuthors.has("huyentn")) {
+        revAuthors.add("tranngochuyen1909");
+        reviewers.push({ author: "tranngochuyen1909", label: "Huyền (QC)", state: "Commented", color: "var(--green)" });
+      }
+    }
+    if ((b.prCommentsByTruong ?? 0) > 0) {
+      if (!revAuthors.has("truongtc")) {
+        revAuthors.add("truongtc");
+        reviewers.push({ author: "truongtc", label: "Anh Trường (TechLead)", state: "Commented", color: "var(--purple)" });
+      }
+    }
+
+    return reviewers;
   };
 
   const isNoRepro = (b: BugRecord) => {
@@ -272,10 +309,24 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const totalComments = solvedWithPr.reduce((sum, b) => sum + (b.prCommentsByTruong ?? 0), 0);
         const commentsPerTask = solvedWithPr.length > 0 ? totalComments / solvedWithPr.length : 0;
 
-        const repeatedBugs = solvedWithPr.filter(b => {
+        const repeatedBugs = solvedWithPr.filter((b: any) => {
           return view.checklist.some(item =>
             item.prs.some(pr => b.pullRequestUrl?.toLowerCase().includes(pr.toLowerCase()))
           );
+        });
+
+        const repeatedBugsList = repeatedBugs.map((b: any) => {
+          const matched = view.checklist.filter(item =>
+            item.prs.some(pr => b.pullRequestUrl?.toLowerCase().includes(pr.toLowerCase()))
+          );
+          return {
+            bugId: b.bugId || b.id,
+            title: b.title,
+            url: b.url,
+            prUrl: b.pullRequestUrl,
+            location: getPrimaryLocation(b.location),
+            matchedLessons: matched.map(m => `[${m.code}] ${m.title}`)
+          };
         });
 
         const repeatedCodesMap = new Map<string, string>();
@@ -304,6 +355,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
           commentsPerTask,
           repeatedCount: repeatedBugs.length,
           repeatedDetails,
+          repeatedBugsList,
         });
       });
     });
@@ -325,7 +377,6 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
       const noRepro = devRows.reduce((sum, r) => sum + r.noRepro, 0);
       const reopenedCount = devRows.reduce((sum, r) => sum + r.reopenedCount, 0);
-      const repeatedCount = devRows.reduce((sum, r) => sum + r.repeatedCount, 0);
 
       const reopenedList: any[] = [];
       devRows.forEach(r => {
@@ -334,13 +385,24 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         }
       });
 
-      const repeatedMap = new Map<string, string>();
+      const repeatedBugsMap = new Map<string, any>();
+      devRows.forEach(r => {
+        if (r.repeatedBugsList) {
+          r.repeatedBugsList.forEach((item: any) => {
+            repeatedBugsMap.set(item.bugId, item);
+          });
+        }
+      });
+      const repeatedBugsList = Array.from(repeatedBugsMap.values());
+      const repeatedCount = repeatedBugsList.length;
+
+      const repeatedCodesMap = new Map<string, string>();
       devRows.forEach(r => {
         r.repeatedDetails.forEach((d: any) => {
-          repeatedMap.set(d.code, d.title);
+          repeatedCodesMap.set(d.code, d.title);
         });
       });
-      const repeatedDetails = Array.from(repeatedMap.entries()).map(([code, title]) => ({ code, title }));
+      const repeatedDetails = Array.from(repeatedCodesMap.entries()).map(([code, title]) => ({ code, title }));
 
       // Calculate comments per task directly from the developer's bugs in the period
       const devBugs = view.bugs.filter(b => bugBelongsToDev(b, dev) && (b.status ?? "").toLowerCase() !== "cancel");
@@ -961,6 +1023,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         commentsPerTask,
         repeatedCount,
         repeatedDetails,
+        repeatedBugsList,
         prevCommentsPerTask,
         prBugsList,
         hasPrevData: !!prevPMetric,
@@ -1228,6 +1291,28 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <div style={{ color: "var(--text-3)", fontSize: "11px", fontWeight: "normal", marginTop: 2 }}>
                         ({row.dev.code})
                       </div>
+                      {row.repeatedCount > 0 && (
+                        <div
+                          style={{
+                            marginTop: "4px",
+                            fontSize: "10.5px",
+                            color: "var(--yellow)",
+                            fontWeight: "600",
+                            cursor: "pointer",
+                            display: "inline-flex",
+                            alignItems: "center",
+                            gap: "3px",
+                            padding: "2px 6px",
+                            borderRadius: "4px",
+                            background: "rgba(234, 179, 8, 0.1)",
+                            border: "1px solid rgba(234, 179, 8, 0.3)"
+                          }}
+                          title="Bấm để xem danh sách chi tiết các Bug Lặp bài học kinh nghiệm"
+                          onClick={() => setSelectedRepeatedBugs({ devName: row.dev.displayName, list: row.repeatedBugsList })}
+                        >
+                          ⚠️ {row.repeatedCount} lỗi lặp checklist 🔍
+                        </div>
+                      )}
                       {(() => {
                         const exp = activePeriod && view.conclusions?.[activePeriod.key]?.explanations?.[row.dev.code];
                         if (exp) {
@@ -1540,6 +1625,26 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               </button>
             </div>
 
+            {/* Quick Filter Toggle for Multi-Reviewers */}
+            <div style={{ display: "flex", gap: "8px", alignItems: "center", marginBottom: "14px", flexWrap: "wrap" }}>
+              <button
+                type="button"
+                className={`ctrl ${!showOnlyMultiReviewers ? "ctrl-primary" : ""}`}
+                onClick={() => setShowOnlyMultiReviewers(false)}
+                style={{ fontSize: "11px", padding: "4px 12px", borderRadius: "4px" }}
+              >
+                Tất cả Task ({selectedPrBugs.length})
+              </button>
+              <button
+                type="button"
+                className={`ctrl ${showOnlyMultiReviewers ? "ctrl-primary" : ""}`}
+                onClick={() => setShowOnlyMultiReviewers(true)}
+                style={{ fontSize: "11px", padding: "4px 12px", borderRadius: "4px", display: "flex", alignItems: "center", gap: "5px" }}
+              >
+                <span>👥</span> PR Có Nhiều Reviewer (Huyền, dract, truongtc) ({selectedPrBugs.filter(b => getBugReviewersSummary(b).length >= 2).length})
+              </button>
+            </div>
+
             {/* Highlight Banner if there are duplicate child bugs resolved via PR */}
             {selectedPrBugs.some(b => b.isChild) && (
               <div style={{
@@ -1572,19 +1677,33 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <th style={{ padding: "10px 12px", textAlign: "left", width: "15%" }}>BUG ID</th>
                       <th style={{ padding: "10px 12px", textAlign: "left", width: "12%" }}>VỊ TRÍ LỖI</th>
                       <th style={{ padding: "10px 12px", textAlign: "center", width: "12%" }}>TRẠNG THÁI</th>
-                      <th style={{ padding: "10px 12px", textAlign: "center", width: "23%" }}>TRẠNG THÁI PR & CLUSTER</th>
+                      <th style={{ padding: "10px 12px", textAlign: "center", width: "23%" }}>TRẠNG THÁI PR & REVIEWERS</th>
                       <th style={{ padding: "10px 12px", textAlign: "left", width: "28%" }}>TIÊU ĐỀ LỖI</th>
                       <th style={{ padding: "10px 12px", textAlign: "right", width: "10%" }}>NGÀY TÍNH</th>
                     </tr>
                   </thead>
                   <tbody>
                     {(() => {
-                      const roots = selectedPrBugs.filter(b => !b.isChild);
-                      const childrenOrphans = selectedPrBugs.filter(b => b.isChild && !roots.some(r => (r.bugId || r.id) === b.parentBugId));
+                      const activeBugsList = showOnlyMultiReviewers
+                        ? selectedPrBugs.filter(b => getBugReviewersSummary(b).length >= 2)
+                        : selectedPrBugs;
+
+                      if (activeBugsList.length === 0) {
+                        return (
+                          <tr>
+                            <td colSpan={6} style={{ padding: "20px", textAlign: "center", color: "var(--text-3)" }}>
+                              Không tìm thấy PR nào thỏa mãn bộ lọc nhiều Reviewer.
+                            </td>
+                          </tr>
+                        );
+                      }
+
+                      const roots = activeBugsList.filter(b => !b.isChild);
+                      const childrenOrphans = activeBugsList.filter(b => b.isChild && !roots.some(r => (r.bugId || r.id) === b.parentBugId));
                       const ordered: any[] = [];
                       roots.forEach(root => {
                         ordered.push(root);
-                        const children = selectedPrBugs.filter(b => b.isChild && b.parentBugId === (root.bugId || root.id));
+                        const children = activeBugsList.filter(b => b.isChild && b.parentBugId === (root.bugId || root.id));
                         children.forEach(child => ordered.push(child));
                       });
                       childrenOrphans.forEach(child => ordered.push(child));
@@ -1593,6 +1712,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         const isClosed = (b.status ?? "").toLowerCase().includes("close") || (b.status ?? "").toLowerCase().includes("deploy");
                         const isRes = (b.status ?? "").toLowerCase().includes("resolve");
                         const isChild = Boolean(b.isChild);
+                        const revs = getBugReviewersSummary(b);
 
                         return (
                           <tr
@@ -1661,7 +1781,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                 {b.status || (isClosed ? "CLOSED" : isRes ? "RESOLVED" : "DONE")}
                               </span>
                             </td>
-                            <td style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "10px 12px", textAlign: "center" }}>
                               {isChild ? (
                                 <span
                                   style={{
@@ -1679,70 +1799,94 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                 >
                                   ↳ Ăn theo PR {b.parentBugId || "Gốc"}
                                 </span>
-                              ) : (() => {
-                                const badges = extractPrBadges(b.prUrl);
-                                if (badges.length > 0) {
-                                  return (
-                                    <div style={{ display: "inline-flex", gap: "6px", flexWrap: "wrap", justifyContent: "center" }}>
-                                      {badges.map((pr, pIdx) => (
-                                        <a
-                                          key={pIdx}
-                                          href={pr.url}
-                                          target="_blank"
-                                          rel="noreferrer"
+                              ) : (
+                                <div>
+                                  {(() => {
+                                    const badges = extractPrBadges(b.prUrl);
+                                    if (badges.length > 0) {
+                                      return (
+                                        <div style={{ display: "inline-flex", gap: "6px", flexWrap: "wrap", justifyContent: "center" }}>
+                                          {badges.map((pr, pIdx) => (
+                                            <a
+                                              key={pIdx}
+                                              href={pr.url}
+                                              target="_blank"
+                                              rel="noreferrer"
+                                              style={{
+                                                padding: "3px 8px",
+                                                borderRadius: "4px",
+                                                fontSize: "11px",
+                                                fontWeight: 700,
+                                                background: "var(--blue-bg)",
+                                                color: "var(--blue)",
+                                                border: "1px solid var(--blue)",
+                                                textDecoration: "none",
+                                                display: "inline-flex",
+                                                alignItems: "center",
+                                                gap: "4px",
+                                              }}
+                                            >
+                                              {pr.label}
+                                            </a>
+                                          ))}
+                                        </div>
+                                      );
+                                    }
+                                    if (!b.hasPR || b.isDocsNoPr) {
+                                      return (
+                                        <span
                                           style={{
                                             padding: "3px 8px",
                                             borderRadius: "4px",
                                             fontSize: "11px",
-                                            fontWeight: 700,
-                                            background: "var(--blue-bg)",
-                                            color: "var(--blue)",
-                                            border: "1px solid var(--blue)",
-                                            textDecoration: "none",
-                                            display: "inline-flex",
-                                            alignItems: "center",
-                                            gap: "4px",
+                                            fontWeight: 600,
+                                            background: "rgba(2, 132, 199, 0.12)",
+                                            color: "#0284c7",
+                                            border: "1px solid #0284c7",
                                           }}
                                         >
-                                          {pr.label}
-                                        </a>
+                                          📄 TASK DOCS / TEST (KHÔNG PR)
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <span
+                                        style={{
+                                          padding: "3px 8px",
+                                          borderRadius: "4px",
+                                          fontSize: "11px",
+                                          fontWeight: 600,
+                                          background: "rgba(217, 119, 6, 0.12)",
+                                          color: "var(--yellow)",
+                                          border: "1px solid var(--yellow)",
+                                        }}
+                                      >
+                                        KHÔNG CÓ PR
+                                      </span>
+                                    );
+                                  })()}
+                                  {revs.length > 0 && (
+                                    <div style={{ marginTop: "4px", display: "flex", gap: "4px", flexWrap: "wrap", justifyContent: "center" }}>
+                                      {revs.map((r, rIdx) => (
+                                        <span
+                                          key={rIdx}
+                                          style={{
+                                            padding: "1.5px 6px",
+                                            borderRadius: "3px",
+                                            fontSize: "10px",
+                                            fontWeight: 600,
+                                            background: "var(--surface-2)",
+                                            color: r.color,
+                                            border: `1px solid ${r.color}`,
+                                          }}
+                                        >
+                                          💬 {r.label}
+                                        </span>
                                       ))}
                                     </div>
-                                  );
-                                }
-                                if (!b.hasPR || b.isDocsNoPr) {
-                                  return (
-                                    <span
-                                      style={{
-                                        padding: "3px 8px",
-                                        borderRadius: "4px",
-                                        fontSize: "11px",
-                                        fontWeight: 600,
-                                        background: "rgba(2, 132, 199, 0.12)",
-                                        color: "#0284c7",
-                                        border: "1px solid #0284c7",
-                                      }}
-                                    >
-                                      📄 TASK DOCS / TEST (KHÔNG PR)
-                                    </span>
-                                  );
-                                }
-                                return (
-                                  <span
-                                    style={{
-                                      padding: "3px 8px",
-                                      borderRadius: "4px",
-                                      fontSize: "11px",
-                                      fontWeight: 600,
-                                      background: "rgba(217, 119, 6, 0.12)",
-                                      color: "var(--yellow)",
-                                      border: "1px solid var(--yellow)",
-                                    }}
-                                  >
-                                    KHÔNG CÓ PR
-                                  </span>
-                                );
-                              })()}
+                                  )}
+                                </div>
+                              )}
                             </td>
                             <td style={{ padding: "10px 12px", color: isChild ? "var(--text-2)" : "var(--text-1)" }}>
                               {isChild ? (
@@ -1767,6 +1911,82 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
             </div>
             <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--text-2)", textAlign: "right" }}>
               * Mật độ comment trung bình = Tổng comments / Tổng số task có PR trong kỳ.
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Repeated Bugs (Checklist) Detail Modal */}
+      {selectedRepeatedBugs && (
+        <div className="modal-overlay" onClick={() => setSelectedRepeatedBugs(null)}>
+          <div className="modal" style={{ width: "850px", maxWidth: "95vw", padding: "24px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border-2)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "var(--yellow)", display: "flex", alignItems: "center", gap: "8px" }}>
+                <span>⚠️</span> Danh sách Bug Lặp Bài Học Kinh Nghiệm ({selectedRepeatedBugs.devName})
+              </h3>
+              <button
+                type="button"
+                className="ctrl"
+                style={{ padding: "4px 12px", fontSize: "12px", cursor: "pointer" }}
+                onClick={() => setSelectedRepeatedBugs(null)}
+              >
+                Đóng
+              </button>
+            </div>
+
+            <div style={{ background: "rgba(234, 179, 8, 0.08)", border: "1px solid rgba(234, 179, 8, 0.3)", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", fontSize: "12px", color: "var(--yellow)" }}>
+              <strong>Chú ý:</strong> Đây là các task có PR trùng khớp với quy tắc kiểm tra trong <strong>Checklist Bài Học Kinh Nghiệm</strong>. Dev cần nghiêm túc tự rà soát checklist trước khi tạo PR.
+            </div>
+
+            <div style={{ maxHeight: "420px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--surface)" }}>
+              {selectedRepeatedBugs.list.length === 0 ? (
+                <div style={{ padding: "20px", color: "var(--text-3)", textAlign: "center" }}>Không có bug lặp nào.</div>
+              ) : (
+                <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", tableLayout: "fixed" }}>
+                  <thead>
+                    <tr style={{ background: "var(--surface-2)", borderBottom: "2px solid var(--border-2)", color: "var(--text-1)", fontWeight: "700", fontSize: "11px" }}>
+                      <th style={{ padding: "10px 12px", textAlign: "left", width: "15%" }}>BUG ID</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", width: "20%" }}>MÃ BÀI HỌC CHECKLIST</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", width: "40%" }}>TIÊU ĐỀ LỖI</th>
+                      <th style={{ padding: "10px 12px", textAlign: "center", width: "25%" }}>LINK PR GITHUB</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {selectedRepeatedBugs.list.map((b, idx) => (
+                      <tr key={idx} style={{ borderBottom: "1px solid var(--border-3)" }}>
+                        <td style={{ padding: "10px 12px", fontWeight: "700" }}>
+                          {b.url ? (
+                            <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", textDecoration: "underline" }}>
+                              {b.bugId}
+                            </a>
+                          ) : b.bugId}
+                        </td>
+                        <td style={{ padding: "10px 12px" }}>
+                          {b.matchedLessons && b.matchedLessons.length > 0 ? (
+                            <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                              {b.matchedLessons.map((les: string, lIdx: number) => (
+                                <span key={lIdx} style={{ padding: "2px 6px", borderRadius: "4px", fontSize: "10.5px", fontWeight: "bold", background: "rgba(234, 179, 8, 0.12)", color: "var(--yellow)", border: "1px solid rgba(234, 179, 8, 0.3)" }}>
+                                  {les}
+                                </span>
+                              ))}
+                            </div>
+                          ) : (
+                            <span style={{ color: "var(--text-3)" }}>—</span>
+                          )}
+                        </td>
+                        <td style={{ padding: "10px 12px", color: "var(--text-1)" }}>{b.title}</td>
+                        <td style={{ padding: "10px 12px", textAlign: "center" }}>
+                          {b.prUrl ? (
+                            <a href={b.prUrl} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: "bold", textDecoration: "underline" }}>
+                              PR GitHub ↗
+                            </a>
+                          ) : "—"}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
             </div>
           </div>
         </div>

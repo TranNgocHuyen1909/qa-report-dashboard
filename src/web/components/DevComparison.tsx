@@ -618,11 +618,22 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
       const activeMetric = view.teamMetrics.find(m => m.period.key === activePeriod.key);
       const pMetric = activeMetric?.byPerson.find(p => p.personCode === dev.code);
+      const isAllPeriods = activePeriod?.key === "all";
 
-      // Use local overrides if defined, otherwise fallback to the backend metric's value (default 5 MD)
-      const manDays = manDaysOverrides[dev.code] !== undefined
-        ? manDaysOverrides[dev.code]
-        : (pMetric && pMetric.manDays > 0 ? pMetric.manDays : 5);
+      // Use local overrides if defined, otherwise sum all periods if "all", or fallback to metric value
+      let manDays = 5;
+      if (isAllPeriods) {
+        let totalMd = 0;
+        view.teamMetrics.forEach(m => {
+          const pm = m.byPerson.find(p => p.personCode === dev.code);
+          totalMd += (pm && pm.manDays > 0 ? pm.manDays : 5);
+        });
+        manDays = totalMd > 0 ? totalMd : (view.teamMetrics.length * 5);
+      } else {
+        manDays = manDaysOverrides[dev.code] !== undefined
+          ? manDaysOverrides[dev.code]
+          : (pMetric && pMetric.manDays > 0 ? pMetric.manDays : 5);
+      }
 
       const getPrRealActivityDate = (b: BugRecord) => {
         const dates: string[] = [];
@@ -649,7 +660,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         if (!b.pullRequestUrl && !(b.note ?? "").includes("github.com")) return;
 
         const createdDate = dateKey(b.prCreatedAt) ?? dateKey(b.createdTime);
-        const isCreatedEarlier = !!createdDate && createdDate < activePeriod.startDate;
+        const isCreatedEarlier = isAllPeriods ? true : (!!createdDate && createdDate < activePeriod.startDate);
         if (!isCreatedEarlier) return;
 
         const commitsCount = b.ghCommitsCount ?? 1;

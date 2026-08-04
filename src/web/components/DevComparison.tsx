@@ -104,7 +104,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       const bad = currentConclusion?.bad || "";
       const risks = currentConclusion?.risks || "";
       const dataToSave = overrideData || manDaysOverrides;
-      
+
       await saveConclusion(activePeriod.key, good, bad, risks, dataToSave);
       if (onUpdate) {
         await onUpdate();
@@ -192,7 +192,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     developers.forEach(dev => {
       // Find all bugs belonging to this developer in this period
       const devBugs = view.bugs.filter(b => bugBelongsToDev(b, dev));
-      
+
       // Get all unique locations for this developer's bugs in this period (assigned or fixed)
       const locations = new Set<string>();
       devBugs.forEach(b => {
@@ -212,11 +212,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
           return locs.includes(loc);
         });
 
-        const assignedBugs = locBugs.filter(b => 
+        const assignedBugs = locBugs.filter(b =>
           dateInRange(dateKey(b.detectedDate) ?? dateKey(b.createdTime), activePeriod.startDate, activePeriod.endDate)
         );
 
-        const completedBugs = locBugs.filter(b => 
+        const completedBugs = locBugs.filter(b =>
           isFixed(b) && dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
         );
 
@@ -224,14 +224,14 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const closed = completedBugs.filter(b => ["closed", "deployed"].includes((b.status ?? "").toLowerCase()));
         const resolved = completedBugs.filter(b => (b.status ?? "").toLowerCase() === "resolved");
 
-        const noRepro = locBugs.filter(b => 
-          isNoRepro(b) && 
+        const noRepro = locBugs.filter(b =>
+          isNoRepro(b) &&
           dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
         ).length;
 
         const solvedWithPr = completedBugs.filter(b => !!b.pullRequestUrl);
 
-        const reopenedBugsList = locBugs.filter(b => 
+        const reopenedBugsList = locBugs.filter(b =>
           ((b.status ?? "").toLowerCase() === "reopened" || b.reopenedDate) &&
           dateInRange(dateKey(b.reopenedDate) ?? dateKey(b.confirmedDate) ?? dateKey(b.createdTime), activePeriod.startDate, activePeriod.endDate)
         );
@@ -241,14 +241,14 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const commentsPerTask = solvedWithPr.length > 0 ? totalComments / solvedWithPr.length : 0;
 
         const repeatedBugs = solvedWithPr.filter(b => {
-          return view.checklist.some(item => 
+          return view.checklist.some(item =>
             item.prs.some(pr => b.pullRequestUrl?.toLowerCase().includes(pr.toLowerCase()))
           );
         });
 
         const repeatedCodesMap = new Map<string, string>();
         repeatedBugs.forEach(b => {
-          const matched = view.checklist.filter(item => 
+          const matched = view.checklist.filter(item =>
             item.prs.some(pr => b.pullRequestUrl?.toLowerCase().includes(pr.toLowerCase()))
           );
           matched.forEach(m => {
@@ -290,18 +290,18 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
     return developers.map(dev => {
       const devRows = devStats.filter(r => r.dev.code === dev.code);
-      
+
       const noRepro = devRows.reduce((sum, r) => sum + r.noRepro, 0);
       const reopenedCount = devRows.reduce((sum, r) => sum + r.reopenedCount, 0);
       const repeatedCount = devRows.reduce((sum, r) => sum + r.repeatedCount, 0);
-      
+
       const reopenedList: any[] = [];
       devRows.forEach(r => {
         if (r.reopenedList) {
           reopenedList.push(...r.reopenedList);
         }
       });
-      
+
       const repeatedMap = new Map<string, string>();
       devRows.forEach(r => {
         r.repeatedDetails.forEach((d: any) => {
@@ -574,10 +574,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const idxB = order.indexOf(b.location);
         return (idxA !== -1 ? idxA : 99) - (idxB !== -1 ? idxB : 99);
       });
-      
+
       const activeMetric = view.teamMetrics.find(m => m.period.key === activePeriod.key);
       const pMetric = activeMetric?.byPerson.find(p => p.personCode === dev.code);
-      
+
       // Use local overrides if defined, otherwise fallback to the backend metric's value (default 5 MD)
       const manDays = manDaysOverrides[dev.code] !== undefined
         ? manDaysOverrides[dev.code]
@@ -590,18 +590,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const isCreatedEarlier = !!createdDate && createdDate < activePeriod.startDate;
         if (!isCreatedEarlier) return false;
 
-        const datesInPeriod = [
-          dateKey(b.prLastCommitAt),
-          dateKey(b.huyenLastCommentAt),
-          dateKey(b.huyenFirstCommentAt),
-          dateKey(b.reviewStartDate),
-          dateKey(b.reviewEndDate),
-          dateKey(b.lastEditedTime),
-          dateKey(b.confirmedDate),
-        ];
+        // Strict Dev Commit check: Must have > 1 commits from Dev AND dev commit/update date in active period
+        const commitsCount = b.ghCommitsCount ?? 1;
+        if (commitsCount <= 1) return false;
 
-        const hasActivityInPeriod = datesInPeriod.some(d => d && dateInRange(d, activePeriod.startDate, activePeriod.endDate));
-        return hasActivityInPeriod;
+        const devCommitDate = dateKey(b.prLastCommitAt) || dateKey(b.lastEditedTime);
+        return !!devCommitDate && dateInRange(devCommitDate, activePeriod.startDate, activePeriod.endDate);
       }).map(b => ({
         bugId: b.bugId || b.id,
         title: b.title,
@@ -609,7 +603,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         prUrl: b.pullRequestUrl || (b.note && b.note.includes("github.com") ? b.note : undefined),
         commitsCount: b.ghCommitsCount ?? 1,
         commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
-        date: dateKey(b.prLastCommitAt) || dateKey(b.huyenLastCommentAt) || bugFixedDate(b) || dateKey(b.prCreatedAt) || "—",
+        date: dateKey(b.prLastCommitAt) || dateKey(b.lastEditedTime) || dateKey(b.prCreatedAt) || "—",
         prCreatedAt: dateKey(b.prCreatedAt) || "—",
       }));
       const reCommitCount = reCommitBugsList.length;
@@ -738,7 +732,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
       }));
 
-      const pendingReviewBugsList = solvedWithPrBugs.filter(b => 
+      const pendingReviewBugsList = solvedWithPrBugs.filter(b =>
         !isReviewedByHuyen(b) && !isReviewedByTruong(b) && (b.status ?? "").toLowerCase() === "resolved"
       ).map(b => ({
         bugId: b.bugId || b.id,
@@ -749,8 +743,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
       }));
 
-      const reopenRate = (closedCount + resolvedCount) > 0 
-        ? (reopenedCount / (closedCount + resolvedCount)) * 100 
+      const reopenRate = (closedCount + resolvedCount) > 0
+        ? (reopenedCount / (closedCount + resolvedCount)) * 100
         : 0;
 
       const locParts = locationDetailsList.map(r => `${r.location} (${r.closedWithPr + r.closedNoPr + r.resolvedWithPr + r.resolvedNoPr})`);
@@ -778,10 +772,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
             const reviewDate = dateKey(b.huyenLastCommentAt) || dateKey(b.lastEditedTime) || b.confirmedDate || dateKey(b.prCreatedAt);
             if (reviewDate && dateInRange(reviewDate, activePeriod.startDate, activePeriod.endDate)) {
               reviewsCount++;
-              
+
               // Find who fixed this bug
               const fixerDev = developers.find(d => bugBelongsToDev(b, d));
-              
+
               reviewedBugsList.push({
                 bugId: b.bugId || b.id,
                 title: b.title,
@@ -862,7 +856,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     const benchmarkAvg = may ? Number(may.avgBugsPerDay) : 2.1;
     return developers.map(dev => {
       const pMetric = activeMetric.byPerson.find(p => p.personCode === dev.code);
-      
+
       // Use local overrides if defined, otherwise fallback to the backend metric's value
       const finalMD = manDaysOverrides[dev.code] !== undefined
         ? manDaysOverrides[dev.code]
@@ -871,7 +865,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       const fixedCount = devStats.filter(r => r.dev.code === dev.code).reduce((sum, r) => sum + r.closedCount + r.resolvedCount, 0);
       const bugsPerDay = finalMD > 0 ? fixedCount / finalMD : 0;
       const pct = benchmarkAvg > 0 ? (bugsPerDay / benchmarkAvg) * 100 : 0;
-      
+
       const devRows = devStats.filter(r => r.dev.code === dev.code && r.location !== "—");
       const locBreakdownText = devRows.map(r => `${r.location} (${r.closedCount + r.resolvedCount} bug)`).join(", ") || "chưa phân loại";
 
@@ -880,8 +874,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
       // Calculate comments per task directly for this period
       const devBugs = view.bugs.filter(b => bugBelongsToDev(b, dev) && (b.status ?? "").toLowerCase() !== "cancel");
-      const completedBugs = devBugs.filter(b => 
-        isFixed(b) && 
+      const completedBugs = devBugs.filter(b =>
+        isFixed(b) &&
         dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
       );
       const solvedWithPrBugs = completedBugs.filter(b => !!b.pullRequestUrl);
@@ -926,11 +920,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     if (!activePeriod) return null;
     const activeMetric = view.teamMetrics.find(m => m.period.key === activePeriod.key);
     if (!activeMetric) return <div style={{ color: "var(--text-3)" }}>Chưa có đủ số liệu tổng hợp cho kỳ này.</div>;
-    
+
     const abnormalNotes: React.ReactNode[] = [];
     const leaderNotes: React.ReactNode[] = [];
     const coordinationNotes: React.ReactNode[] = [];
-    
+
     // Check abnormals for each developer
     devPerformance.forEach(d => {
       if (d.reopened > 0) {
@@ -974,7 +968,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     // proposed resource coordination actions
     const lowPerfDevs = devPerformance.filter(d => d.bugsPerDay < 0.8 && d.code !== "HuyenTN").map(d => d.code);
     const highPerfDevs = devPerformance.filter(d => d.bugsPerDay >= 2.0 && d.code !== "HuyenTN").map(d => d.code);
-    
+
     if (lowPerfDevs.length > 0) {
       coordinationNotes.push(
         <span key="coord-low">👉 <strong>Điều phối hỗ trợ:</strong> Cần trao đổi làm rõ rào cản kỹ thuật hoặc <strong>giảm tải bớt task / lùi deadline / thay đổi độ ưu tiên</strong> cho <strong>{lowPerfDevs.join(", ")}</strong> do năng suất sửa lỗi dưới mốc kỳ vọng (&lt; 0.8 bug/ngày).</span>
@@ -985,7 +979,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         <span key="coord-high">👉 <strong>Phân bổ tài nguyên tối ưu:</strong> Tận dụng và giao thêm các task phức tạp/độ khó cao hơn cho <strong>{highPerfDevs.join(", ")}</strong> do năng suất sửa lỗi đạt mức vượt trội (&gt;= 2.0 bug/ngày).</span>
       );
     }
-    
+
     const highReopenDevs = devPerformance.filter(d => d.reopened > 0).map(d => d.code);
     if (highReopenDevs.length > 0) {
       coordinationNotes.push(
@@ -995,7 +989,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
     return (
       <div style={{ display: "flex", flexDirection: "column", gap: "16px", fontSize: "13px", lineHeight: "1.6" }}>
-        
+
 
 
         {/* Row 2: Điểm bất thường (Abnormalities) */}
@@ -1053,9 +1047,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
           </p>
         </div>
         {hasMdChanges && (
-          <button 
-            type="button" 
-            className="ctrl ctrl-primary" 
+          <button
+            type="button"
+            className="ctrl ctrl-primary"
             style={{ display: "flex", alignItems: "center", gap: "6px", height: "36px", padding: "0 16px" }}
             onClick={() => handleSaveMd()}
             disabled={savingMd}
@@ -1087,17 +1081,17 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                 const groupBg = devIdx % 2 === 1 ? "rgba(99, 102, 241, 0.015)" : "transparent";
 
                 return (
-                  <tr 
-                    key={row.dev.code} 
-                    style={{ 
+                  <tr
+                    key={row.dev.code}
+                    style={{
                       background: groupBg,
-                      borderBottom: "1px solid var(--border-2)" 
+                      borderBottom: "1px solid var(--border-2)"
                     }}
                   >
-                    <td 
-                      style={{ 
-                        textAlign: "left", 
-                        verticalAlign: "middle", 
+                    <td
+                      style={{
+                        textAlign: "left",
+                        verticalAlign: "middle",
                         fontWeight: "bold",
                         padding: "8px 6px"
                       }}
@@ -1118,12 +1112,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         return null;
                       })()}
                     </td>
-                    <td 
-                      className="td-num" 
-                      style={{ 
-                        padding: "8px 10px", 
+                    <td
+                      className="td-num"
+                      style={{
+                        padding: "8px 10px",
                         textAlign: "center",
-                        fontSize: "12px", 
+                        fontSize: "12px",
                         color: row.closedCount > 0 ? "var(--green)" : "var(--text-3)",
                         cursor: row.closedCount > 0 ? "pointer" : "default",
                         textDecoration: row.closedCount > 0 ? "underline dashed" : "none"
@@ -1144,12 +1138,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         {row.closedBugsWithPr}
                       </div>
                     </td>
-                    <td 
-                      className="td-num" 
-                      style={{ 
-                        padding: "8px 10px", 
+                    <td
+                      className="td-num"
+                      style={{
+                        padding: "8px 10px",
                         textAlign: "center",
-                        fontSize: "12px", 
+                        fontSize: "12px",
                         color: row.duplicateChildCount > 0 ? "var(--purple)" : "var(--text-3)",
                         cursor: row.duplicateChildCount > 0 ? "pointer" : "default",
                       }}
@@ -1170,12 +1164,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         {row.duplicateChildCount > 0 ? `${row.duplicateChildCount}` : "0"}
                       </div>
                     </td>
-                    <td 
-                      className="td-num" 
-                      style={{ 
-                        padding: "8px 10px", 
+                    <td
+                      className="td-num"
+                      style={{
+                        padding: "8px 10px",
                         textAlign: "center",
-                        fontSize: "12px", 
+                        fontSize: "12px",
                         color: row.resolvedCount > 0 ? "var(--blue)" : "var(--text-3)",
                         cursor: row.resolvedCount > 0 ? "pointer" : "default",
                         textDecoration: row.resolvedCount > 0 ? "underline dashed" : "none"
@@ -1196,12 +1190,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         {row.resolvedBugsWithPr}
                       </div>
                     </td>
-                    <td 
-                      className="td-num" 
-                      style={{ 
-                        padding: "8px 10px", 
+                    <td
+                      className="td-num"
+                      style={{
+                        padding: "8px 10px",
                         textAlign: "center",
-                        fontSize: "12px", 
+                        fontSize: "12px",
                         color: row.reCommitCount > 0 ? "var(--cyan)" : "var(--text-3)",
                         cursor: row.reCommitCount > 0 ? "pointer" : "default",
                         textDecoration: row.reCommitCount > 0 ? "underline dashed" : "none"
@@ -1222,13 +1216,13 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         {row.reCommitCount}
                       </div>
                     </td>
-                    <td 
-                      className="td-num" 
-                      style={{ 
+                    <td
+                      className="td-num"
+                      style={{
                         padding: "8px 6px",
                         textAlign: "center",
                         fontSize: "12px",
-                        color: row.reopenedCount > 0 ? "var(--red)" : "var(--text-2)", 
+                        color: row.reopenedCount > 0 ? "var(--red)" : "var(--text-2)",
                         cursor: row.reopenedCount > 0 ? "pointer" : "default",
                         textDecoration: row.reopenedCount > 0 ? "underline dashed" : "none"
                       }}
@@ -1239,19 +1233,19 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     </td>
 
                     <td className="td-num" style={{ verticalAlign: "middle", textAlign: "center", padding: "8px 6px" }}>
-                      <input 
-                        type="number" 
-                        step="0.5" 
-                        min="0" 
+                      <input
+                        type="number"
+                        step="0.5"
+                        min="0"
                         max="31"
                         title="Bấm để nhập lại ngày công (MD), tự động lưu khi nhấn Enter hoặc click ra ngoài"
-                        style={{ 
-                          width: "52px", 
-                          textAlign: "center", 
-                          padding: "3px 4px", 
-                          fontSize: "12px", 
+                        style={{
+                          width: "52px",
+                          textAlign: "center",
+                          padding: "3px 4px",
+                          fontSize: "12px",
                           fontWeight: "bold",
-                          border: "1px solid var(--border-2)", 
+                          border: "1px solid var(--border-2)",
                           borderRadius: "4px",
                           background: "var(--surface-2)",
                           color: "var(--text-1)",
@@ -1298,7 +1292,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                 <span>{row.dev.displayName} ({row.dev.code})</span>
                 <span style={{ fontSize: "11px", color: "var(--text-3)", fontWeight: "normal" }}>Ngày công: {row.manDays} MD</span>
               </div>
-              
+
               {row.locationDetailsList.length === 0 ? (
                 <div style={{ fontSize: "12px", color: "var(--text-3)", fontStyle: "italic", padding: "8px 0" }}>Không có bug nào được sửa trong kỳ này.</div>
               ) : (
@@ -1357,16 +1351,16 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <span>🚨</span> Danh sách Bug bị Reopen trong kỳ
               </h3>
-              <button 
-                type="button" 
-                className="ctrl" 
-                style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "4px" }} 
+              <button
+                type="button"
+                className="ctrl"
+                style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "4px" }}
                 onClick={() => setSelectedReopenedBugs(null)}
               >
                 Đóng
               </button>
             </div>
-            
+
             <div style={{ maxHeight: "350px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--bg-2)" }}>
               {selectedReopenedBugs.length === 0 ? (
                 <div style={{ padding: "16px", color: "var(--text-3)", textAlign: "center" }}>Không có bug nào.</div>
@@ -1409,25 +1403,25 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               <h3 style={{ margin: 0, fontSize: "15px", fontWeight: "700", color: "var(--text-1)" }}>
                 Chi tiết Task có PR trong kỳ {activePeriod?.label} ({selectedDevCode})
               </h3>
-              <button 
-                type="button" 
-                className="ctrl" 
-                style={{ padding: "4px 12px", fontSize: "12px" }} 
+              <button
+                type="button"
+                className="ctrl"
+                style={{ padding: "4px 12px", fontSize: "12px" }}
                 onClick={() => { setSelectedPrBugs(null); setSelectedDevCode(""); }}
               >
                 Đóng
               </button>
             </div>
-            
+
             {/* Highlight Banner if there are duplicate child bugs resolved via PR */}
             {selectedPrBugs.some(b => b.isChild) && (
-              <div style={{ 
-                background: "var(--blue-bg)", 
-                border: "1px solid var(--blue)", 
-                borderRadius: "4px", 
-                padding: "10px 14px", 
-                marginBottom: "14px", 
-                fontSize: "12px", 
+              <div style={{
+                background: "var(--blue-bg)",
+                border: "1px solid var(--blue)",
+                borderRadius: "4px",
+                padding: "10px 14px",
+                marginBottom: "14px",
+                fontSize: "12px",
                 color: "var(--blue)",
                 fontWeight: "500"
               }}>
@@ -1457,11 +1451,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       const isChild = Boolean(b.isChild);
 
                       return (
-                        <tr 
-                          key={idx} 
-                          style={{ 
-                            borderBottom: "1px solid var(--border-3)", 
-                            background: isChild ? "var(--surface-2)" : "var(--surface)" 
+                        <tr
+                          key={idx}
+                          style={{
+                            borderBottom: "1px solid var(--border-3)",
+                            background: isChild ? "var(--surface-2)" : "var(--surface)"
                           }}
                         >
                           <td style={{ padding: "10px 12px", fontWeight: "700", whiteSpace: "nowrap" }}>
@@ -1498,14 +1492,14 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                 background: isClosed
                                   ? "rgba(22, 163, 74, 0.12)"
                                   : isRes
-                                  ? "var(--blue-bg)"
-                                  : "var(--surface-2)",
+                                    ? "var(--blue-bg)"
+                                    : "var(--surface-2)",
                                 color: isClosed ? "var(--green)" : isRes ? "var(--blue)" : "var(--text-2)",
                                 border: isClosed
                                   ? "1px solid var(--green)"
                                   : isRes
-                                  ? "1px solid var(--blue)"
-                                  : "1px solid var(--border-2)",
+                                    ? "1px solid var(--blue)"
+                                    : "1px solid var(--border-2)",
                               }}
                             >
                               {b.status || (isClosed ? "CLOSED" : isRes ? "RESOLVED" : "DONE")}
@@ -1598,16 +1592,16 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <span>🔍</span> Chi tiết PR đã Review bởi {selectedDevCode}
               </h3>
-              <button 
-                type="button" 
-                className="ctrl" 
-                style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "4px" }} 
+              <button
+                type="button"
+                className="ctrl"
+                style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "4px" }}
                 onClick={() => { setSelectedReviewsList(null); setSelectedDevCode(""); }}
               >
                 Đóng
               </button>
             </div>
-            
+
             <div style={{ maxHeight: "350px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--bg-2)" }}>
               {selectedReviewsList.length === 0 ? (
                 <div style={{ padding: "16px", color: "var(--text-3)", textAlign: "center" }}>Không có PR nào được review.</div>
@@ -1651,9 +1645,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                           )}
                         </td>
                         <td style={{ padding: "10px", textAlign: "center" }}>
-                          <span style={{ 
-                            padding: "2px 6px", 
-                            borderRadius: "4px", 
+                          <span style={{
+                            padding: "2px 6px",
+                            borderRadius: "4px",
                             fontSize: "11px",
                             fontWeight: "bold",
                             background: b.state === "APPROVED" ? "rgba(16,185,129,0.15)" : "rgba(245,158,11,0.15)",
@@ -1682,16 +1676,16 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               <h3 style={{ margin: 0, fontSize: "16px", display: "flex", alignItems: "center", gap: "8px" }}>
                 <span>🔍</span> Danh sách Lỗi Trùng Lặp do Lead Huyền Lọc ({selectedDuplicateGroup.totalCount} bug trùng)
               </h3>
-              <button 
-                type="button" 
-                className="ctrl" 
-                style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "4px" }} 
+              <button
+                type="button"
+                className="ctrl"
+                style={{ padding: "4px 10px", fontSize: "12px", borderRadius: "4px" }}
                 onClick={() => setSelectedDuplicateGroup(null)}
               >
                 Đóng
               </button>
             </div>
-            
+
             <div style={{ maxHeight: "400px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--bg-2)", padding: "12px" }}>
               {selectedDuplicateGroup.groups.length === 0 ? (
                 <div style={{ padding: "16px", color: "var(--text-3)", textAlign: "center" }}>Không có bug trùng lặp nào trong kỳ này.</div>

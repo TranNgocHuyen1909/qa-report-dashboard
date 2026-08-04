@@ -260,9 +260,29 @@ export function BugWorkflowView({
                   {cp.title}
                 </h3>
               </div>
-              <span style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "20px", background: cp.bgColor, color: cp.color, border: `1px solid ${cp.color}`, fontWeight: "bold" }}>
-                {cp.badge}
-              </span>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px", flexWrap: "wrap" }}>
+                {cp.num === 1 && (
+                  <button
+                    type="button"
+                    className="ctrl ctrl-primary"
+                    onClick={() => onNavigateTab?.("checklist")}
+                    style={{
+                      fontSize: "11px",
+                      fontWeight: "bold",
+                      padding: "4px 10px",
+                      display: "inline-flex",
+                      alignItems: "center",
+                      gap: "4px",
+                      cursor: "pointer"
+                    }}
+                  >
+                    📋 Mở Trang Checklist Tự Kiểm Tra ↗
+                  </button>
+                )}
+                <span style={{ fontSize: "11px", padding: "4px 10px", borderRadius: "20px", background: cp.bgColor, color: cp.color, border: `1px solid ${cp.color}`, fontWeight: "bold" }}>
+                  {cp.badge}
+                </span>
+              </div>
             </div>
 
             <p style={{ fontSize: "13px", color: "var(--text-2)", margin: "0 0 16px 0", lineHeight: "1.5" }}>
@@ -287,9 +307,32 @@ export function BugWorkflowView({
                   }}
                 >
                   <span style={{ color: cp.color, fontWeight: "bold", fontSize: "14px", marginTop: "1px" }}>✓</span>
-                  <div>
+                  <div style={{ flex: 1 }}>
                     <strong style={{ color: "var(--text-1)", marginRight: "6px", fontSize: "12px" }}>{task.label}:</strong>
                     <span style={{ color: "var(--text-2)" }}>{task.text}</span>
+                    {task.label.includes("Checklist") && (
+                      <button
+                        type="button"
+                        className="ctrl"
+                        onClick={() => onNavigateTab?.("checklist")}
+                        style={{
+                          marginLeft: "8px",
+                          padding: "2px 8px",
+                          fontSize: "11px",
+                          fontWeight: "bold",
+                          color: "var(--blue)",
+                          background: "var(--blue-bg)",
+                          border: "1px solid var(--blue)",
+                          borderRadius: "4px",
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "4px"
+                        }}
+                      >
+                        📋 Đi tới Repo Checklist ↗
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}

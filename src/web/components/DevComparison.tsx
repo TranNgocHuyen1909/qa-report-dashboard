@@ -172,6 +172,13 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     );
   };
 
+  const getBugPrUrl = (b: any) => {
+    if (b.pullRequestUrl && b.pullRequestUrl.trim()) return b.pullRequestUrl.trim();
+    const note = b.note ?? "";
+    const match = note.match(/https:\/\/github\.com\/[^\s\)]+\/pull\/\d+/i);
+    return match ? match[0] : undefined;
+  };
+
   const isNoRepro = (b: BugRecord) => {
     const note = (b.note ?? "").toLowerCase();
     const st = (b.status ?? "").toLowerCase();
@@ -373,14 +380,19 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const isPrDev = isDevGithubAuthor(dev.code, prAuthor) || (dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase());
         if (!isFixedByDev && !isPrDev) return;
 
-        // Strict filter: Must have b.confirmedDate or b.lastEditedTime in active period AND non-empty Pull Request link!
-        const closedDate = dateKey(b.confirmedDate) || dateKey(b.lastEditedTime);
+        // Strict filter: Must have b.confirmedDate or b.lastEditedTime in active period
+        const closedDate = dateKey(b.confirmedDate) || dateKey(b.lastEditedTime) || dateKey(b.detectedDate);
         if (!closedDate || !dateInRange(closedDate, activePeriod.startDate, activePeriod.endDate)) return;
-        if (!b.pullRequestUrl || !b.pullRequestUrl.trim()) return;
+
+        const prUrl = getBugPrUrl(b);
+        const isDocsNoPr = !prUrl && isFixedByDev;
+
+        // Allow tasks without PR IF dev is tagged in Fixed by (Docs / Test verification task)!
+        if (!prUrl && !isDocsNoPr) return;
 
         const key = b.bugId || b.id;
         if (!closedBugsMap.has(key)) {
-          closedBugsMap.set(key, b);
+          closedBugsMap.set(key, { ...b, pullRequestUrl: prUrl, isDocsNoPr });
         }
 
         if (b.duplicateIds && b.duplicateIds.length > 0) {
@@ -397,7 +409,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                   status: (childObj?.status || "CLOSED").toUpperCase(),
                   isChild: true,
                   parentBugId: key,
-                  pullRequestUrl: childObj?.pullRequestUrl || b.pullRequestUrl,
+                  pullRequestUrl: childObj?.pullRequestUrl || prUrl,
                   location: childObj?.location && childObj.location.length > 0 ? childObj.location : b.location,
                   title: childObj ? `${childObj.title} (Task trùng lặp của [${key}])` : `Task trùng lặp của [${key}]`
                 });
@@ -408,25 +420,27 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       });
 
       const closedBugs = Array.from(closedBugsMap.values());
-      const getBugPrUrl = (b: any) => {
-        if (b.pullRequestUrl && b.pullRequestUrl.trim()) return b.pullRequestUrl.trim();
-        const note = b.note ?? "";
-        const match = note.match(/https:\/\/github\.com\/[^\s\)]+\/pull\/\d+/i);
-        return match ? match[0] : undefined;
-      };
 
       const resolvedBugsMap = new Map<string, any>();
       devBugs.forEach(b => {
         const st = (b.status ?? "").toLowerCase();
         if (st === "cancel" || st === "không lỗi" || st === "wontfix") return;
         if (isNoRepro(b)) return;
-        const prUrl = getBugPrUrl(b);
-        if (!prUrl) return;
+        
+        const isFixedByDev = (b.fixedByIds ?? []).some(id => dev.notionIds.includes(id));
+        const prAuthor = b.prAuthor?.toLowerCase();
+        const isPrDev = isDevGithubAuthor(dev.code, prAuthor) || (dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase());
+        if (!isFixedByDev && !isPrDev) return;
 
-        const prDate = bugFixedDate(b);
+        const prUrl = getBugPrUrl(b);
+        const isDocsNoPr = !prUrl && isFixedByDev;
+
+        const prDate = bugFixedDate(b) || dateKey(b.lastEditedTime) || dateKey(b.detectedDate);
         if (prDate && dateInRange(prDate, activePeriod.startDate, activePeriod.endDate)) {
+          if (!prUrl && !isDocsNoPr) return;
+
           const taskId = b.bugId || b.id;
-          resolvedBugsMap.set(taskId, { ...b, pullRequestUrl: prUrl });
+          resolvedBugsMap.set(taskId, { ...b, pullRequestUrl: prUrl, isDocsNoPr });
 
           if (b.duplicateIds && b.duplicateIds.length > 0) {
             b.duplicateIds.forEach((childId: string) => {
@@ -464,11 +478,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         url: b.url,
         prUrl: b.pullRequestUrl,
         hasPR: !!b.pullRequestUrl,
+        isDocsNoPr: Boolean(b.isDocsNoPr),
         status: (b.status ?? "").toUpperCase(),
         location: getPrimaryLocation(b.location),
         commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
         commitsCount: b.ghCommitsCount ?? 1,
-        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || dateKey(b.lastEditedTime) || "—",
         isChild: b.isChild,
         parentBugId: b.parentBugId
       }));
@@ -479,11 +494,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         url: b.url,
         prUrl: b.pullRequestUrl,
         hasPR: !!b.pullRequestUrl,
+        isDocsNoPr: Boolean(b.isDocsNoPr),
         status: "RESOLVED",
         location: getPrimaryLocation(b.location),
         commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
         commitsCount: b.ghCommitsCount ?? 1,
-        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || dateKey(b.lastEditedTime) || "—",
         isChild: (b as any).isChild,
         parentBugId: (b as any).parentBugId
       }));
@@ -491,6 +507,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       const targetBugs = view.bugs;
 
       const closedBugsWithPr = closedBugsList.filter(b => !b.isChild && b.hasPR).length;
+      const closedBugsDocsNoPr = closedBugsList.filter(b => !b.isChild && !b.hasPR).length;
 
       let duplicateChildCount = 0;
       const seenChildKeys = new Set<string>();
@@ -512,6 +529,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       });
       const closedBugsNoPr = closedBugsList.filter(b => !b.hasPR).length;
       const resolvedBugsWithPr = resolvedBugsList.filter(b => !b.isChild && b.hasPR).length;
+      const resolvedBugsDocsNoPr = resolvedBugsList.filter(b => !b.isChild && !b.hasPR).length;
       const resolvedBugsNoPr = resolvedBugsList.filter(b => !b.hasPR).length;
 
       const closedUniquePrs = new Set(
@@ -865,7 +883,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         prevCommentsPerTask = prevSolvedWithPr.length > 0 ? prevTotalComments / prevSolvedWithPr.length : 0;
       }
 
-      const bugsPerDay = manDays > 0 ? resolvedCount / manDays : 0;
+      const totalVerifiedRootBugs = closedBugsWithPr + resolvedBugsWithPr + closedBugsDocsNoPr + resolvedBugsDocsNoPr;
+      const bugsPerDay = manDays > 0 ? totalVerifiedRootBugs / manDays : 0;
 
       // Count reviews performed by this person in this period based on Notion reviewerIds
       let reviewsCount = 0;
@@ -916,10 +935,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         closedBugsList,
         resolvedBugsList,
         closedBugsWithPr,
+        closedBugsDocsNoPr,
         closedBugsNoPr,
         duplicateChildCount,
         closedUniquePrs,
         resolvedBugsWithPr,
+        resolvedBugsDocsNoPr,
         resolvedBugsNoPr,
         resolvedUniquePrs,
         resolvedDuplicateChildCount,
@@ -1231,7 +1252,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.closedCount > 0
-                          ? `[CLOSED: ${row.closedBugsWithPr} bug có PR (${row.closedCount} bug bao gồm task trùng case)]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
+                          ? `[CLOSED: ${row.closedBugsWithPr} bug có PR${row.closedBugsDocsNoPr > 0 ? `, ${row.closedBugsDocsNoPr} task Docs/Test` : ""}]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
                           : "0 task Closed"
                       }
                       onClick={() => {
@@ -1244,6 +1265,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <div style={{ fontWeight: "bold", fontSize: "14px" }}>
                         {row.closedBugsWithPr}
                       </div>
+                      {row.closedBugsDocsNoPr > 0 && (
+                        <div style={{ fontSize: "10px", color: "#0284c7", fontWeight: "600", marginTop: "2px" }} title="Task Docs / Test không PR (gán Fixed by)">
+                          (+{row.closedBugsDocsNoPr} task Docs/Test)
+                        </div>
+                      )}
                       {row.duplicateChildCount > 0 && (
                         <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }}>
                           ({row.duplicateChildCount} task trùng)
@@ -1262,7 +1288,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.resolvedCount > 0
-                          ? `[RESOLVED: ${row.resolvedBugsWithPr} PR${row.resolvedDuplicateChildCount > 0 ? ` (${row.resolvedDuplicateChildCount} task trùng case)` : ""}]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}\n• PR status: ${row.resolvedBugsWithPr} CÓ PR, ${row.resolvedBugsNoPr} KHÔNG PR`
+                          ? `[RESOLVED: ${row.resolvedBugsWithPr} PR${row.resolvedBugsDocsNoPr > 0 ? `, ${row.resolvedBugsDocsNoPr} task Docs/Test` : ""}]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}`
                           : "0 task Resolved"
                       }
                       onClick={() => {
@@ -1275,6 +1301,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <div style={{ fontWeight: "bold", fontSize: "14px" }}>
                         {row.resolvedBugsWithPr}
                       </div>
+                      {row.resolvedBugsDocsNoPr > 0 && (
+                        <div style={{ fontSize: "10px", color: "#0284c7", fontWeight: "600", marginTop: "2px" }} title="Task Docs / Test không PR (gán Fixed by)">
+                          (+{row.resolvedBugsDocsNoPr} task Docs/Test)
+                        </div>
+                      )}
                       {row.resolvedDuplicateChildCount > 0 && (
                         <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }}>
                           ({row.resolvedDuplicateChildCount} task trùng)
@@ -1677,6 +1708,23 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                         </a>
                                       ))}
                                     </div>
+                                  );
+                                }
+                                if (!b.hasPR || b.isDocsNoPr) {
+                                  return (
+                                    <span
+                                      style={{
+                                        padding: "3px 8px",
+                                        borderRadius: "4px",
+                                        fontSize: "11px",
+                                        fontWeight: 600,
+                                        background: "rgba(2, 132, 199, 0.12)",
+                                        color: "#0284c7",
+                                        border: "1px solid #0284c7",
+                                      }}
+                                    >
+                                      📄 TASK DOCS / TEST (KHÔNG PR)
+                                    </span>
                                   );
                                 }
                                 return (

@@ -33,12 +33,17 @@ export function BugWorkflowView({
           label: "Tạo PR GitHub & Dán Link Card Notion",
           text: "Tạo PR trên GitHub với tiêu đề chuẩn, đính kèm ảnh minh họa evidence, điền Số giờ fix và đổi Status sang Resolved (Chờ Review).",
         },
+        {
+          label: "Quy Định Dán PR Cho Task Trùng Lặp (Duplicate Bug)",
+          text: "• Bug Gốc (Bug A): Gắn trực tiếp link Pull Request (PR) GitHub vào trường Pull Request của Bug A.\n• Bug Trùng (Bug B): Gán liên kết Duplicates trỏ về Bug A, KHÔNG gắn link PR vào Bug B (để Bug B tự động ăn theo nghiệm thu từ PR của Bug A).",
+        },
       ],
       notionFields: [
         "Status ➔ In Progress ➔ Resolved",
         "Fixed by (Tên Dev)",
         "📅 Ngày bắt đầu / Dự định xong",
-        "Pull Request (Link PR)",
+        "Pull Request (Gắn PR ở Bug Gốc A)",
+        "Duplicates (Link Bug B trùng về Bug Gốc A)",
         "Số giờ fix (Number)",
       ],
     },
@@ -186,6 +191,35 @@ export function BugWorkflowView({
               </div>
             );
           })}
+        </div>
+      </div>
+
+      {/* Duplicate Bug Rules Highlight Banner */}
+      <div
+        className="card"
+        style={{
+          padding: "16px 20px",
+          background: "rgba(168, 85, 247, 0.05)",
+          border: "1.5px solid rgba(168, 85, 247, 0.3)",
+          borderRadius: "8px",
+          display: "flex",
+          flexDirection: "column",
+          gap: "10px"
+        }}
+      >
+        <div style={{ display: "flex", alignItems: "center", gap: "8px", color: "var(--purple)", fontWeight: "bold", fontSize: "14px" }}>
+          <span style={{ fontSize: "16px" }}>📌</span>
+          <span>QUY ĐỊNH GẮN LINK PR KHI PHÁT HIỆN TASK TRÙNG LẶP (DUPLICATE BUG)</span>
+        </div>
+        <div style={{ fontSize: "13px", color: "var(--text-1)", lineHeight: "1.6", display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px" }}>
+          <div style={{ background: "var(--surface)", padding: "12px 16px", borderRadius: "6px", border: "1px solid var(--border-3)" }}>
+            <div style={{ color: "var(--blue)", fontWeight: "bold", marginBottom: "4px", fontSize: "13px" }}>1. Bug A (Bug Gốc)</div>
+            <div>Gắn trực tiếp link Pull Request (PR) GitHub vào trường <code>Pull Request</code> trên thẻ Notion của Bug A.</div>
+          </div>
+          <div style={{ background: "var(--surface)", padding: "12px 16px", borderRadius: "6px", border: "1px solid var(--border-3)" }}>
+            <div style={{ color: "var(--purple)", fontWeight: "bold", marginBottom: "4px", fontSize: "13px" }}>2. Bug B (Bug Trùng Case)</div>
+            <div>Gán liên kết <code>Duplicates</code> trỏ về Bug A. <strong style={{ color: "var(--red)" }}>KHÔNG gắn link PR vào Bug B</strong> (để Bug B tự động ăn theo nghiệm thu từ PR của Bug A).</div>
+          </div>
         </div>
       </div>
 

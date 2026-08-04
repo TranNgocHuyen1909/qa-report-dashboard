@@ -1079,7 +1079,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                 <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Số bug đã hoàn thành, review xong và có Ngày Xác Nhận trong kỳ">CLOSE</th>
                 <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Số lượng task con trùng case ăn theo bug gốc được Closed">TASK TRÙNG</th>
                 <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Số PR tạo mới và sửa xong trong kỳ">RESOLVED</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số PR mở từ các kỳ trước nhưng có commit sửa bổ sung / review trong kỳ này">PR BỔ SUNG</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số task/PR được tạo từ các kỳ trước nhưng phát sinh commit sửa bổ sung hoặc review trong kỳ này">TASK CÓ CHỈNH SỬA THÊM</th>
                 <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong: (Reopen / (Closed + Resolved)) * 100%">REOPEN</th>
                 <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
                 <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "14%" }} title="Năng suất sửa lỗi trung bình mỗi ngày công: (Closed + Resolved) / MD">BUG/NGÀY</th>
@@ -1211,13 +1211,13 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.reCommitCount > 0
-                          ? `[PR BỔ SUNG: ${row.reCommitCount} bug]\n• PR mở từ các kỳ trước nhưng có commit/review bổ sung trong kỳ này`
-                          : "0 PR bổ sung"
+                          ? `[TASK CÓ CHỈNH SỬA THÊM: ${row.reCommitCount} task]\n• Task mở từ các kỳ trước nhưng phát sinh commit/review bổ sung trong kỳ này`
+                          : "0 task có chỉnh sửa thêm"
                       }
                       onClick={() => {
                         if (row.reCommitCount > 0) {
                           setSelectedPrBugs(row.reCommitBugsList);
-                          setSelectedDevCode(`${row.dev.displayName} - PR BỔ SUNG`);
+                          setSelectedDevCode(`${row.dev.displayName} - TASK CÓ CHỈNH SỬA THÊM`);
                         }
                       }}
                     >

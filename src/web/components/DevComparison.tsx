@@ -427,9 +427,33 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         if (prDate && dateInRange(prDate, activePeriod.startDate, activePeriod.endDate)) {
           const taskId = b.bugId || b.id;
           resolvedBugsMap.set(taskId, { ...b, pullRequestUrl: prUrl });
+
+          if (b.duplicateIds && b.duplicateIds.length > 0) {
+            b.duplicateIds.forEach((childId: string) => {
+              const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
+              const childKey = childObj ? (childObj.bugId || childObj.id) : childId;
+              if (!resolvedBugsMap.has(childKey)) {
+                const childSt = (childObj?.status ?? "").toLowerCase();
+                if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
+                  resolvedBugsMap.set(childKey, {
+                    ...(childObj || {}),
+                    bugId: childObj?.bugId || childId.slice(0, 8),
+                    id: childId,
+                    status: (childObj?.status || "RESOLVED").toUpperCase(),
+                    isChild: true,
+                    parentBugId: taskId,
+                    pullRequestUrl: childObj?.pullRequestUrl || prUrl,
+                    location: childObj?.location && childObj.location.length > 0 ? childObj.location : b.location,
+                    title: childObj ? `${childObj.title} (Task trùng lặp của [${taskId}])` : `Task trùng lặp của [${taskId}]`
+                  });
+                }
+              }
+            });
+          }
         }
       });
       const resolvedBugs = Array.from(resolvedBugsMap.values());
+      const resolvedDuplicateChildCount = resolvedBugs.filter(b => b.isChild).length;
 
       const closedCount = closedBugs.length;
       const resolvedCount = resolvedBugs.length;
@@ -862,6 +886,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         resolvedBugsWithPr,
         resolvedBugsNoPr,
         resolvedUniquePrs,
+        resolvedDuplicateChildCount,
         closedLocText,
         resolvedLocText,
         locationDetailsList,
@@ -1222,7 +1247,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.resolvedCount > 0
-                          ? `[RESOLVED: ${row.resolvedCount} bug]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}\n• PR status: ${row.resolvedBugsWithPr} CÓ PR, ${row.resolvedBugsNoPr} KHÔNG PR`
+                          ? `[RESOLVED: ${row.resolvedBugsWithPr} PR${row.resolvedDuplicateChildCount > 0 ? ` (${row.resolvedDuplicateChildCount} task trùng case)` : ""}]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}\n• PR status: ${row.resolvedBugsWithPr} CÓ PR, ${row.resolvedBugsNoPr} KHÔNG PR`
                           : "0 task Resolved"
                       }
                       onClick={() => {
@@ -1235,6 +1260,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <div style={{ fontWeight: "bold", fontSize: "14px" }}>
                         {row.resolvedBugsWithPr}
                       </div>
+                      {row.resolvedDuplicateChildCount > 0 && (
+                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }}>
+                          ({row.resolvedDuplicateChildCount} task trùng)
+                        </div>
+                      )}
                     </td>
                     <td
                       className="td-num"

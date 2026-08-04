@@ -102,25 +102,25 @@ export function BugWorkflowView({
     <div style={{ display: "flex", flexDirection: "column", gap: "20px", width: "100%", maxWidth: "1100px", margin: "0 auto" }}>
       {/* Checkpoint Header Banner */}
       <div className="card" style={{ padding: "20px 24px" }}>
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
-          <div>
-            <h1 className="section-title" style={{ margin: "0 0 4px 0", fontSize: "18px" }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: "16px", marginBottom: "16px", flexWrap: "wrap" }}>
+          <div style={{ flex: 1, minWidth: "280px" }}>
+            <h1 className="section-title" style={{ margin: "0 0 4px 0", fontSize: "17px" }}>
               📍 Bản Đồ Quy Trình Checkpoint Sửa Bug &amp; Nghiệm Thu
             </h1>
-            <p style={{ fontSize: "12px", color: "var(--text-3)", margin: 0 }}>
-              Luồng 3 mốc Checkpoint chuẩn hóa: <code>Checkpoint 1: Dev Fix &amp; PR</code> ➔ <code>Checkpoint 2: Review</code> ➔ <code>Checkpoint 3: OP Nghiệm Thu</code>.
+            <p style={{ fontSize: "12px", color: "var(--text-3)", margin: 0, lineHeight: "1.4" }}>
+              Luồng 3 mốc Checkpoint chuẩn hóa: <code>Dev Fix &amp; PR</code> ➔ <code>Review</code> ➔ <code>OP Nghiệm Thu</code>.
             </p>
           </div>
 
           {/* Checkpoint Filter Tabs */}
-          <div style={{ display: "flex", gap: "6px" }}>
+          <div style={{ display: "flex", gap: "6px", flexShrink: 0, alignItems: "center" }}>
             <button
               type="button"
               className={`ctrl ${activeStepTab === 0 ? "ctrl-primary" : ""}`}
               onClick={() => setActiveStepTab(0)}
-              style={{ fontSize: "12px", padding: "6px 12px", fontWeight: "bold" }}
+              style={{ fontSize: "12px", padding: "6px 14px", fontWeight: "bold", whiteSpace: "nowrap", height: "34px" }}
             >
-              Tất cả Checkpoints
+              Tất cả
             </button>
             {checkpoints.map((s) => (
               <button
@@ -128,7 +128,7 @@ export function BugWorkflowView({
                 type="button"
                 className={`ctrl ${activeStepTab === s.num ? "ctrl-primary" : ""}`}
                 onClick={() => setActiveStepTab(s.num)}
-                style={{ fontSize: "12px", padding: "6px 12px", fontWeight: "bold" }}
+                style={{ fontSize: "12px", padding: "6px 12px", fontWeight: "bold", whiteSpace: "nowrap", height: "34px" }}
               >
                 CP {s.num}
               </button>

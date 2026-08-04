@@ -1075,13 +1075,14 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", tableLayout: "fixed" }}>
             <thead>
               <tr style={{ fontSize: "11px", background: "var(--surface-2)", borderBottom: "2px solid var(--border-2)" }}>
-                <th style={{ textAlign: "left", padding: "12px 14px", color: "var(--text-1)", width: "26%" }}>Nhân sự</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số bug đã hoàn thành, review xong và có Ngày Xác Nhận trong kỳ">Close</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số lượng task con trùng case ăn theo bug gốc được Closed">Task Trùng</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số bug đã sửa xong (Resolved) trong kỳ">Resolved</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "14%" }} title="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong: (Reopen / (Closed + Resolved)) * 100%">Reopen</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Năng suất sửa lỗi trung bình mỗi ngày công: (Closed + Resolved) / MD">Bug/Ngày</th>
+                <th style={{ textAlign: "left", padding: "12px 14px", color: "var(--text-1)", width: "22%" }}>Nhân sự</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Số bug đã hoàn thành, review xong và có Ngày Xác Nhận trong kỳ">CLOSE</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Số lượng task con trùng case ăn theo bug gốc được Closed">TASK TRÙNG</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Số PR tạo mới và sửa xong trong kỳ">RESOLVED</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số PR mở từ các kỳ trước nhưng có commit sửa bổ sung / review trong kỳ này">PR BỔ SUNG</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong: (Reopen / (Closed + Resolved)) * 100%">REOPEN</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "14%" }} title="Năng suất sửa lỗi trung bình mỗi ngày công: (Closed + Resolved) / MD">BUG/NGÀY</th>
               </tr>
             </thead>
             <tbody>
@@ -1196,6 +1197,32 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     >
                       <div style={{ fontWeight: "bold", fontSize: "14px" }}>
                         {row.resolvedBugsWithPr}
+                      </div>
+                    </td>
+                    <td 
+                      className="td-num" 
+                      style={{ 
+                        padding: "8px 10px", 
+                        textAlign: "center",
+                        fontSize: "12px", 
+                        color: row.reCommitCount > 0 ? "var(--cyan)" : "var(--text-3)",
+                        cursor: row.reCommitCount > 0 ? "pointer" : "default",
+                        textDecoration: row.reCommitCount > 0 ? "underline dashed" : "none"
+                      }}
+                      title={
+                        row.reCommitCount > 0
+                          ? `[PR BỔ SUNG: ${row.reCommitCount} bug]\n• PR mở từ các kỳ trước nhưng có commit/review bổ sung trong kỳ này`
+                          : "0 PR bổ sung"
+                      }
+                      onClick={() => {
+                        if (row.reCommitCount > 0) {
+                          setSelectedPrBugs(row.reCommitBugsList);
+                          setSelectedDevCode(`${row.dev.displayName} - PR BỔ SUNG`);
+                        }
+                      }}
+                    >
+                      <div style={{ fontWeight: "bold", fontSize: "14px" }}>
+                        {row.reCommitCount}
                       </div>
                     </td>
                     <td 

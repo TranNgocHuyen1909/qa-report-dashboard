@@ -49,7 +49,7 @@ export function BugWorkflowView({
       actions: [
         {
           label: "Vòng 1 — QC Lead (Huyền)",
-          text: "BẮT BUỘC QUA VÒNG 1 TRƯỚC. Huyền test nghiệm thu thực tế & review PR. Test Pass ➔ đổi Status sang Reviewed và nhãn wait for development. Có lỗi ➔ comment chỉ rõ và đổi Status sang InReview.",
+          text: "BẮT BUỘC QUA VÒNG 1 TRƯỚC. Huyền test nghiệm thu thực tế & review PR, gán Reviewers = Huyền, điền 📅 Ngày bắt đầu review, 📅 Ngày kết thúc review và Số giờ review. Test Pass ➔ đổi Status sang Reviewed và nhãn wait for development. Có lỗi ➔ comment chỉ rõ và đổi Status sang InReview.",
         },
         {
           label: "Vòng 2 — Tech Lead (Anh Trường)",
@@ -57,6 +57,10 @@ export function BugWorkflowView({
         },
       ],
       notionFields: [
+        "Reviewers (Gán Huyền)",
+        "📅 Ngày bắt đầu review",
+        "📅 Ngày kết thúc review",
+        "Số giờ review (Number)",
         "Status ➔ InReview (có comment) / Reviewed (pass vòng 1)",
         "Status ➔ Deployed (sau khi Merge PR & Deploy)",
         "Label ➔ wait for development ➔ change requested / ready for review",

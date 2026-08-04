@@ -652,31 +652,64 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         return valid.sort().pop();
       };
 
-      const reCommitBugsList = devBugs.filter(b => {
-        if (!b.pullRequestUrl && !(b.note ?? "").includes("github.com")) return false;
-        
+      const reCommitBugsMap = new Map<string, any>();
+      devBugs.forEach(b => {
+        if (!b.pullRequestUrl && !(b.note ?? "").includes("github.com")) return;
+
         const createdDate = dateKey(b.prCreatedAt) ?? dateKey(b.createdTime);
         const isCreatedEarlier = !!createdDate && createdDate < activePeriod.startDate;
-        if (!isCreatedEarlier) return false;
+        if (!isCreatedEarlier) return;
 
         const commitsCount = b.ghCommitsCount ?? 1;
-        if (commitsCount <= 1) return false;
+        if (commitsCount <= 1) return;
 
         const realActivityDate = getPrRealActivityDate(b);
-        return !!realActivityDate && dateInRange(realActivityDate, activePeriod.startDate, activePeriod.endDate);
-      }).map(b => ({
-        bugId: b.bugId || b.id,
-        title: b.title,
-        url: b.url,
-        prUrl: b.pullRequestUrl || (b.note && b.note.includes("github.com") ? b.note : undefined),
-        status: (b.status ?? "RESOLVED").toUpperCase(),
-        location: getPrimaryLocation(b.location),
-        commitsCount: b.ghCommitsCount ?? 1,
-        commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
-        date: getPrRealActivityDate(b) || dateKey(b.prCreatedAt) || "—",
-        prCreatedAt: dateKey(b.prCreatedAt) || "—",
-      }));
-      const reCommitCount = reCommitBugsList.length;
+        if (realActivityDate && dateInRange(realActivityDate, activePeriod.startDate, activePeriod.endDate)) {
+          const key = b.bugId || b.id;
+          const prUrl = b.pullRequestUrl || (b.note && b.note.includes("github.com") ? b.note : undefined);
+          reCommitBugsMap.set(key, {
+            bugId: key,
+            title: b.title,
+            url: b.url,
+            prUrl,
+            status: (b.status ?? "RESOLVED").toUpperCase(),
+            location: getPrimaryLocation(b.location),
+            commitsCount,
+            commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
+            date: realActivityDate || dateKey(b.prCreatedAt) || "—",
+            prCreatedAt: dateKey(b.prCreatedAt) || "—",
+          });
+
+          if (b.duplicateIds && b.duplicateIds.length > 0) {
+            b.duplicateIds.forEach((childId: string) => {
+              const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
+              const childKey = childObj ? (childObj.bugId || childObj.id) : childId;
+              if (!reCommitBugsMap.has(childKey)) {
+                const childSt = (childObj?.status ?? "").toLowerCase();
+                if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
+                  reCommitBugsMap.set(childKey, {
+                    bugId: childKey,
+                    title: childObj ? `${childObj.title} (Task trùng lặp của [${key}])` : `Task trùng lặp của [${key}]`,
+                    url: childObj?.url,
+                    prUrl: childObj?.pullRequestUrl || prUrl,
+                    status: (childObj?.status || "RESOLVED").toUpperCase(),
+                    isChild: true,
+                    parentBugId: key,
+                    location: getPrimaryLocation(childObj?.location && childObj.location.length > 0 ? childObj.location : b.location),
+                    commitsCount: 1,
+                    commentsCount: 0,
+                    date: realActivityDate || "—",
+                    prCreatedAt: dateKey(childObj?.prCreatedAt) || dateKey(b.prCreatedAt) || "—",
+                  });
+                }
+              }
+            });
+          }
+        }
+      });
+      const reCommitBugsList = Array.from(reCommitBugsMap.values());
+      const reCommitCount = reCommitBugsList.filter(b => !b.isChild).length;
+      const reCommitDuplicateChildCount = reCommitBugsList.filter(b => b.isChild).length;
       const reCommitRate = solvedWithPr > 0 ? (reCommitCount / solvedWithPr) * 100 : 0;
 
       const isDuplicateBugRecord = (b: BugRecord) => {
@@ -887,6 +920,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         resolvedBugsNoPr,
         resolvedUniquePrs,
         resolvedDuplicateChildCount,
+        reCommitDuplicateChildCount,
         closedLocText,
         resolvedLocText,
         locationDetailsList,
@@ -1137,14 +1171,13 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", tableLayout: "fixed" }}>
             <thead>
               <tr style={{ fontSize: "11px", background: "var(--surface-2)", borderBottom: "2px solid var(--border-2)" }}>
-                <th style={{ textAlign: "left", padding: "12px 14px", color: "var(--text-1)", width: "22%" }}>Nhân sự</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Số bug đã hoàn thành, review xong và có Ngày Xác Nhận trong kỳ">CLOSE</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Số lượng task con trùng case ăn theo bug gốc được Closed">TASK TRÙNG</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Số PR tạo mới và sửa xong trong kỳ">RESOLVED</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số task/PR được tạo từ các kỳ trước nhưng phát sinh commit sửa bổ sung hoặc review trong kỳ này">TASK CÓ CHỈNH SỬA THÊM</th>
+                <th style={{ textAlign: "left", padding: "12px 14px", color: "var(--text-1)", width: "24%" }}>Nhân sự</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số bug đã hoàn thành, review xong và có Ngày Xác Nhận trong kỳ">CLOSE</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số PR tạo mới và sửa xong trong kỳ">RESOLVED</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "14%" }} title="Số task/PR được tạo từ các kỳ trước nhưng phát sinh commit sửa bổ sung hoặc review trong kỳ này">TASK CÓ CHỈNH SỬA THÊM</th>
                 <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong: (Reopen / (Closed + Resolved)) * 100%">REOPEN</th>
                 <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "14%" }} title="Năng suất sửa lỗi trung bình mỗi ngày công: (Closed + Resolved) / MD">BUG/NGÀY</th>
+                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "16%" }} title="Năng suất sửa lỗi trung bình mỗi ngày công: (Closed + Resolved) / MD">BUG/NGÀY</th>
               </tr>
             </thead>
             <tbody>
@@ -1195,7 +1228,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.closedCount > 0
-                          ? `[CLOSED: ${row.closedBugsWithPr} bug có PR (${row.closedCount} bug trùng case)]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
+                          ? `[CLOSED: ${row.closedBugsWithPr} bug có PR (${row.closedCount} bug bao gồm task trùng case)]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
                           : "0 task Closed"
                       }
                       onClick={() => {
@@ -1208,32 +1241,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <div style={{ fontWeight: "bold", fontSize: "14px" }}>
                         {row.closedBugsWithPr}
                       </div>
-                    </td>
-                    <td
-                      className="td-num"
-                      style={{
-                        padding: "8px 10px",
-                        textAlign: "center",
-                        fontSize: "12px",
-                        color: row.duplicateChildCount > 0 ? "var(--purple)" : "var(--text-3)",
-                        cursor: row.duplicateChildCount > 0 ? "pointer" : "default",
-                      }}
-                      title={
-                        row.duplicateChildCount > 0
-                          ? `${row.duplicateChildCount} task con trùng case ăn theo bug gốc`
-                          : "0 task trùng"
-                      }
-                      onClick={() => {
-                        const childBugs = row.closedBugsList.filter((b: any) => b.isChild);
-                        if (childBugs.length > 0) {
-                          setSelectedPrBugs(childBugs);
-                          setSelectedDevCode(`${row.dev.displayName} - TASK TRÙNG`);
-                        }
-                      }}
-                    >
-                      <div style={{ fontWeight: "bold", fontSize: "13px" }}>
-                        {row.duplicateChildCount > 0 ? `${row.duplicateChildCount}` : "0"}
-                      </div>
+                      {row.duplicateChildCount > 0 && (
+                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }}>
+                          ({row.duplicateChildCount} task trùng)
+                        </div>
+                      )}
                     </td>
                     <td
                       className="td-num"
@@ -1291,6 +1303,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <div style={{ fontWeight: "bold", fontSize: "14px" }}>
                         {row.reCommitCount}
                       </div>
+                      {row.reCommitDuplicateChildCount > 0 && (
+                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }}>
+                          ({row.reCommitDuplicateChildCount} task trùng)
+                        </div>
+                      )}
                     </td>
                     <td
                       className="td-num"

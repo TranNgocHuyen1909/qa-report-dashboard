@@ -590,11 +590,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const isCreatedEarlier = !!createdDate && createdDate < activePeriod.startDate;
         if (!isCreatedEarlier) return false;
 
-        // Strict Dev Commit check: Must have > 1 commits from Dev AND dev commit/update date in active period
+        // Strict Dev Commit check: MUST have prLastCommitAt from GitHub in active period and commits > 1
         const commitsCount = b.ghCommitsCount ?? 1;
         if (commitsCount <= 1) return false;
 
-        const devCommitDate = dateKey(b.prLastCommitAt) || dateKey(b.lastEditedTime);
+        const devCommitDate = dateKey(b.prLastCommitAt);
         return !!devCommitDate && dateInRange(devCommitDate, activePeriod.startDate, activePeriod.endDate);
       }).map(b => ({
         bugId: b.bugId || b.id,

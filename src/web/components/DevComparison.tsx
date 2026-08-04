@@ -584,35 +584,32 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         : (pMetric && pMetric.manDays > 0 ? pMetric.manDays : 5);
 
       const reCommitBugsList = devBugs.filter(b => {
-        if (!b.pullRequestUrl) return false;
+        if (!b.pullRequestUrl && !(b.note ?? "").includes("github.com")) return false;
         
         const createdDate = dateKey(b.prCreatedAt) ?? dateKey(b.createdTime);
-        const fixDate = bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.lastEditedTime);
-
-        // 1. PR created BEFORE active period (opened in an earlier period)
         const isCreatedEarlier = !!createdDate && createdDate < activePeriod.startDate;
+        if (!isCreatedEarlier) return false;
 
-        // 2. Received new commits / updates within active period
-        const isUpdatedInPeriod = dateInRange(fixDate, activePeriod.startDate, activePeriod.endDate);
+        const datesInPeriod = [
+          dateKey(b.prLastCommitAt),
+          dateKey(b.huyenLastCommentAt),
+          dateKey(b.huyenFirstCommentAt),
+          dateKey(b.reviewStartDate),
+          dateKey(b.reviewEndDate),
+          dateKey(b.lastEditedTime),
+          dateKey(b.confirmedDate),
+        ];
 
-        // 3. Has extra commits / re-commits / review comments
-        const hasExtraCommitsOrEdits =
-          (b.ghCommitsCount ?? 1) > 1 ||
-          (b.prCommentsByHuyen ?? 0) > 0 ||
-          (b.prCommentsByTruong ?? 0) > 0 ||
-          (b.prCommentsByAuthor ?? 0) > 0 ||
-          (b.huyenReviewRounds ?? 0) > 1 ||
-          (fixDate && createdDate && fixDate > createdDate);
-
-        return isCreatedEarlier && isUpdatedInPeriod && hasExtraCommitsOrEdits;
+        const hasActivityInPeriod = datesInPeriod.some(d => d && dateInRange(d, activePeriod.startDate, activePeriod.endDate));
+        return hasActivityInPeriod;
       }).map(b => ({
         bugId: b.bugId || b.id,
         title: b.title,
         url: b.url,
-        prUrl: b.pullRequestUrl,
+        prUrl: b.pullRequestUrl || (b.note && b.note.includes("github.com") ? b.note : undefined),
         commitsCount: b.ghCommitsCount ?? 1,
         commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
-        date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
+        date: dateKey(b.prLastCommitAt) || dateKey(b.huyenLastCommentAt) || bugFixedDate(b) || dateKey(b.prCreatedAt) || "—",
         prCreatedAt: dateKey(b.prCreatedAt) || "—",
       }));
       const reCommitCount = reCommitBugsList.length;

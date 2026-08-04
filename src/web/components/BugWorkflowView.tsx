@@ -9,9 +9,9 @@ export function BugWorkflowView({
     {
       num: 1,
       badge: "Notion: New ➔ In Progress ➔ Resolved",
-      shortTitle: "1. Dev Fix & PR",
-      title: "1. Dev Tiếp Nhận, Sửa Code & Tạo PR GitHub",
-      color: "var(--accent)",
+      shortTitle: "Dev Fix & PR",
+      title: "Dev Tiếp Nhận, Sửa Code & Tạo PR GitHub",
+      color: "#2563eb",
       desc: "Tiếp nhận task theo priority, trace root cause, sửa code sạch và dán link PR lên Notion.",
       actions: [
         {
@@ -42,9 +42,9 @@ export function BugWorkflowView({
     {
       num: 2,
       badge: "Notion: Resolved ➔ Reviewed ➔ Deployed",
-      shortTitle: "2. QA & Tech Review",
-      title: "2. Kiểm Soát Chất Lượng & Duyệt Code (QC Lead & Tech Lead)",
-      color: "var(--blue)",
+      shortTitle: "QA & Tech Review",
+      title: "Kiểm Soát Chất Lượng & Duyệt Code (QC Lead & Tech Lead)",
+      color: "#7c3aed",
       desc: "Quy trình review 2 vòng chặt chẽ giúp bảo đảm chất lượng mã nguồn trước khi deploy.",
       actions: [
         {
@@ -69,9 +69,9 @@ export function BugWorkflowView({
     {
       num: 3,
       badge: "Notion: Deployed ➔ Closed / Reopened",
-      shortTitle: "3. OP Nghiệm Thu",
-      title: "3. Nghiệm Thu Thực Tế & Đóng Thẻ (OP Thương & Linh)",
-      color: "var(--green)",
+      shortTitle: "OP Nghiệm Thu",
+      title: "Nghiệm Thu Thực Tế & Đóng Thẻ (OP Thương & Linh)",
+      color: "#059669",
       desc: "Kiểm tra thực tế sau khi deploy server và chốt trạng thái đóng hoặc mở lại task.",
       actions: [
         {
@@ -232,8 +232,23 @@ export function BugWorkflowView({
         {steps.map((st) => (
           <div key={st.num} id={`step-${st.num}`} className="card" style={{ padding: "20px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "10px", paddingBottom: "8px", borderBottom: "1px solid var(--border-3)" }}>
-              <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-1)", display: "flex", alignItems: "center", gap: "10px" }}>
-                <span style={{ width: "26px", height: "26px", borderRadius: "50%", background: st.color, color: "#fff", display: "inline-flex", alignItems: "center", justifyContent: "center", fontSize: "12px", fontWeight: "bold" }}>
+              <div style={{ fontSize: "15px", fontWeight: "700", color: "var(--text-1)", display: "flex", alignItems: "center", gap: "12px" }}>
+                <span
+                  style={{
+                    width: "28px",
+                    height: "28px",
+                    borderRadius: "50%",
+                    background: st.color,
+                    color: "#ffffff",
+                    display: "inline-flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "14px",
+                    fontWeight: "900",
+                    boxShadow: "0 2px 4px rgba(0,0,0,0.18)",
+                    flexShrink: 0,
+                  }}
+                >
                   {st.num}
                 </span>
                 {st.title}

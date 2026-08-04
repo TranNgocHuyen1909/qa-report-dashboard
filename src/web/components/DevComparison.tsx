@@ -490,15 +490,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
       const targetBugs = view.bugs;
 
-      const closedBugsWithPr = targetBugs.filter(b => {
-        const st = (b.status ?? "").toLowerCase();
-        if (st !== "closed" && st !== "deployed") return false;
-        if (isNoRepro(b)) return false;
-        if (!bugBelongsToDev(b, dev)) return false;
-        const closedDate = dateKey(b.confirmedDate);
-        if (!closedDate || !dateInRange(closedDate, activePeriod.startDate, activePeriod.endDate)) return false;
-        return Boolean(b.pullRequestUrl && b.pullRequestUrl.trim());
-      }).length;
+      const closedBugsWithPr = closedBugsList.filter(b => !b.isChild && b.hasPR).length;
 
       let duplicateChildCount = 0;
       const seenChildKeys = new Set<string>();
@@ -519,7 +511,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         }
       });
       const closedBugsNoPr = closedBugsList.filter(b => !b.hasPR).length;
-      const resolvedBugsWithPr = resolvedBugs.length;
+      const resolvedBugsWithPr = resolvedBugsList.filter(b => !b.isChild && b.hasPR).length;
       const resolvedBugsNoPr = resolvedBugsList.filter(b => !b.hasPR).length;
 
       const closedUniquePrs = new Set(
@@ -1538,99 +1530,137 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     </tr>
                   </thead>
                   <tbody>
-                    {selectedPrBugs.map((b, idx) => {
-                      const isClosed = (b.status ?? "").toLowerCase().includes("close") || (b.status ?? "").toLowerCase().includes("deploy");
-                      const isRes = (b.status ?? "").toLowerCase().includes("resolve");
-                      const isChild = Boolean(b.isChild);
+                    {(() => {
+                      const roots = selectedPrBugs.filter(b => !b.isChild);
+                      const childrenOrphans = selectedPrBugs.filter(b => b.isChild && !roots.some(r => (r.bugId || r.id) === b.parentBugId));
+                      const ordered: any[] = [];
+                      roots.forEach(root => {
+                        ordered.push(root);
+                        const children = selectedPrBugs.filter(b => b.isChild && b.parentBugId === (root.bugId || root.id));
+                        children.forEach(child => ordered.push(child));
+                      });
+                      childrenOrphans.forEach(child => ordered.push(child));
 
-                      return (
-                        <tr
-                          key={idx}
-                          style={{
-                            borderBottom: "1px solid var(--border-3)",
-                            background: isChild ? "var(--surface-2)" : "var(--surface)"
-                          }}
-                        >
-                          <td style={{ padding: "10px 12px", fontWeight: "700", whiteSpace: "nowrap" }}>
-                            {b.url ? (
-                              <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: "700", textDecoration: "underline" }}>
-                                {b.bugId}
-                              </a>
-                            ) : (
-                              b.bugId
-                            )}
-                          </td>
-                          <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
-                            <span
-                              style={{
-                                padding: "2px 6px",
-                                borderRadius: "4px",
-                                fontSize: "11px",
-                                fontWeight: 600,
-                                background: "var(--surface-2)",
-                                color: "var(--text-1)",
-                                border: "1px solid var(--border-2)",
-                              }}
-                            >
-                              {b.location || "Chưa phân loại"}
-                            </span>
-                          </td>
-                          <td style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
-                            <span
-                              style={{
-                                padding: "2px 8px",
-                                borderRadius: "4px",
-                                fontSize: "11px",
-                                fontWeight: 700,
-                                background: isClosed
-                                  ? "rgba(22, 163, 74, 0.12)"
-                                  : isRes
-                                    ? "var(--blue-bg)"
-                                    : "var(--surface-2)",
-                                color: isClosed ? "var(--green)" : isRes ? "var(--blue)" : "var(--text-2)",
-                                border: isClosed
-                                  ? "1px solid var(--green)"
-                                  : isRes
-                                    ? "1px solid var(--blue)"
-                                    : "1px solid var(--border-2)",
-                              }}
-                            >
-                              {b.status || (isClosed ? "CLOSED" : isRes ? "RESOLVED" : "DONE")}
-                            </span>
-                          </td>
-                          <td style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
-                            {(() => {
-                              const badges = extractPrBadges(b.prUrl);
-                              if (badges.length > 0) {
-                                return (
-                                  <div style={{ display: "inline-flex", gap: "6px", flexWrap: "wrap", justifyContent: "center" }}>
-                                    {badges.map((pr, pIdx) => (
-                                      <a
-                                        key={pIdx}
-                                        href={pr.url}
-                                        target="_blank"
-                                        rel="noreferrer"
-                                        style={{
-                                          padding: "3px 8px",
-                                          borderRadius: "4px",
-                                          fontSize: "11px",
-                                          fontWeight: 700,
-                                          background: "var(--blue-bg)",
-                                          color: "var(--blue)",
-                                          border: "1px solid var(--blue)",
-                                          textDecoration: "none",
-                                          display: "inline-flex",
-                                          alignItems: "center",
-                                          gap: "4px",
-                                        }}
-                                      >
-                                        {pr.label}
-                                      </a>
-                                    ))}
-                                  </div>
-                                );
-                              }
-                              if (isChild) {
+                      return ordered.map((b, idx) => {
+                        const isClosed = (b.status ?? "").toLowerCase().includes("close") || (b.status ?? "").toLowerCase().includes("deploy");
+                        const isRes = (b.status ?? "").toLowerCase().includes("resolve");
+                        const isChild = Boolean(b.isChild);
+
+                        return (
+                          <tr
+                            key={idx}
+                            style={{
+                              borderBottom: "1px solid var(--border-3)",
+                              background: isChild ? "rgba(168, 85, 247, 0.04)" : "var(--surface)"
+                            }}
+                          >
+                            <td style={{ padding: "10px 12px", fontWeight: "700", whiteSpace: "nowrap", paddingLeft: isChild ? "28px" : "12px" }}>
+                              {isChild ? (
+                                <span style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                  <span style={{ color: "var(--purple)", fontWeight: "bold" }}>↳</span>
+                                  {b.url ? (
+                                    <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--purple)", fontWeight: "700", textDecoration: "underline" }}>
+                                      {b.bugId}
+                                    </a>
+                                  ) : (
+                                    <span style={{ color: "var(--purple)" }}>{b.bugId}</span>
+                                  )}
+                                </span>
+                              ) : b.url ? (
+                                <a href={b.url} target="_blank" rel="noreferrer" style={{ color: "var(--blue)", fontWeight: "700", textDecoration: "underline" }}>
+                                  {b.bugId}
+                                </a>
+                              ) : (
+                                b.bugId
+                              )}
+                            </td>
+                            <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                              <span
+                                style={{
+                                  padding: "2px 6px",
+                                  borderRadius: "4px",
+                                  fontSize: "11px",
+                                  fontWeight: 600,
+                                  background: isChild ? "rgba(168, 85, 247, 0.08)" : "var(--surface-2)",
+                                  color: isChild ? "var(--purple)" : "var(--text-1)",
+                                  border: isChild ? "1px solid rgba(168, 85, 247, 0.3)" : "1px solid var(--border-2)",
+                                }}
+                              >
+                                {b.location || "Chưa phân loại"}
+                              </span>
+                            </td>
+                            <td style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
+                              <span
+                                style={{
+                                  padding: "2px 8px",
+                                  borderRadius: "4px",
+                                  fontSize: "11px",
+                                  fontWeight: 700,
+                                  background: isClosed
+                                    ? "rgba(22, 163, 74, 0.12)"
+                                    : isRes
+                                      ? "var(--blue-bg)"
+                                      : "var(--surface-2)",
+                                  color: isClosed ? "var(--green)" : isRes ? "var(--blue)" : "var(--text-2)",
+                                  border: isClosed
+                                    ? "1px solid var(--green)"
+                                    : isRes
+                                      ? "1px solid var(--blue)"
+                                      : "1px solid var(--border-2)",
+                                }}
+                              >
+                                {b.status || (isClosed ? "CLOSED" : isRes ? "RESOLVED" : "DONE")}
+                              </span>
+                            </td>
+                            <td style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
+                              {isChild ? (
+                                <span
+                                  style={{
+                                    padding: "3px 8px",
+                                    borderRadius: "4px",
+                                    fontSize: "11px",
+                                    fontWeight: 600,
+                                    background: "rgba(168, 85, 247, 0.1)",
+                                    color: "var(--purple)",
+                                    border: "1px solid rgba(168, 85, 247, 0.3)",
+                                    display: "inline-flex",
+                                    alignItems: "center",
+                                    gap: "4px",
+                                  }}
+                                >
+                                  ↳ Ăn theo PR {b.parentBugId || "Gốc"}
+                                </span>
+                              ) : (() => {
+                                const badges = extractPrBadges(b.prUrl);
+                                if (badges.length > 0) {
+                                  return (
+                                    <div style={{ display: "inline-flex", gap: "6px", flexWrap: "wrap", justifyContent: "center" }}>
+                                      {badges.map((pr, pIdx) => (
+                                        <a
+                                          key={pIdx}
+                                          href={pr.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          style={{
+                                            padding: "3px 8px",
+                                            borderRadius: "4px",
+                                            fontSize: "11px",
+                                            fontWeight: 700,
+                                            background: "var(--blue-bg)",
+                                            color: "var(--blue)",
+                                            border: "1px solid var(--blue)",
+                                            textDecoration: "none",
+                                            display: "inline-flex",
+                                            alignItems: "center",
+                                            gap: "4px",
+                                          }}
+                                        >
+                                          {pr.label}
+                                        </a>
+                                      ))}
+                                    </div>
+                                  );
+                                }
                                 return (
                                   <span
                                     style={{
@@ -1638,48 +1668,33 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                       borderRadius: "4px",
                                       fontSize: "11px",
                                       fontWeight: 600,
-                                      background: "var(--surface-2)",
-                                      color: "var(--text-2)",
-                                      border: "1px solid var(--border-2)",
+                                      background: "rgba(217, 119, 6, 0.12)",
+                                      color: "var(--yellow)",
+                                      border: "1px solid var(--yellow)",
                                     }}
                                   >
-                                    ↳ TRÙNG CASE [{b.parentBugId}]
+                                    KHÔNG CÓ PR
                                   </span>
                                 );
-                              }
-                              return (
-                                <span
-                                  style={{
-                                    padding: "3px 8px",
-                                    borderRadius: "4px",
-                                    fontSize: "11px",
-                                    fontWeight: 600,
-                                    background: "rgba(217, 119, 6, 0.12)",
-                                    color: "var(--yellow)",
-                                    border: "1px solid var(--yellow)",
-                                  }}
-                                >
-                                  KHÔNG CÓ PR
+                              })()}
+                            </td>
+                            <td style={{ padding: "10px 12px", color: isChild ? "var(--text-2)" : "var(--text-1)" }}>
+                              {isChild ? (
+                                <span>
+                                  <span style={{ color: "var(--purple)", fontWeight: 600, marginRight: "4px" }}>↳ Cùng Root Cause:</span>
+                                  {b.title.replace(/ \(Task trùng lặp của \[.*\]\)/, "")}
                                 </span>
-                              );
-                            })()}
-                          </td>
-                          <td style={{ padding: "10px 12px", color: "var(--text-1)" }}>
-                            {isChild ? (
-                              <span>
-                                <span style={{ color: "var(--text-2)", fontWeight: 600, marginRight: "4px" }}>↳ Cùng Root Cause:</span>
-                                {b.title.replace(/ \(Task trùng lặp của \[.*\]\)/, "")}
-                              </span>
-                            ) : (
-                              b.title
-                            )}
-                          </td>
-                          <td style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap", color: "var(--text-3)", fontSize: "12px" }}>
-                            {b.date || "—"}
-                          </td>
-                        </tr>
-                      );
-                    })}
+                              ) : (
+                                b.title
+                              )}
+                            </td>
+                            <td style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap", color: "var(--text-3)", fontSize: "12px" }}>
+                              {b.date || "—"}
+                            </td>
+                          </tr>
+                        );
+                      });
+                    })()}
                   </tbody>
                 </table>
               )}

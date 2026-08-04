@@ -20,6 +20,31 @@ function hasPR(b: BugRecord): boolean {
   return Boolean(b.pullRequestUrl && b.pullRequestUrl.trim().length > 0);
 }
 
+function extractPrBadges(rawUrl?: string): { url: string; label: string }[] {
+  if (!rawUrl || !rawUrl.trim()) return [];
+  const urlRegex = /(https?:\/\/[^\s,;)]+)/g;
+  const matches = rawUrl.match(urlRegex) || [];
+  const results: { url: string; label: string }[] = [];
+  const seen = new Set<string>();
+
+  for (let m of matches) {
+    const cleanUrl = m.replace(/[.,;)]+$/, "");
+    if (!seen.has(cleanUrl)) {
+      seen.add(cleanUrl);
+      const match = cleanUrl.match(/github\.com\/([^\/]+)\/([^\/]+)\/pull\/(\d+)/i);
+      if (match) {
+        const repo = match[2];
+        const prNum = match[3];
+        results.push({ url: cleanUrl, label: `📦 ${repo}#${prNum} ↗` });
+      } else if (cleanUrl.includes("github.com")) {
+        results.push({ url: cleanUrl, label: "📦 PR ↗" });
+      }
+    }
+  }
+
+  return results;
+}
+
 const LOCATION_PRIORITY = ["Flow", "Prompt", "Metadata", "Docs"];
 
 // Helper to pick 1 single primary location by priority: Flow > Prompt > Metadata > Docs > Others
@@ -1527,56 +1552,70 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                             </span>
                           </td>
                           <td style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
-                            {b.prUrl ? (
-                              <a
-                                href={b.prUrl}
-                                target="_blank"
-                                rel="noreferrer"
-                                style={{
-                                  padding: "3px 8px",
-                                  borderRadius: "4px",
-                                  fontSize: "11px",
-                                  fontWeight: 600,
-                                  background: "var(--blue-bg)",
-                                  color: "var(--blue)",
-                                  border: "1px solid var(--blue)",
-                                  textDecoration: "none",
-                                  display: "inline-flex",
-                                  alignItems: "center",
-                                  gap: "4px",
-                                }}
-                              >
-                                {isChild ? `PR ${b.parentBugId || "Chung"} ↗` : "CÓ PR ↗"}
-                              </a>
-                            ) : isChild ? (
-                              <span
-                                style={{
-                                  padding: "3px 8px",
-                                  borderRadius: "4px",
-                                  fontSize: "11px",
-                                  fontWeight: 600,
-                                  background: "var(--surface-2)",
-                                  color: "var(--text-2)",
-                                  border: "1px solid var(--border-2)",
-                                }}
-                              >
-                                ↳ TRÙNG CASE [{b.parentBugId}]
-                              </span>
-                            ) : (
-                              <span
-                                style={{
-                                  padding: "3px 8px",
-                                  borderRadius: "4px",
-                                  fontSize: "11px",
-                                  fontWeight: 600,
-                                  background: "rgba(217, 119, 6, 0.12)",
-                                  color: "var(--yellow)",
-                                  border: "1px solid var(--yellow)",
-                                }}
-                              >
-                                PR EMPTY
-                              </span>
-                            )}
+                            {(() => {
+                              const badges = extractPrBadges(b.prUrl);
+                              if (badges.length > 0) {
+                                return (
+                                  <div style={{ display: "inline-flex", gap: "6px", flexWrap: "wrap", justifyContent: "center" }}>
+                                    {badges.map((pr, pIdx) => (
+                                      <a
+                                        key={pIdx}
+                                        href={pr.url}
+                                        target="_blank"
+                                        rel="noreferrer"
+                                        style={{
+                                          padding: "3px 8px",
+                                          borderRadius: "4px",
+                                          fontSize: "11px",
+                                          fontWeight: 700,
+                                          background: "var(--blue-bg)",
+                                          color: "var(--blue)",
+                                          border: "1px solid var(--blue)",
+                                          textDecoration: "none",
+                                          display: "inline-flex",
+                                          alignItems: "center",
+                                          gap: "4px",
+                                        }}
+                                      >
+                                        {pr.label}
+                                      </a>
+                                    ))}
+                                  </div>
+                                );
+                              }
+                              if (isChild) {
+                                return (
+                                  <span
+                                    style={{
+                                      padding: "3px 8px",
+                                      borderRadius: "4px",
+                                      fontSize: "11px",
+                                      fontWeight: 600,
+                                      background: "var(--surface-2)",
+                                      color: "var(--text-2)",
+                                      border: "1px solid var(--border-2)",
+                                    }}
+                                  >
+                                    ↳ TRÙNG CASE [{b.parentBugId}]
+                                  </span>
+                                );
+                              }
+                              return (
+                                <span
+                                  style={{
+                                    padding: "3px 8px",
+                                    borderRadius: "4px",
+                                    fontSize: "11px",
+                                    fontWeight: 600,
+                                    background: "rgba(217, 119, 6, 0.12)",
+                                    color: "var(--yellow)",
+                                    border: "1px solid var(--yellow)",
+                                  }}
+                                >
+                                  KHÔNG CÓ PR
+                                </span>
+                              );
+                            })()}
                           </td>
                           <td style={{ padding: "10px 12px", color: "var(--text-1)" }}>
                             {isChild ? (

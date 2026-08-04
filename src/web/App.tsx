@@ -58,6 +58,48 @@ export function App() {
   const [comparisonSubTab, setComparisonSubTab] = useState<ComparisonSubTab>("matrix");
   const [checklistSubTab, setChecklistSubTab] = useState<ChecklistSubTab>("master");
 
+  const [isRepeatedUnlocked, setIsRepeatedUnlocked] = useState<boolean>(() => {
+    return sessionStorage.getItem("qa_repeated_tab_unlocked") === "true";
+  });
+  const [showPasswordModal, setShowPasswordModal] = useState<boolean>(false);
+  const [passwordInput, setPasswordInput] = useState<string>("");
+  const [passwordError, setPasswordError] = useState<string>("");
+  const [tabPassword, setTabPassword] = useState<string>(() => {
+    return localStorage.getItem("qa_repeated_tab_password") || "Test@1234";
+  });
+  const [isChangingPassword, setIsChangingPassword] = useState<boolean>(false);
+  const [newPasswordInput, setNewPasswordInput] = useState<string>("");
+
+  const handleUnlockTab = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
+    if (passwordInput === tabPassword) {
+      sessionStorage.setItem("qa_repeated_tab_unlocked", "true");
+      setIsRepeatedUnlocked(true);
+      setShowPasswordModal(false);
+      setPasswordInput("");
+      setPasswordError("");
+      handleNavigateTab("repeated");
+    } else {
+      setPasswordError("Mật khẩu không chính xác. Vui lòng thử lại!");
+    }
+  };
+
+  const handleLockTab = () => {
+    sessionStorage.removeItem("qa_repeated_tab_unlocked");
+    setIsRepeatedUnlocked(false);
+    handleNavigateTab("report");
+  };
+
+  const handleChangePassword = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newPasswordInput.trim()) return;
+    localStorage.setItem("qa_repeated_tab_password", newPasswordInput.trim());
+    setTabPassword(newPasswordInput.trim());
+    setIsChangingPassword(false);
+    setNewPasswordInput("");
+    alert("Đã đổi mật khẩu khóa tab thành công!");
+  };
+
   const [periodType, setPeriodType] = useState<PeriodType>("week");
   const [periodKey, setPeriodKey] = useState<string>();
   const [personCode, setPersonCode] = useState<string>();
@@ -198,7 +240,7 @@ export function App() {
     { key: "review", label: "Review" },
     { key: "comparison", label: "Tiến Độ" },
     { key: "lessons", label: "Bài Học" },
-    { key: "repeated", label: "⚠️ Thống Kê Lỗi Lặp" },
+    { key: "repeated", label: isRepeatedUnlocked ? "⚠️ Thống Kê Lỗi Lặp" : "🔒 Thống Kê Lỗi Lặp" },
   ];
 
   return (
@@ -244,11 +286,22 @@ export function App() {
       </header>
 
       <main className="main-content">
-        {/* Main 4 Navigation Hub Tabs */}
+        {/* Main Navigation Hub Tabs */}
         <div className="tabs" role="tablist">
           {tabs.map(t => (
-            <button key={t.key} className={`tab ${tab === t.key ? "active" : ""}`}
-              onClick={() => handleNavigateTab(t.key)} role="tab" aria-selected={tab === t.key}>
+            <button
+              key={t.key}
+              className={`tab ${tab === t.key ? "active" : ""}`}
+              onClick={() => {
+                if (t.key === "repeated" && !isRepeatedUnlocked) {
+                  setShowPasswordModal(true);
+                  return;
+                }
+                handleNavigateTab(t.key);
+              }}
+              role="tab"
+              aria-selected={tab === t.key}
+            >
               {t.label}
             </button>
           ))}
@@ -288,8 +341,113 @@ export function App() {
         {tab === "roles" && <RoleView />}
 
         {/* TAB 8: THỐNG KÊ & PHÂN LOẠI LỖI LẶP THEO 9 BÀI HỌC KINH NGHIỆM */}
-        {tab === "repeated" && <RepeatedBugsAnalysisView view={view} activePeriodKey={periodKey} />}
+        {tab === "repeated" && (
+          isRepeatedUnlocked ? (
+            <RepeatedBugsAnalysisView view={view} activePeriodKey={periodKey} onLockTab={handleLockTab} />
+          ) : (
+            <div style={{ padding: "60px 20px", textAlign: "center", background: "var(--surface)", border: "1px solid var(--border-2)", borderRadius: "8px" }}>
+              <div style={{ fontSize: "48px", marginBottom: "12px" }}>🔒</div>
+              <h2 style={{ fontSize: "18px", color: "var(--text-1)", marginBottom: "8px" }}>Tab Đang Được Khóa Bảo Mật</h2>
+              <p style={{ fontSize: "13px", color: "var(--text-3)", marginBottom: "20px" }}>Vui lòng bấm nút mở khóa và nhập mật khẩu để truy cập.</p>
+              <button
+                type="button"
+                className="ctrl ctrl-primary"
+                onClick={() => setShowPasswordModal(true)}
+                style={{ padding: "10px 24px", fontSize: "14px", fontWeight: "700" }}
+              >
+                🔑 Nhập Mật Khẩu Mở Khóa
+              </button>
+            </div>
+          )
+        )}
       </main>
+
+      {/* Password Unlock Modal for Repeated Bugs Tab */}
+      {showPasswordModal && (
+        <div className="modal-overlay" onClick={() => setShowPasswordModal(false)}>
+          <div className="modal" style={{ width: "420px", padding: "24px", borderRadius: "10px", background: "var(--surface)", border: "1px solid var(--border-2)" }} onClick={e => e.stopPropagation()}>
+            <div style={{ textAlign: "center", marginBottom: "18px" }}>
+              <div style={{ fontSize: "36px", marginBottom: "8px" }}>🔐</div>
+              <h3 style={{ margin: "0 0 6px 0", fontSize: "17px", fontWeight: "700", color: "var(--text-1)" }}>
+                Xác Nhận Quyền Truy Cập Tab Lỗi Lặp
+              </h3>
+              <p style={{ fontSize: "12px", color: "var(--text-3)", margin: 0 }}>
+                Vui lòng nhập mật khẩu để mở khóa và xem thống kê lỗi lặp 9 bài học kinh nghiệm.
+              </p>
+            </div>
+
+            <form onSubmit={handleUnlockTab}>
+              <div style={{ marginBottom: "16px" }}>
+                <label style={{ display: "block", fontSize: "12px", fontWeight: "600", color: "var(--text-2)", marginBottom: "6px" }}>
+                  Mật khẩu truy cập:
+                </label>
+                <input
+                  type="password"
+                  className="ctrl"
+                  autoFocus
+                  placeholder="Nhập mật khẩu (Mặc định: 1234)..."
+                  value={passwordInput}
+                  onChange={e => { setPasswordInput(e.target.value); setPasswordError(""); }}
+                  style={{ width: "100%", padding: "10px 12px", fontSize: "14px", textAlign: "center", letterSpacing: "2px", fontWeight: "bold" }}
+                />
+                {passwordError && (
+                  <div style={{ fontSize: "11px", color: "var(--red)", marginTop: "6px", fontWeight: "600" }}>
+                    ⚠️ {passwordError}
+                  </div>
+                )}
+              </div>
+
+              <div style={{ display: "flex", gap: "10px", justifyContent: "flex-end" }}>
+                <button
+                  type="button"
+                  className="ctrl"
+                  onClick={() => setShowPasswordModal(false)}
+                  style={{ padding: "8px 16px", fontSize: "13px" }}
+                >
+                  Hủy
+                </button>
+                <button
+                  type="submit"
+                  className="ctrl ctrl-primary"
+                  style={{ padding: "8px 20px", fontSize: "13px", fontWeight: "700" }}
+                >
+                  🔓 Mở Khóa Tab
+                </button>
+              </div>
+            </form>
+
+            <div style={{ marginTop: "16px", paddingTop: "12px", borderTop: "1px solid var(--border-3)", display: "flex", justifyContent: "space-between", alignItems: "center", fontSize: "11px", color: "var(--text-3)" }}>
+              <span>💡 Mật khẩu mặc định: <strong>1234</strong></span>
+              <button
+                type="button"
+                style={{ background: "none", border: "none", color: "var(--blue)", textDecoration: "underline", cursor: "pointer", padding: 0, fontSize: "11px" }}
+                onClick={() => setIsChangingPassword(!isChangingPassword)}
+              >
+                {isChangingPassword ? "Đóng đổi MK" : "Đổi Mật Khẩu"}
+              </button>
+            </div>
+
+            {isChangingPassword && (
+              <form onSubmit={handleChangePassword} style={{ marginTop: "12px", background: "var(--surface-2)", padding: "12px", borderRadius: "6px" }}>
+                <div style={{ fontSize: "11px", fontWeight: "700", color: "var(--text-1)", marginBottom: "6px" }}>Thiết lập Mật Khẩu Mới:</div>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <input
+                    type="password"
+                    className="ctrl"
+                    placeholder="Mật khẩu mới..."
+                    value={newPasswordInput}
+                    onChange={e => setNewPasswordInput(e.target.value)}
+                    style={{ flex: 1, fontSize: "12px", padding: "6px 8px" }}
+                  />
+                  <button type="submit" className="ctrl ctrl-primary" style={{ fontSize: "11px", padding: "6px 12px" }}>
+                    Lưu Mật Khẩu
+                  </button>
+                </div>
+              </form>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

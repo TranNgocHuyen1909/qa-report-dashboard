@@ -4,6 +4,7 @@ import type { DashboardView } from "../../shared/types";
 interface RepeatedBugsAnalysisViewProps {
   view: DashboardView;
   activePeriodKey?: string;
+  onLockTab?: () => void;
 }
 
 export const MASTER_LESSONS = [
@@ -99,7 +100,7 @@ export const MASTER_LESSONS = [
   }
 ];
 
-export function RepeatedBugsAnalysisView({ view, activePeriodKey }: RepeatedBugsAnalysisViewProps) {
+export function RepeatedBugsAnalysisView({ view, activePeriodKey, onLockTab }: RepeatedBugsAnalysisViewProps) {
   const [selectedLessonFilter, setSelectedLessonFilter] = useState<string>("all");
   const [selectedDevFilter, setSelectedDevFilter] = useState<string>("all");
   const [searchQuery, setSearchQuery] = useState<string>("");
@@ -328,6 +329,28 @@ export function RepeatedBugsAnalysisView({ view, activePeriodKey }: RepeatedBugs
               </option>
             ))}
           </select>
+
+          {onLockTab && (
+            <button
+              type="button"
+              className="ctrl"
+              onClick={onLockTab}
+              style={{
+                fontSize: "12px",
+                padding: "6px 14px",
+                fontWeight: "700",
+                background: "rgba(239, 68, 68, 0.12)",
+                color: "var(--red)",
+                border: "1px solid var(--red)",
+                display: "flex",
+                alignItems: "center",
+                gap: "5px"
+              }}
+              title="Bấm để khóa lại tab này"
+            >
+              🔒 Khóa Tab Lỗi Lặp
+            </button>
+          )}
         </div>
       </div>
 

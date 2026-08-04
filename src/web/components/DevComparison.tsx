@@ -583,6 +583,21 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         ? manDaysOverrides[dev.code]
         : (pMetric && pMetric.manDays > 0 ? pMetric.manDays : 5);
 
+      const getPrRealActivityDate = (b: BugRecord) => {
+        const dates: string[] = [];
+        if (b.prLastCommitAt) dates.push(dateKey(b.prLastCommitAt)!);
+        if (b.huyenLastCommentAt) dates.push(dateKey(b.huyenLastCommentAt)!);
+        if (b.confirmedDate) dates.push(dateKey(b.confirmedDate)!);
+        if (b.ghReviews && Array.isArray(b.ghReviews)) {
+          b.ghReviews.forEach((r: any) => {
+            if (r.submittedAt) dates.push(dateKey(r.submittedAt)!);
+          });
+        }
+        const valid = dates.filter(Boolean);
+        if (valid.length === 0) return dateKey(b.prCreatedAt) ?? dateKey(b.createdTime);
+        return valid.sort().pop();
+      };
+
       const reCommitBugsList = devBugs.filter(b => {
         if (!b.pullRequestUrl && !(b.note ?? "").includes("github.com")) return false;
         
@@ -593,21 +608,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const commitsCount = b.ghCommitsCount ?? 1;
         if (commitsCount <= 1) return false;
 
-        const devCommitDate = dateKey(b.prLastCommitAt);
-        if (devCommitDate) {
-          return dateInRange(devCommitDate, activePeriod.startDate, activePeriod.endDate);
-        }
-
-        const lastEditedDate = dateKey(b.lastEditedTime);
-        if (!lastEditedDate || !dateInRange(lastEditedDate, activePeriod.startDate, activePeriod.endDate)) return false;
-
-        // Exclude pure QC review finish events where author did not commit or comment in period
-        const reviewEndDate = dateKey(b.reviewEndDate);
-        if (reviewEndDate && reviewEndDate === lastEditedDate && (b.prCommentsByAuthor ?? 0) === 0) {
-          return false;
-        }
-
-        return true;
+        const realActivityDate = getPrRealActivityDate(b);
+        return !!realActivityDate && dateInRange(realActivityDate, activePeriod.startDate, activePeriod.endDate);
       }).map(b => ({
         bugId: b.bugId || b.id,
         title: b.title,
@@ -617,7 +619,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         location: getPrimaryLocation(b.location),
         commitsCount: b.ghCommitsCount ?? 1,
         commentsCount: (b.prCommentsByHuyen ?? 0) + (b.prCommentsByTruong ?? 0),
-        date: dateKey(b.prLastCommitAt) || dateKey(b.lastEditedTime) || dateKey(b.prCreatedAt) || "—",
+        date: getPrRealActivityDate(b) || dateKey(b.prCreatedAt) || "—",
         prCreatedAt: dateKey(b.prCreatedAt) || "—",
       }));
       const reCommitCount = reCommitBugsList.length;

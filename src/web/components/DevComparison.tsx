@@ -1356,8 +1356,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         </div>
                       )}
                       {row.duplicateChildCount > 0 ? (
-                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Tổng ${row.closedCount} task gồm ${row.closedBugsWithPr} task gốc và ${row.duplicateChildCount} task trùng lặp`}>
-                          ({row.closedBugsWithPr} gốc, {row.duplicateChildCount} trùng)
+                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Trong tổng ${row.closedCount} task có ${row.duplicateChildCount} task trùng lặp`}>
+                          ({row.duplicateChildCount} task trùng)
                         </div>
                       ) : null}
                     </td>
@@ -1392,8 +1392,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         </div>
                       )}
                       {row.resolvedDuplicateChildCount > 0 ? (
-                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Tổng ${row.resolvedCount} task gồm ${row.resolvedBugsWithPr} task gốc và ${row.resolvedDuplicateChildCount} task trùng lặp`}>
-                          ({row.resolvedBugsWithPr} gốc, {row.resolvedDuplicateChildCount} trùng)
+                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Trong tổng ${row.resolvedCount} task có ${row.resolvedDuplicateChildCount} task trùng lặp`}>
+                          ({row.resolvedDuplicateChildCount} task trùng)
                         </div>
                       ) : null}
                     </td>

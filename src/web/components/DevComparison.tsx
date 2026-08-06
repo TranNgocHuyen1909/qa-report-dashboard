@@ -1337,7 +1337,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.closedCount > 0
-                          ? `[CLOSED: ${row.closedBugsWithPr} bug có PR${row.closedBugsDocsNoPr > 0 ? `, ${row.closedBugsDocsNoPr} task Docs/Test` : ""}]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
+                          ? `[CLOSED: ${row.closedBugsWithPr} task chính${row.closedBugsDocsNoPr > 0 ? `, ${row.closedBugsDocsNoPr} task Docs/Test` : ""}${row.duplicateChildCount > 0 ? ` + ${row.duplicateChildCount} task trùng` : ""}]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
                           : "0 task Closed"
                       }
                       onClick={() => {
@@ -1356,8 +1356,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         </div>
                       )}
                       {row.duplicateChildCount > 0 && (
-                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }}>
-                          ({row.duplicateChildCount} task trùng)
+                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Thêm ${row.duplicateChildCount} task trùng lặp được gộp chung`}>
+                          (+{row.duplicateChildCount} task trùng)
                         </div>
                       )}
                     </td>
@@ -1373,7 +1373,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.resolvedCount > 0
-                          ? `[RESOLVED: ${row.resolvedBugsWithPr} PR${row.resolvedBugsDocsNoPr > 0 ? `, ${row.resolvedBugsDocsNoPr} task Docs/Test` : ""}]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}`
+                          ? `[RESOLVED: ${row.resolvedBugsWithPr} task chính${row.resolvedBugsDocsNoPr > 0 ? `, ${row.resolvedBugsDocsNoPr} task Docs/Test` : ""}${row.resolvedDuplicateChildCount > 0 ? ` + ${row.resolvedDuplicateChildCount} task trùng` : ""}]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}`
                           : "0 task Resolved"
                       }
                       onClick={() => {
@@ -1392,8 +1392,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         </div>
                       )}
                       {row.resolvedDuplicateChildCount > 0 && (
-                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }}>
-                          ({row.resolvedDuplicateChildCount} task trùng)
+                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Thêm ${row.resolvedDuplicateChildCount} task trùng lặp được gộp chung`}>
+                          (+{row.resolvedDuplicateChildCount} task trùng)
                         </div>
                       )}
                     </td>

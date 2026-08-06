@@ -376,14 +376,43 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       const devRows = devStats.filter(r => r.dev.code === dev.code);
 
       const noRepro = devRows.reduce((sum, r) => sum + r.noRepro, 0);
-      const reopenedCount = devRows.reduce((sum, r) => sum + r.reopenedCount, 0);
 
-      const reopenedList: any[] = [];
-      devRows.forEach(r => {
-        if (r.reopenedList) {
-          reopenedList.push(...r.reopenedList);
+      // Reopen calculation: Include ALL Notion tasks (both WITH PR and WITHOUT PR)
+      // that have reopenedDate or status Reopened/Mở lại in the active period.
+      const reopenedBugsMap = new Map<string, any>();
+      view.bugs.forEach(b => {
+        if ((b.status ?? "").toLowerCase() === "cancel") return;
+
+        const prAuthor = b.prAuthor?.toLowerCase();
+        const isFixedByDev = (b.fixedByIds ?? []).some((id: string) => dev.notionIds.includes(id));
+        const isPrDev = isDevGithubAuthor(dev.code, prAuthor) || (dev.githubUsername && prAuthor === dev.githubUsername.toLowerCase());
+
+        if (!isFixedByDev && !isPrDev) return;
+
+        const st = (b.status ?? "").toLowerCase();
+        const isReopenStatus = st === "reopened" || st.includes("mở lại") || st.includes("reopen");
+        const hasReopenDate = Boolean(b.reopenedDate);
+
+        if (!isReopenStatus && !hasReopenDate) return;
+
+        const rDate = dateKey(b.reopenedDate) || dateKey(b.confirmedDate) || dateKey(b.lastEditedTime) || dateKey(b.createdTime);
+        if (rDate && dateInRange(rDate, activePeriod.startDate, activePeriod.endDate)) {
+          const key = b.bugId || b.id;
+          if (!reopenedBugsMap.has(key)) {
+            reopenedBugsMap.set(key, {
+              bugId: key,
+              title: b.title,
+              url: b.url,
+              prUrl: b.pullRequestUrl,
+              status: (b.status ?? "REOPENED").toUpperCase(),
+              date: rDate
+            });
+          }
         }
       });
+
+      const reopenedList = Array.from(reopenedBugsMap.values());
+      const reopenedCount = reopenedList.length;
 
       const repeatedBugsMap = new Map<string, any>();
       devRows.forEach(r => {

@@ -378,7 +378,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       const noRepro = devRows.reduce((sum, r) => sum + r.noRepro, 0);
 
       // Reopen calculation: Count tasks where QC left defect notes (Medium, High, Low, repro, root cause, rebase),
-      // or where PR has re-commits/multi-round reviews, or explicit Notion reopen status/date.
+      // or where PR has >1 re-commits or >1 review comments/rounds, or explicit Notion reopen status/date.
       const reopenedBugsMap = new Map<string, any>();
       view.bugs.forEach(b => {
         if ((b.status ?? "").toLowerCase() === "cancel") return;
@@ -410,7 +410,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
         const isMultiCommitOrReview =
           (b.ghCommitsCount ?? 1) > 1 ||
-          (b.prCommentsByHuyen ?? 0) > 0 ||
+          (b.prCommentsByHuyen ?? 0) > 1 ||
           (b.huyenReviewRounds ?? 0) > 1;
 
         const isReopened = isExplicitReopen || isDefectNote || isMultiCommitOrReview;

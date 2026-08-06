@@ -5,6 +5,9 @@ export interface DevReviewStatRow {
   dev: Person;
   fixedCount: number;
   reviewedCount: number;
+  approvedWithNoteCount?: number;
+  changesRequestedCount?: number;
+  totalQcCommentsCount?: number;
   withCommentCount: number;
   noCommentCount: number;
   pendingCount: number;
@@ -18,7 +21,15 @@ export interface DevBreakdownTableProps {
   bugBelongsToPerson: (b: BugRecord, p: Person) => boolean;
   onSelectDevFilter: (devCode: string) => void;
   onSelectSubTab: (tab: "reviewed" | "pending") => void;
-  onSelectCommentFilter: (filter: "all" | "comments" | "nocomments" | "multiround") => void;
+  onSelectCommentFilter: (
+    filter:
+      | "all"
+      | "comments"
+      | "nocomments"
+      | "multiround"
+      | "approved_with_note"
+      | "changes_requested"
+  ) => void;
   scrollToDetails: () => void;
 }
 
@@ -50,35 +61,64 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
               fontWeight: "bold",
             }}
           >
-            <th style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-1)" }} title="Tên lập trình viên phụ trách">
+            <th
+              style={{ padding: "10px 12px", textAlign: "left", color: "var(--text-1)" }}
+              title="Tên lập trình viên phụ trách"
+            >
               TÁC GIẢ
-            </th>
-            <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Tổng số bug có PR của Dev này mà QC Lead đã hoàn thành review">
-              TỔNG ĐÃ REVIEW
-            </th>
-            <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Số bug của Dev này test Pass 100% không cần comment lỗi">
-              PASS NGAY
-            </th>
-            <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Số bug của Dev này bị QC Lead comment ra lỗi trên GitHub PR">
-              REVIEW CÓ COMMENT
             </th>
             <th
               style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
-              title={`[Công thức Tỷ Lệ Lỗi Cá Nhân]\n• Phép tính = (Số bug có comment / Tổng số bug đã review của chính Dev này) × 100%\n• Đánh giá: >30% (Đỏ - Cao) | >15%-30% (Vàng) | ≤15% (Xanh)`}
+              title="Tổng số bug có PR của Dev này mà QC Lead đã hoàn thành review"
+            >
+              TỔNG ĐÃ REVIEW
+            </th>
+            <th
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
+              title="Số bug của Dev này test Pass 100% không cần comment/lưu ý nào"
+            >
+              PASS NGAY
+            </th>
+            <th
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
+              title="Số bug của Dev này được QC Approve cho merge nhưng có comment note góp ý thêm"
+            >
+              PASS CÓ NOTE
+            </th>
+            <th
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
+              title="Số bug của Dev này bị QC Lead bắt lỗi nghiêm trọng/Request Changes trên GitHub PR"
+            >
+              REQUEST CHANGES
+            </th>
+            <th
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
+              title="Tổng số câu comment QC đã để lại trên tất cả PR của Dev này"
+            >
+              TỔNG COMMENT QC
+            </th>
+            <th
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
+              title={`[Công thức Tỷ Lệ Lỗi Cá Nhân]\n• Phép tính = (Số bug bị Request Changes / Tổng số bug đã review của chính Dev này) × 100%\n• Đánh giá: >30% (Đỏ - Cao) | >15%-30% (Vàng) | ≤15% (Xanh)`}
             >
               TỶ LỆ LỖI (CÁ NHÂN)
             </th>
             <th
               style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
-              title={`[Công thức Đóng Góp Lỗi Cả Team]\n• Phép tính = (Số bug có comment của Dev này / TỔNG BUG CÓ COMMENT CỦA CẢ TEAM) × 100%\n• Đánh giá mức độ đóng góp lỗi vào tổng lỗi team`}
+              title={`[Công thức Đóng Góp Lỗi Cả Team]\n• Phép tính = (Số bug Request Changes của Dev này / TỔNG BUG REQUEST CHANGES CỦA CẢ TEAM) × 100%\n• Đánh giá mức độ đóng góp lỗi vào tổng lỗi team`}
             >
               ĐÓNG GÓP LỖI (CẢ TEAM)
             </th>
-            <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Số PR của Dev này phải re-review / comment từ 2 lần trở lên">
+            <th
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
+              title="Số PR của Dev này phải re-review / comment từ 2 lần trở lên"
+            >
               RE-REVIEW
             </th>
-
-            <th style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }} title="Số bug của Dev này đã sửa/có PR nhưng chưa được QC Lead review (Tất cả thời gian)">
+            <th
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
+              title="Số bug của Dev này đã sửa/có PR nhưng chưa được QC Lead review"
+            >
               ĐANG CHỜ REVIEW
             </th>
             <th
@@ -92,27 +132,26 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
         <tbody>
           {devReviewStats.map((row, idx) => {
             const devBugs = huyenReviewedBugs.filter((b) =>
-              bugBelongsToPerson(b, row.dev),
+              bugBelongsToPerson(b, row.dev)
             );
             const multiRoundCount = devBugs.filter(
               (b) =>
                 (b.prCommentsByHuyen ?? 0) > 1 ||
-                (b.huyenReviewRounds ?? 0) > 1,
+                (b.huyenReviewRounds ?? 0) > 1
             ).length;
+
+            const reqChangesCount = row.changesRequestedCount ?? row.withCommentCount;
+            const appNoteCount = row.approvedWithNoteCount ?? 0;
+            const qcCommentsTotal = row.totalQcCommentsCount ?? devBugs.reduce((sum, b) => sum + (b.prCommentsByHuyen ?? 0), 0);
+
             const errRatePersonal =
               row.reviewedCount > 0
-                ? (
-                    (row.withCommentCount / row.reviewedCount) *
-                    100
-                  ).toFixed(0)
+                ? ((reqChangesCount / row.reviewedCount) * 100).toFixed(0)
                 : "0";
-            const totalTeamWithComments = huyenReviewedWithComments.length;
+            const totalTeamChangesReq = huyenReviewedWithComments.length;
             const errRateTeamShare =
-              totalTeamWithComments > 0
-                ? (
-                    (row.withCommentCount / totalTeamWithComments) *
-                    100
-                  ).toFixed(0)
+              totalTeamChangesReq > 0
+                ? ((reqChangesCount / totalTeamChangesReq) * 100).toFixed(0)
                 : "0";
 
             return (
@@ -177,28 +216,59 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
                     onSelectCommentFilter("nocomments");
                     scrollToDetails();
                   }}
-                  title={`Click để xem bug Pass của ${row.dev.code}`}
+                  title={`Click để xem bug Pass ngay của ${row.dev.code}`}
                 >
                   {row.noCommentCount} bug
                 </td>
-                {/* Review có comment */}
+                {/* Pass có note */}
                 <td
                   style={{
                     padding: "8px 12px",
                     textAlign: "center",
-                    color: row.withCommentCount > 0 ? "#ef4444" : "var(--text-2)",
+                    color: appNoteCount > 0 ? "#f59e0b" : "var(--text-2)",
                     fontWeight: "600",
                     cursor: "pointer",
                   }}
                   onClick={() => {
                     onSelectDevFilter(row.dev.code);
                     onSelectSubTab("reviewed");
-                    onSelectCommentFilter("comments");
+                    onSelectCommentFilter("approved_with_note");
                     scrollToDetails();
                   }}
-                  title={`Click để xem bug có comment của ${row.dev.code}`}
+                  title={`Click để xem bug Approve with note của ${row.dev.code}`}
                 >
-                  {row.withCommentCount} bug
+                  {appNoteCount} bug
+                </td>
+                {/* Request changes */}
+                <td
+                  style={{
+                    padding: "8px 12px",
+                    textAlign: "center",
+                    color: reqChangesCount > 0 ? "#ef4444" : "var(--text-2)",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => {
+                    onSelectDevFilter(row.dev.code);
+                    onSelectSubTab("reviewed");
+                    onSelectCommentFilter("changes_requested");
+                    scrollToDetails();
+                  }}
+                  title={`Click để xem bug Request Changes của ${row.dev.code}`}
+                >
+                  {reqChangesCount} bug
+                </td>
+                {/* Tổng comment QC */}
+                <td
+                  style={{
+                    padding: "8px 12px",
+                    textAlign: "center",
+                    color: "var(--accent-2)",
+                    fontWeight: "700",
+                  }}
+                  title={`Tổng số comment QC đã để lại trên các PR của ${row.dev.code}`}
+                >
+                  {qcCommentsTotal} comments
                 </td>
                 {/* Tỷ Lệ Lỗi (Cá Nhân) */}
                 <td

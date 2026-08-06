@@ -16,7 +16,15 @@ export interface ReviewBugsTableProps {
   setSelectedDevFilter: (val: string) => void;
   selectedLocFilter: string;
   setSelectedLocFilter: (val: string) => void;
-  huyenCommentFilter: "all" | "comments" | "nocomments" | "multiround" | "dev_replied" | "pending_reply";
+  huyenCommentFilter:
+    | "all"
+    | "comments"
+    | "nocomments"
+    | "approved_with_note"
+    | "changes_requested"
+    | "multiround"
+    | "dev_replied"
+    | "pending_reply";
   setHuyenCommentFilter: (val: any) => void;
   selectedPrFilter: string;
   setSelectedPrFilter: (val: string) => void;

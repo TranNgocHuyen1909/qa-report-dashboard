@@ -50,6 +50,7 @@ export interface BugRecord {
   // GitHub enrichment
   ghReviewStatus?:
     | "Approved"
+    | "Approved with Note"
     | "Changes Requested"
     | "Commented"
     | "No review"
@@ -67,6 +68,8 @@ export interface BugRecord {
   huyenFirstCommentAt?: string;
   huyenLastCommentAt?: string;
   huyenReviewRounds?: number;
+  huyenHasApproveWithNote?: boolean;
+  huyenHasChangesRequested?: boolean;
   ghLabels?: string[];
 }
 
@@ -159,16 +162,16 @@ export interface BenchmarkData {
   fixRatePercent: number;
   avgBugsPerDay: number;
   weeklyBreakdown: TeamPeriodMetric["period"] extends infer P
-    ? Array<{
-        period: PeriodInfo;
-        detected: number;
-        newFixed: number;
-        newOpen: number;
-        fixedInPeriod: number;
-        backlogEnd: number;
-        fixRatePercent: number;
-      }>
-    : never;
+  ? Array<{
+    period: PeriodInfo;
+    detected: number;
+    newFixed: number;
+    newOpen: number;
+    fixedInPeriod: number;
+    backlogEnd: number;
+    fixRatePercent: number;
+  }>
+  : never;
 }
 
 /* ── Checklist ────────────────────────────────────────── */

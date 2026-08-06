@@ -36,6 +36,8 @@ export function ReviewStats({
     | "all"
     | "comments"
     | "nocomments"
+    | "approved_with_note"
+    | "changes_requested"
     | "multiround"
     | "dev_replied"
     | "pending_reply"
@@ -848,30 +850,66 @@ export function ReviewStats({
     });
   }, [view.bugs, activePeriod]);
 
-  const isHuyenBugWithComment = (b: BugRecord) => {
+  const isHuyenBugApprovedWithNote = (b: BugRecord) => {
+    if (b.ghReviewStatus === "Approved with Note" || b.huyenHasApproveWithNote === true) {
+      return true;
+    }
+    const note = (b.note ?? "").toLowerCase();
+    return note.includes("approve with note");
+  };
+
+  const isHuyenBugChangesRequested = (b: BugRecord) => {
+    if (isHuyenBugApprovedWithNote(b)) return false;
+    if (b.ghReviewStatus === "Changes Requested" || b.huyenHasChangesRequested === true) {
+      return true;
+    }
+    const note = (b.note ?? "").toLowerCase();
+    const st = (b.status ?? "").toLowerCase();
+    const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
+    if (
+      st.includes("change requested") ||
+      st.includes("changes requested") ||
+      ghLbls.some((l) => l.includes("change")) ||
+      note.includes("request change") ||
+      note.includes("có lỗi")
+    ) {
+      return true;
+    }
+
+    return false;
+  };
+
+  const isHuyenBugPassNgay = (b: BugRecord) => {
+    if (isHuyenBugApprovedWithNote(b) || isHuyenBugChangesRequested(b)) return false;
     const start = dateKey(b.reviewStartDate);
     const end = dateKey(b.reviewEndDate);
-    if (start && end && start !== end) return true;
-    if (start && !end) return true;
-    return false;
+    if (start && end && start === end) return true;
+    if (b.ghReviewStatus === "Approved") return true;
+    return true;
+  };
+
+  const isHuyenBugWithComment = (b: BugRecord) => {
+    return isHuyenBugChangesRequested(b);
   };
 
   const isHuyenBugReReview = (b: BugRecord) => {
     const start = dateKey(b.reviewStartDate);
     const end = dateKey(b.reviewEndDate);
     if (start && !end) return true;
-    return false;
+    return (b.prCommentsByHuyen ?? 0) > 1 || (b.huyenReviewRounds ?? 0) > 1;
   };
 
-  const isHuyenBugPassNgay = (b: BugRecord) => {
-    const start = dateKey(b.reviewStartDate);
-    const end = dateKey(b.reviewEndDate);
-    return Boolean(start && end && start === end);
-  };
+  const huyenReviewedChangesRequested = useMemo(() => {
+    return huyenReviewedBugs.filter(isHuyenBugChangesRequested);
+  }, [huyenReviewedBugs]);
+
+  const huyenReviewedApprovedWithNote = useMemo(() => {
+    return huyenReviewedBugs.filter(isHuyenBugApprovedWithNote);
+  }, [huyenReviewedBugs]);
 
   const huyenReviewedWithComments = useMemo(() => {
-    return huyenReviewedBugs.filter(isHuyenBugWithComment);
-  }, [huyenReviewedBugs]);
+    return huyenReviewedChangesRequested;
+  }, [huyenReviewedChangesRequested]);
 
   const huyenReviewedNoComments = useMemo(() => {
     return huyenReviewedBugs.filter(isHuyenBugPassNgay);
@@ -993,8 +1031,14 @@ export function ReviewStats({
         bugBelongsToPerson(b, dev),
       ).length;
       const reviewedCount = devBugs.length;
-      const withCommentCount = devBugs.filter(isHuyenBugWithComment).length;
-      const noCommentCount = devBugs.length - withCommentCount;
+      const approvedWithNoteCount = devBugs.filter(isHuyenBugApprovedWithNote).length;
+      const changesRequestedCount = devBugs.filter(isHuyenBugChangesRequested).length;
+      const totalQcCommentsCount = devBugs.reduce(
+        (sum, b) => sum + (b.prCommentsByHuyen ?? 0),
+        0,
+      );
+      const withCommentCount = changesRequestedCount;
+      const noCommentCount = devBugs.filter(isHuyenBugPassNgay).length;
       const pendingCount = teamResolvedPriorityBugs.filter((b) =>
         bugBelongsToPerson(b, dev),
       ).length;
@@ -1004,13 +1048,16 @@ export function ReviewStats({
         dev,
         fixedCount,
         reviewedCount,
+        approvedWithNoteCount,
+        changesRequestedCount,
+        totalQcCommentsCount,
         withCommentCount,
         noCommentCount,
         pendingCount,
         reviewRate,
       };
     });
-  }, [dev3People, periodFixedBugs, huyenReviewedBugs, pendingHuyenReviewBugs]);
+  }, [dev3People, periodFixedBugs, huyenReviewedBugs, teamResolvedPriorityBugs]);
 
   const isDevRepliedBug = (b: BugRecord) => {
     if (!isHuyenBugWithComment(b)) return false;
@@ -1375,6 +1422,8 @@ export function ReviewStats({
         if (!(b.location ?? []).includes(selectedLocFilter)) return false;
       }
       if (huyenCommentFilter === "comments") return isHuyenBugWithComment(b);
+      if (huyenCommentFilter === "changes_requested") return isHuyenBugChangesRequested(b);
+      if (huyenCommentFilter === "approved_with_note") return isHuyenBugApprovedWithNote(b);
       if (huyenCommentFilter === "nocomments") return isHuyenBugPassNgay(b);
       if (huyenCommentFilter === "multiround") return isHuyenBugReReview(b);
       if (huyenCommentFilter === "dev_replied") return isDevRepliedBug(b);
@@ -2402,7 +2451,20 @@ export function ReviewStats({
                       background: "#10b981",
                     }}
                   ></span>
-                  Pass
+                  Pass ngay
+                </span>
+                <span
+                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "2px",
+                      background: "#f59e0b",
+                    }}
+                  ></span>
+                  Pass có note
                 </span>
                 <span
                   style={{ display: "flex", alignItems: "center", gap: "4px" }}
@@ -2415,7 +2477,7 @@ export function ReviewStats({
                       background: "#ef4444",
                     }}
                   ></span>
-                  Có comment
+                  Request changes (Lỗi)
                 </span>
                 <span
                   style={{ display: "flex", alignItems: "center", gap: "4px" }}
@@ -2425,7 +2487,7 @@ export function ReviewStats({
                       width: "10px",
                       height: "10px",
                       borderRadius: "2px",
-                      background: "#f59e0b",
+                      background: "#64748b",
                     }}
                   ></span>
                   Chờ review
@@ -2444,7 +2506,8 @@ export function ReviewStats({
                   1,
                 );
                 const noCommentWidth = (row.noCommentCount / maxVal) * 100;
-                const withCommentWidth = (row.withCommentCount / maxVal) * 100;
+                const approvedNoteWidth = ((row.approvedWithNoteCount ?? 0) / maxVal) * 100;
+                const withCommentWidth = ((row.changesRequestedCount ?? row.withCommentCount) / maxVal) * 100;
                 const pendingWidth = (row.pendingCount / maxVal) * 100;
 
                 return (
@@ -2507,8 +2570,36 @@ export function ReviewStats({
                         </div>
                       )}
 
-                      {/* Segment 2: Ra Lỗi (Red) */}
-                      {row.withCommentCount > 0 && (
+                      {/* Segment 2: Pass có Note (Amber) */}
+                      {(row.approvedWithNoteCount ?? 0) > 0 && (
+                        <div
+                          style={{
+                            width: `${approvedNoteWidth}%`,
+                            height: "100%",
+                            background: "#f59e0b",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#fff",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            transition: "width 0.4s ease-out",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => {
+                            setSelectedDevFilter(row.dev.code);
+                            setDetailSubTab("reviewed");
+                            setHuyenCommentFilter("approved_with_note");
+                            scrollToDetails();
+                          }}
+                          title={`[Bấm để lọc chi tiết]\n• Dev: ${row.dev.code}\n• Loại: Pass Có Note (Approve with note)\n• Số lượng: ${row.approvedWithNoteCount} bug`}
+                        >
+                          {approvedNoteWidth > 6 && `${row.approvedWithNoteCount} Note`}
+                        </div>
+                      )}
+
+                      {/* Segment 3: Request Changes / Lỗi (Red) */}
+                      {(row.changesRequestedCount ?? row.withCommentCount) > 0 && (
                         <div
                           style={{
                             width: `${withCommentWidth}%`,
@@ -2526,23 +2617,23 @@ export function ReviewStats({
                           onClick={() => {
                             setSelectedDevFilter(row.dev.code);
                             setDetailSubTab("reviewed");
-                            setHuyenCommentFilter("comments");
+                            setHuyenCommentFilter("changes_requested");
                             scrollToDetails();
                           }}
-                          title={`[Bấm để lọc chi tiết]\n• Dev: ${row.dev.code}\n• Loại: Review Có Comment (Ra lỗi)\n• Số lượng: ${row.withCommentCount} bug`}
+                          title={`[Bấm để lọc chi tiết]\n• Dev: ${row.dev.code}\n• Loại: Request Changes (Lỗi)\n• Số lượng: ${row.changesRequestedCount ?? row.withCommentCount} bug`}
                         >
                           {withCommentWidth > 6 &&
-                            `${row.withCommentCount} Lỗi`}
+                            `${row.changesRequestedCount ?? row.withCommentCount} Lỗi`}
                         </div>
                       )}
 
-                      {/* Segment 3: Chờ Review (Yellow) */}
+                      {/* Segment 4: Chờ Review (Gray) */}
                       {row.pendingCount > 0 && (
                         <div
                           style={{
                             width: `${pendingWidth}%`,
                             height: "100%",
-                            background: "#f59e0b",
+                            background: "#64748b",
                             display: "flex",
                             alignItems: "center",
                             justifyContent: "center",
@@ -2566,7 +2657,7 @@ export function ReviewStats({
 
                     <div
                       style={{
-                        width: "280px",
+                        width: "320px",
                         fontSize: "12px",
                         display: "flex",
                         alignItems: "center",
@@ -2581,8 +2672,8 @@ export function ReviewStats({
                       <span
                         style={{ color: "var(--text-3)", fontSize: "11px" }}
                       >
-                        (🟢 {row.noCommentCount} pass | 🔴{" "}
-                        {row.withCommentCount} lỗi | ⏳ {row.pendingCount} chờ)
+                        (🟢 {row.noCommentCount} pass | 🟨 {row.approvedWithNoteCount ?? 0} note | 🔴{" "}
+                        {row.changesRequestedCount ?? row.withCommentCount} lỗi | ⏳ {row.pendingCount} chờ)
                       </span>
                     </div>
                   </div>
@@ -2709,14 +2800,20 @@ export function ReviewStats({
                   <option value="all">
                     Tất cả trạng thái review ({huyenReviewedBugs.length})
                   </option>
+                  <option value="nocomments">
+                    Pass ngay ({huyenReviewedNoComments.length})
+                  </option>
+                  <option value="approved_with_note">
+                    Pass có note ({huyenReviewedApprovedWithNote.length})
+                  </option>
+                  <option value="changes_requested">
+                    Request changes ({huyenReviewedChangesRequested.length})
+                  </option>
                   <option value="dev_replied">
                     Dev đã reply ({huyenDevRepliedBugs.length})
                   </option>
                   <option value="pending_reply">
                     Chờ Dev reply ({huyenPendingReplyBugs.length})
-                  </option>
-                  <option value="nocomments">
-                    Pass ({huyenReviewedNoComments.length})
                   </option>
                 </select>
               )}
@@ -2909,30 +3006,27 @@ export function ReviewStats({
                             );
                           }
 
-                          const start = dateKey(b.reviewStartDate);
-                          const end = dateKey(b.reviewEndDate);
-
-                          if (start && end && start === end) {
+                          if (isHuyenBugApprovedWithNote(b)) {
                             return (
                               <span
                                 className="tag"
                                 style={{
-                                  background: "#dcfce7",
-                                  color: "#15803d",
-                                  border: "1px solid #86efac",
+                                  background: "#fef3c7",
+                                  color: "#d97706",
+                                  border: "1px solid #fde68a",
                                   fontSize: "11px",
                                   fontWeight: "700",
                                   padding: "3px 8px",
                                   borderRadius: "4px",
                                 }}
-                                title="Ngày bắt đầu review === Ngày kết thúc review (Pass ngay)"
+                                title="Approve with note (Có comment góp ý thêm)"
                               >
-                                Pass
+                                Pass có note
                               </span>
                             );
                           }
 
-                          if (start && !end) {
+                          if (isHuyenBugChangesRequested(b)) {
                             return (
                               <span
                                 className="tag"
@@ -2945,29 +3039,9 @@ export function ReviewStats({
                                   padding: "3px 8px",
                                   borderRadius: "4px",
                                 }}
-                                title="Đã bắt đầu review nhưng Ngày kết thúc review rỗng (Chờ Dev phản hồi)"
+                                title="Request Changes / Bị bắt lỗi nghiêm trọng"
                               >
-                                Chờ Dev phản hồi
-                              </span>
-                            );
-                          }
-
-                          if (start && end && start !== end) {
-                            return (
-                              <span
-                                className="tag"
-                                style={{
-                                  background: "#fee2e2",
-                                  color: "#b91c1c",
-                                  border: "1px solid #fca5a5",
-                                  fontSize: "11px",
-                                  fontWeight: "700",
-                                  padding: "3px 8px",
-                                  borderRadius: "4px",
-                                }}
-                                title="Ngày bắt đầu review !== Ngày kết thúc review (Review có comment)"
-                              >
-                                Review có comment
+                                Request Changes
                               </span>
                             );
                           }
@@ -2976,17 +3050,17 @@ export function ReviewStats({
                             <span
                               className="tag"
                               style={{
-                                background: "rgba(34, 197, 94, 0.15)",
-                                color: "#4ade80",
-                                border: "1px solid rgba(34, 197, 94, 0.3)",
-                                fontSize: "10px",
-                                fontWeight: "600",
+                                background: "#dcfce7",
+                                color: "#15803d",
+                                border: "1px solid #86efac",
+                                fontSize: "11px",
+                                fontWeight: "700",
                                 padding: "3px 8px",
                                 borderRadius: "4px",
                               }}
                               title="Huyền test đạt 100%, không comment"
                             >
-                              Pass
+                              Pass ngay
                             </span>
                           );
                         }}

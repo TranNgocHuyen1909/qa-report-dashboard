@@ -24,6 +24,8 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
   let commentsHuyen = 0;
   const huyenTimestamps: number[] = [];
   let huyenReviewRounds = 0;
+  let huyenHasApproveWithNote = false;
+  let huyenHasChangesRequested = false;
 
   const isHuyen = (login: string) => {
     const l = (login ?? "").toLowerCase();
@@ -82,6 +84,29 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
       const huyenInlines = comData.filter(c => isHuyen(c.user?.login ?? ""));
       const huyenIssues = issueComData.filter(c => isHuyen(c.user?.login ?? ""));
 
+      const allHuyenBodies = [
+        ...huyenInlines.map(c => String(c.body ?? "").toLowerCase()),
+        ...huyenIssues.map(c => String(c.body ?? "").toLowerCase()),
+      ];
+
+      if (allHuyenBodies.some(b => b.includes("approve with note"))) {
+        huyenHasApproveWithNote = true;
+      }
+      if (
+        allHuyenBodies.some(b =>
+          b.includes("medium") ||
+          b.includes("high") ||
+          b.includes("low") ||
+          b.includes("critical") ||
+          b.includes("blocker") ||
+          b.includes("request changes") ||
+          b.includes("repro:") ||
+          b.includes("root cause:")
+        )
+      ) {
+        huyenHasChangesRequested = true;
+      }
+
       huyenReviewRounds += huyenRevs.length;
 
       const prHuyenTimestamps = [
@@ -104,7 +129,7 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
         }
         huyenReviewRounds += sessions;
       }
-    } catch {}
+    } catch { }
   }
 
   huyenTimestamps.sort((a, b) => a - b);
@@ -117,9 +142,20 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
     : undefined;
 
   let status: BugRecord["ghReviewStatus"] = "No review";
-  if (allReviews.some(r => r.state === "CHANGES_REQUESTED")) status = "Changes Requested";
-  else if (allReviews.some(r => r.state === "APPROVED")) status = "Approved";
-  else if (allReviews.some(r => r.state === "COMMENTED")) status = "Commented";
+  if (huyenHasApproveWithNote) {
+    status = "Approved with Note";
+  } else if (
+    allReviews.some(r => r.state === "CHANGES_REQUESTED") ||
+    Array.from(allLabels).some(l => l.toLowerCase().includes("change")) ||
+    huyenHasChangesRequested
+  ) {
+    status = "Changes Requested";
+  } else if (allReviews.some(r => r.state === "APPROVED")) {
+    const hasNotes = commentsHuyen > 0 || commentsTruong > 0;
+    status = hasNotes ? "Approved with Note" : "Approved";
+  } else if (allReviews.some(r => r.state === "COMMENTED")) {
+    status = "Commented";
+  }
 
   return {
     ...bug,
@@ -135,6 +171,8 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
     huyenFirstCommentAt,
     huyenLastCommentAt,
     huyenReviewRounds,
+    huyenHasApproveWithNote,
+    huyenHasChangesRequested,
     ghLabels: Array.from(allLabels),
   };
 }

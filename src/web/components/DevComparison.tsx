@@ -1337,7 +1337,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.closedCount > 0
-                          ? `[CLOSED: ${row.closedBugsWithPr} task chính${row.closedBugsDocsNoPr > 0 ? `, ${row.closedBugsDocsNoPr} task Docs/Test` : ""}${row.duplicateChildCount > 0 ? ` + ${row.duplicateChildCount} task trùng` : ""}]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
+                          ? `[CLOSED: Tổng ${row.closedCount} task (${row.closedBugsWithPr} task gốc${row.closedBugsDocsNoPr > 0 ? `, ${row.closedBugsDocsNoPr} Docs/Test` : ""}${row.duplicateChildCount > 0 ? `, ${row.duplicateChildCount} task trùng` : ""})]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
                           : "0 task Closed"
                       }
                       onClick={() => {
@@ -1348,18 +1348,18 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                     >
                       <div style={{ fontWeight: "bold", fontSize: "14px" }}>
-                        {row.closedBugsWithPr}
+                        {row.closedCount}
                       </div>
                       {row.closedBugsDocsNoPr > 0 && (
                         <div style={{ fontSize: "10px", color: "#0284c7", fontWeight: "600", marginTop: "2px" }} title="Task Docs / Test không PR (gán Fixed by)">
                           (+{row.closedBugsDocsNoPr} task Docs/Test)
                         </div>
                       )}
-                      {row.duplicateChildCount > 0 && (
-                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Thêm ${row.duplicateChildCount} task trùng lặp được gộp chung`}>
-                          (+{row.duplicateChildCount} task trùng)
+                      {row.duplicateChildCount > 0 ? (
+                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Tổng ${row.closedCount} task gồm ${row.closedBugsWithPr} task gốc và ${row.duplicateChildCount} task trùng lặp`}>
+                          ({row.closedBugsWithPr} gốc, {row.duplicateChildCount} trùng)
                         </div>
-                      )}
+                      ) : null}
                     </td>
                     <td
                       className="td-num"
@@ -1373,7 +1373,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.resolvedCount > 0
-                          ? `[RESOLVED: ${row.resolvedBugsWithPr} task chính${row.resolvedBugsDocsNoPr > 0 ? `, ${row.resolvedBugsDocsNoPr} task Docs/Test` : ""}${row.resolvedDuplicateChildCount > 0 ? ` + ${row.resolvedDuplicateChildCount} task trùng` : ""}]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}`
+                          ? `[RESOLVED: Tổng ${row.resolvedCount} task (${row.resolvedBugsWithPr} task gốc${row.resolvedBugsDocsNoPr > 0 ? `, ${row.resolvedBugsDocsNoPr} Docs/Test` : ""}${row.resolvedDuplicateChildCount > 0 ? `, ${row.resolvedDuplicateChildCount} task trùng` : ""})]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}`
                           : "0 task Resolved"
                       }
                       onClick={() => {
@@ -1384,18 +1384,18 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                     >
                       <div style={{ fontWeight: "bold", fontSize: "14px" }}>
-                        {row.resolvedBugsWithPr}
+                        {row.resolvedCount}
                       </div>
                       {row.resolvedBugsDocsNoPr > 0 && (
                         <div style={{ fontSize: "10px", color: "#0284c7", fontWeight: "600", marginTop: "2px" }} title="Task Docs / Test không PR (gán Fixed by)">
                           (+{row.resolvedBugsDocsNoPr} task Docs/Test)
                         </div>
                       )}
-                      {row.resolvedDuplicateChildCount > 0 && (
-                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Thêm ${row.resolvedDuplicateChildCount} task trùng lặp được gộp chung`}>
-                          (+{row.resolvedDuplicateChildCount} task trùng)
+                      {row.resolvedDuplicateChildCount > 0 ? (
+                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Tổng ${row.resolvedCount} task gồm ${row.resolvedBugsWithPr} task gốc và ${row.resolvedDuplicateChildCount} task trùng lặp`}>
+                          ({row.resolvedBugsWithPr} gốc, {row.resolvedDuplicateChildCount} trùng)
                         </div>
-                      )}
+                      ) : null}
                     </td>
                     <td
                       className="td-num"

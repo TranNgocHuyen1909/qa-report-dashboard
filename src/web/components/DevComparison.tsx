@@ -377,8 +377,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
       const noRepro = devRows.reduce((sum, r) => sum + r.noRepro, 0);
 
-      // Reopen calculation: Count tasks where QC left defect notes (Medium, High, Low, repro, root cause, rebase),
-      // or where PR has >1 re-commits or >1 review comments/rounds, or explicit Notion reopen status/date.
+      // Reopen calculation: ONLY count tasks where Notion "Ngày mở lại" (reopenedDate) is explicitly filled.
       const reopenedBugsMap = new Map<string, any>();
       view.bugs.forEach(b => {
         if ((b.status ?? "").toLowerCase() === "cancel") return;
@@ -389,35 +388,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
         if (!isFixedByDev && !isPrDev) return;
 
-        const st = (b.status ?? "").toLowerCase();
-        const note = (b.note ?? "").toLowerCase();
-        const sol = (b.solution ?? "").toLowerCase();
+        // Strictly check ONLY if Notion has Ngày mở lại (reopenedDate)
+        if (!b.reopenedDate) return;
 
-        const isExplicitReopen = st === "reopened" || st.includes("mở lại") || st.includes("reopen") || Boolean(b.reopenedDate);
-        const isDefectNote =
-          note.includes("medium") ||
-          note.includes("high") ||
-          note.includes("low") ||
-          note.includes("critical") ||
-          note.includes("blocker") ||
-          note.includes("repro:") ||
-          note.includes("root cause:") ||
-          note.includes("rebase") ||
-          note.includes("reopen") ||
-          note.includes("mở lại") ||
-          sol.includes("reopen") ||
-          sol.includes("mở lại");
-
-        const isMultiCommitOrReview =
-          (b.ghCommitsCount ?? 1) > 1 ||
-          (b.prCommentsByHuyen ?? 0) > 1 ||
-          (b.huyenReviewRounds ?? 0) > 1;
-
-        const isReopened = isExplicitReopen || isDefectNote || isMultiCommitOrReview;
-
-        if (!isReopened) return;
-
-        const rDate = dateKey(b.reopenedDate) || dateKey(b.confirmedDate) || dateKey(b.reviewStartDate) || dateKey(b.detectedDate) || dateKey(b.lastEditedTime) || dateKey(b.createdTime);
+        const rDate = dateKey(b.reopenedDate);
         if (rDate && dateInRange(rDate, activePeriod.startDate, activePeriod.endDate)) {
           const key = b.bugId || b.id;
           if (!reopenedBugsMap.has(key)) {

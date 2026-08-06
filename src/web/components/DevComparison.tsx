@@ -300,9 +300,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
         const solvedWithPr = completedBugs.filter(b => !!b.pullRequestUrl);
 
-        const reopenedBugsList = locBugs.filter(b =>
-          ((b.status ?? "").toLowerCase() === "reopened" || b.reopenedDate) &&
-          dateInRange(dateKey(b.reopenedDate) ?? dateKey(b.confirmedDate) ?? dateKey(b.createdTime), activePeriod.startDate, activePeriod.endDate)
+        const reopenedBugsList = devBugs.filter(b =>
+          Boolean(b.reopenedDate) &&
+          dateInRange(dateKey(b.reopenedDate), activePeriod.startDate, activePeriod.endDate)
         );
 
         const reopenRate = completedBugs.length > 0 ? (reopenedBugsList.length / completedBugs.length) * 100 : 0;
@@ -377,7 +377,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
       const noRepro = devRows.reduce((sum, r) => sum + r.noRepro, 0);
 
-      // Reopen calculation: ONLY count tasks where Notion "Ngày mở lại" (reopenedDate) is explicitly filled.
+      // Reopen calculation: Strictly count ALL Notion tasks where "Ngày mở lại" (reopenedDate) field is filled in active period
       const reopenedBugsMap = new Map<string, any>();
       view.bugs.forEach(b => {
         if ((b.status ?? "").toLowerCase() === "cancel") return;
@@ -388,7 +388,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
         if (!isFixedByDev && !isPrDev) return;
 
-        // Strictly check ONLY if Notion has Ngày mở lại (reopenedDate)
+        // Strictly check ONLY if Notion has Ngày mở lại (reopenedDate) field filled
         if (!b.reopenedDate) return;
 
         const rDate = dateKey(b.reopenedDate);

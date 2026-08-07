@@ -87,6 +87,7 @@ export async function enrichBugWithGitHub(bug: BugRecord, token?: string): Promi
       const allHuyenBodies = [
         ...huyenInlines.map(c => String(c.body ?? "").toLowerCase()),
         ...huyenIssues.map(c => String(c.body ?? "").toLowerCase()),
+        ...huyenRevs.map(r => String(r.body ?? "").toLowerCase()),
       ];
 
       if (allHuyenBodies.some(b => b.includes("approve with note"))) {

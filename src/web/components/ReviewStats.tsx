@@ -851,61 +851,58 @@ export function ReviewStats({
   }, [view.bugs, activePeriod]);
 
   const isHuyenBugApprovedWithNote = (b: BugRecord) => {
-    if (b.huyenHasApproveWithNote === true) return true;
     const huyenCommentsCount = b.prCommentsByHuyen ?? 0;
-    const huyenApprovedInReview = (b.ghReviews ?? []).some((r) => {
+    const huyenRevs = (b.ghReviews ?? []).filter((r) => {
       const a = (r.author || "").toLowerCase();
-      return (
-        (a === "tranngochuyen1909" || a === "huyentn") &&
-        (r.state === "APPROVED" || r.state === "COMMENTED")
-      );
+      return a === "tranngochuyen1909" || a === "huyentn";
     });
-    if (huyenApprovedInReview && huyenCommentsCount > 0) return true;
+    const hasHuyenCommentsOrReviews =
+      huyenCommentsCount > 0 ||
+      huyenRevs.length > 0 ||
+      Boolean(b.huyenFirstCommentAt);
+
+    if (!hasHuyenCommentsOrReviews) return false;
+
+    if (b.huyenHasApproveWithNote === true) return true;
+
     const note = (b.note ?? "").toLowerCase();
-    return huyenCommentsCount > 0 && note.includes("approve with note");
+    if (note.includes("approve with note")) return true;
+
+    const huyenApprovedWithNoteInReview = huyenRevs.some((r) => {
+      const state = (r.state || "").toLowerCase();
+      const body = (r as any).body ? String((r as any).body).toLowerCase() : "";
+      return (state.includes("approve") || state.includes("comment")) && body.includes("note");
+    });
+    if (huyenApprovedWithNoteInReview) return true;
+
+    return false;
   };
 
   const isHuyenBugChangesRequested = (b: BugRecord) => {
+    // If it is explicit "approve with note", classify as Pass có note
     if (isHuyenBugApprovedWithNote(b)) return false;
 
-    // Must verify if Huyen (QC) herself commented or requested changes on GitHub PR
+    // Check if Huyen (QC) herself commented or reviewed on GitHub PR
     const huyenCommentsCount = b.prCommentsByHuyen ?? 0;
-    const huyenChangesReqInReview = (b.ghReviews ?? []).some((r) => {
+    const huyenRevs = (b.ghReviews ?? []).filter((r) => {
       const a = (r.author || "").toLowerCase();
-      return (
-        (a === "tranngochuyen1909" || a === "huyentn") &&
-        r.state === "CHANGES_REQUESTED"
-      );
+      return a === "tranngochuyen1909" || a === "huyentn";
     });
 
-    const huyenSpecificallyCommentedOrRequested =
+    const hasHuyenCommentsOrReviews =
       huyenCommentsCount > 0 ||
-      b.huyenHasChangesRequested === true ||
-      huyenChangesReqInReview;
+      huyenRevs.length > 0 ||
+      Boolean(b.huyenFirstCommentAt) ||
+      b.huyenHasChangesRequested === true;
 
-    // If Huyen did NOT comment or request changes on GitHub, she passed it without comments (Pass ngay)
-    if (!huyenSpecificallyCommentedOrRequested) {
+    // If Huyen did NOT comment or review on PR, she passed it without comments (Pass ngay)
+    if (!hasHuyenCommentsOrReviews) {
       return false;
     }
 
-    if (b.huyenHasChangesRequested === true || huyenChangesReqInReview) {
-      return true;
-    }
-
-    const note = (b.note ?? "").toLowerCase();
-    const st = (b.status ?? "").toLowerCase();
-    const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
-    if (
-      st.includes("change requested") ||
-      st.includes("changes requested") ||
-      ghLbls.some((l) => l.includes("change")) ||
-      note.includes("request change") ||
-      note.includes("có lỗi")
-    ) {
-      return true;
-    }
-
-    return huyenCommentsCount > 0;
+    // "có approve with note thì tính note, còn k tính lỗi hết"
+    // Since Huyen commented/reviewed and it is NOT "approve with note", ALL OTHER COMMENTED BUGS ARE COUNTED AS ERRORS / REQUEST CHANGES!
+    return true;
   };
 
   const isHuyenBugPassNgay = (b: BugRecord) => {

@@ -851,18 +851,47 @@ export function ReviewStats({
   }, [view.bugs, activePeriod]);
 
   const isHuyenBugApprovedWithNote = (b: BugRecord) => {
-    if (b.ghReviewStatus === "Approved with Note" || b.huyenHasApproveWithNote === true) {
-      return true;
-    }
+    if (b.huyenHasApproveWithNote === true) return true;
+    const huyenCommentsCount = b.prCommentsByHuyen ?? 0;
+    const huyenApprovedInReview = (b.ghReviews ?? []).some((r) => {
+      const a = (r.author || "").toLowerCase();
+      return (
+        (a === "tranngochuyen1909" || a === "huyentn") &&
+        (r.state === "APPROVED" || r.state === "COMMENTED")
+      );
+    });
+    if (huyenApprovedInReview && huyenCommentsCount > 0) return true;
     const note = (b.note ?? "").toLowerCase();
-    return note.includes("approve with note");
+    return huyenCommentsCount > 0 && note.includes("approve with note");
   };
 
   const isHuyenBugChangesRequested = (b: BugRecord) => {
     if (isHuyenBugApprovedWithNote(b)) return false;
-    if (b.ghReviewStatus === "Changes Requested" || b.huyenHasChangesRequested === true) {
+
+    // Must verify if Huyen (QC) herself commented or requested changes on GitHub PR
+    const huyenCommentsCount = b.prCommentsByHuyen ?? 0;
+    const huyenChangesReqInReview = (b.ghReviews ?? []).some((r) => {
+      const a = (r.author || "").toLowerCase();
+      return (
+        (a === "tranngochuyen1909" || a === "huyentn") &&
+        r.state === "CHANGES_REQUESTED"
+      );
+    });
+
+    const huyenSpecificallyCommentedOrRequested =
+      huyenCommentsCount > 0 ||
+      b.huyenHasChangesRequested === true ||
+      huyenChangesReqInReview;
+
+    // If Huyen did NOT comment or request changes on GitHub, she passed it without comments (Pass ngay)
+    if (!huyenSpecificallyCommentedOrRequested) {
+      return false;
+    }
+
+    if (b.huyenHasChangesRequested === true || huyenChangesReqInReview) {
       return true;
     }
+
     const note = (b.note ?? "").toLowerCase();
     const st = (b.status ?? "").toLowerCase();
     const ghLbls = (b.ghLabels ?? []).map((l) => l.toLowerCase());
@@ -876,7 +905,7 @@ export function ReviewStats({
       return true;
     }
 
-    return false;
+    return huyenCommentsCount > 0;
   };
 
   const isHuyenBugPassNgay = (b: BugRecord) => {

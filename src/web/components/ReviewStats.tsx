@@ -856,12 +856,7 @@ export function ReviewStats({
       const a = (r.author || "").toLowerCase();
       return a === "tranngochuyen1909" || a === "huyentn";
     });
-    const hasHuyenCommentsOrReviews =
-      huyenCommentsCount > 0 ||
-      huyenRevs.length > 0 ||
-      Boolean(b.huyenFirstCommentAt);
-
-    if (!hasHuyenCommentsOrReviews) return false;
+    const isApprovedGH = huyenRevs.some((r) => (r.state || "").toUpperCase() === "APPROVED");
 
     if (b.huyenHasApproveWithNote === true) return true;
 
@@ -875,19 +870,28 @@ export function ReviewStats({
     });
     if (huyenApprovedWithNoteInReview) return true;
 
+    if (isApprovedGH && huyenCommentsCount > 0) return true;
+
     return false;
   };
 
   const isHuyenBugChangesRequested = (b: BugRecord) => {
-    // If it is explicit "approve with note", classify as Pass có note
+    // 1. If it is explicit "approve with note", classify as Pass có note
     if (isHuyenBugApprovedWithNote(b)) return false;
 
-    // Check if Huyen (QC) herself commented or reviewed on GitHub PR
     const huyenCommentsCount = b.prCommentsByHuyen ?? 0;
     const huyenRevs = (b.ghReviews ?? []).filter((r) => {
       const a = (r.author || "").toLowerCase();
       return a === "tranngochuyen1909" || a === "huyentn";
     });
+
+    const isApprovedGH = huyenRevs.some((r) => (r.state || "").toUpperCase() === "APPROVED");
+    const isChangesReqGH = huyenRevs.some((r) => (r.state || "").toUpperCase() === "CHANGES_REQUESTED");
+
+    // 2. If Huyen APPROVED on GitHub and did NOT request changes -> NOT an error / Request Changes!
+    if (isApprovedGH && !isChangesReqGH && b.huyenHasChangesRequested !== true) {
+      return false;
+    }
 
     const hasHuyenCommentsOrReviews =
       huyenCommentsCount > 0 ||
@@ -895,13 +899,12 @@ export function ReviewStats({
       Boolean(b.huyenFirstCommentAt) ||
       b.huyenHasChangesRequested === true;
 
-    // If Huyen did NOT comment or review on PR, she passed it without comments (Pass ngay)
+    // 3. If Huyen did NOT comment or review on PR, she passed it without comments (Pass ngay)
     if (!hasHuyenCommentsOrReviews) {
       return false;
     }
 
-    // "có approve with note thì tính note, còn k tính lỗi hết"
-    // Since Huyen commented/reviewed and it is NOT "approve with note", ALL OTHER COMMENTED BUGS ARE COUNTED AS ERRORS / REQUEST CHANGES!
+    // 4. Since Huyen commented/reviewed without approving or with changes requested -> Count as Lỗi / Request Changes!
     return true;
   };
 

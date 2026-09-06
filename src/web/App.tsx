@@ -50,15 +50,37 @@ export function App() {
       const currentRepo = params.get("repo") || "all";
       setTab(currentTab);
       setSelectedRepoFilter(currentRepo);
+      setPeriodType((params.get("periodType") as PeriodType) || "week");
+      setPeriodKey(params.get("periodKey") || undefined);
     };
     window.addEventListener("popstate", handlePopState);
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
+
   const [comparisonSubTab, setComparisonSubTab] = useState<ComparisonSubTab>("matrix");
   const [checklistSubTab, setChecklistSubTab] = useState<ChecklistSubTab>("master");
 
-  const [periodType, setPeriodType] = useState<PeriodType>("week");
-  const [periodKey, setPeriodKey] = useState<string>();
+  const [periodType, setPeriodType] = useState<PeriodType>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return (params.get("periodType") as PeriodType) || "week";
+  });
+  const [periodKey, setPeriodKey] = useState<string | undefined>(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("periodKey") || undefined;
+  });
+
+  // Đồng bộ bộ lọc kỳ (Theo tuần/tháng/ngày + kỳ cụ thể) lên URL param để có thể copy link chia sẻ
+  useEffect(() => {
+    const url = new URL(window.location.href);
+    url.searchParams.set("periodType", periodType);
+    if (periodKey) {
+      url.searchParams.set("periodKey", periodKey);
+    } else {
+      url.searchParams.delete("periodKey");
+    }
+    window.history.replaceState(null, "", url.toString());
+  }, [periodType, periodKey]);
+
   const [personCode, setPersonCode] = useState<string>();
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);

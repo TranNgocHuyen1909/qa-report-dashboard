@@ -1372,7 +1372,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         >
           {[
             { name: "TỔNG (CHUNG)", desc: "= TỔNG (EFFORT) + BUG TRÙNG + KHÔNG TÁI HIỆN. Toàn bộ bug đã đóng/xử lý xong trong kỳ, dùng báo cáo backlog tổng thể." },
-            { name: "TỔNG (EFFORT)", desc: "= CLOSE + RESOLVED + TASK. Số bug/task THỰC SỰ tốn công dev làm, dùng để tính CÔNG VIỆC/NGÀY." },
+            { name: "TỔNG (EFFORT)", desc: "= CLOSE + RESOLVED + TASK. Số bug/task THỰC SỰ tốn công dev làm, dùng để tính CÔNG VIỆC/NGÀY. Dòng nhỏ bên dưới số tách rõ (X bug + Y task) — khi cần số Bug riêng để điền chỗ khác (VD: chấm điểm), LẤY SỐ BUG TRONG NGOẶC, không lấy nguyên số EFFORT." },
             { name: "BUG TRÙNG", desc: "Bug bị Notion đánh dấu trùng với 1 bug gốc, tự động nghiệm thu cùng lúc bug gốc được fix." },
             { name: "CLOSE", desc: "Bug đã hoàn thành, review xong, có Ngày Xác Nhận rơi vào kỳ đang xem." },
             { name: "RESOLVED", desc: "Bug đã tạo PR & sửa xong nhưng chưa Closed. Có thể đang chờ review hoặc cần sửa lại (xem 2 dòng nhỏ bên dưới số)." },
@@ -1480,9 +1480,12 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         fontWeight: "bold",
                         color: row.effortCount > 0 ? "var(--text-1)" : "var(--text-3)",
                       }}
-                      title={`Tổng số bug + task THỰC SỰ tốn effort của dev trong kỳ = ${row.closedCount} Closed + ${row.resolvedCount} Resolved + ${row.taskCount} Task = ${row.effortCount} (không tính Bug trùng và Không tái hiện, bug đã Closed không bị đếm lặp lại ở Resolved)`}
+                      title={`Tổng số bug + task THỰC SỰ tốn effort của dev trong kỳ = ${row.totalDoneCount} Bug (${row.closedCount} Closed + ${row.resolvedCount} Resolved) + ${row.taskCount} Task = ${row.effortCount} (không tính Bug trùng và Không tái hiện, bug đã Closed không bị đếm lặp lại ở Resolved)`}
                     >
                       {row.effortCount}
+                      <div style={{ fontSize: "10px", fontWeight: "600", color: "var(--text-3)", marginTop: "2px" }}>
+                        ({row.totalDoneCount} bug + {row.taskCount} task)
+                      </div>
                     </td>
                     <td
                       className="td-num"
@@ -1751,11 +1754,21 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                 const totalReopenRate = (totalClosed + totalResolved) > 0 ? (totalReopened / (totalClosed + totalResolved)) * 100 : 0;
                 const totalBugsPerDay = totalMd > 0 ? totalEffort / totalMd : 0;
                 const totalTask = sum(r => r.taskCount);
+                const totalBugEffort = sum(r => r.totalDoneCount);
                 return (
                   <tr style={{ background: "var(--surface-2)", borderTop: "2px solid var(--border-2)", fontWeight: "bold" }}>
                     <td style={{ padding: "10px 14px", textAlign: "left", color: "var(--text-1)" }}>TỔNG CỘNG CẢ TEAM</td>
                     <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "14px", color: "var(--text-1)" }}>{totalGeneral}</td>
-                    <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "14px", color: "var(--text-1)" }}>{totalEffort}</td>
+                    <td
+                      className="td-num"
+                      style={{ padding: "8px 10px", textAlign: "center", fontSize: "14px", color: "var(--text-1)" }}
+                      title={`${totalBugEffort} bug + ${totalTask} task = ${totalEffort}`}
+                    >
+                      {totalEffort}
+                      <div style={{ fontSize: "10px", fontWeight: "600", color: "var(--text-3)", marginTop: "2px" }}>
+                        ({totalBugEffort} bug + {totalTask} task)
+                      </div>
+                    </td>
                     <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px", color: "var(--purple)" }}>{totalDuplicate}</td>
                     <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px", color: "var(--green)" }}>{totalClosed}</td>
                     <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px", color: "var(--blue)" }}>{totalResolved}</td>

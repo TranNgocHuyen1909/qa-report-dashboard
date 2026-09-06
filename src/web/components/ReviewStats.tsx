@@ -41,6 +41,8 @@ export function ReviewStats({
     | "multiround"
     | "dev_replied"
     | "pending_reply"
+    | "duplicate"
+    | "norepro"
   >("all");
   const [truongCommentFilter, setTruongCommentFilter] = useState<
     "all" | "approved" | "changes_requested" | "commented" | "wait_dev" | "fresh_pending"
@@ -822,7 +824,20 @@ export function ReviewStats({
   // 3. Review có comment: 2 ngày này khác nhau bao gồm ngày kết thúc rỗng (start && end && start !== end, hoặc start && !end)
   // 4. Re-review: Ngày kết thúc review rỗng (start && !end)
 
-  const huyenReviewedBugs = useMemo(() => {
+  // Bug trùng: bug bị liệt trong duplicateIds của 1 bug gốc -> review qua bug gốc, không tính thêm 1 lượt review riêng
+  const reviewDuplicateChildIds = useMemo(() => {
+    const ids = new Set<string>();
+    view.bugs.forEach((b) => {
+      (b.duplicateIds ?? []).forEach((childId) => ids.add(childId));
+    });
+    return ids;
+  }, [view.bugs]);
+
+  const isReviewDuplicateChild = (b: BugRecord) =>
+    reviewDuplicateChildIds.has(b.id) || (b.bugId ? reviewDuplicateChildIds.has(b.bugId) : false);
+
+  // Tất cả bug thỏa Reviewers=Huyền + reviewStartDate trong kỳ, CHƯA lọc Bug trùng / Không tái hiện
+  const huyenReviewedAllBugs = useMemo(() => {
     const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
     return view.bugs.filter((b) => {
       if ((b.status ?? "").toLowerCase() === "cancel") return false;
@@ -835,6 +850,21 @@ export function ReviewStats({
       return dateInRange(rStart, activePeriod?.startDate, activePeriod?.endDate);
     });
   }, [view.bugs, activePeriod]);
+
+  // Bug trùng: ăn theo bug gốc, không tốn thêm 1 lượt review code -> tách riêng, không cộng vào Effort
+  const huyenReviewedDuplicateBugs = useMemo(() => {
+    return huyenReviewedAllBugs.filter((b) => isReviewDuplicateChild(b));
+  }, [huyenReviewedAllBugs, reviewDuplicateChildIds]);
+
+  // Không tái hiện: không có PR để review code, nhưng vẫn tốn công QC điều tra/thử tái hiện -> tách riêng, không trộn vào lượt review code
+  const huyenReviewedNoReproBugs = useMemo(() => {
+    return huyenReviewedAllBugs.filter((b) => !isReviewDuplicateChild(b) && !hasPR(b));
+  }, [huyenReviewedAllBugs, reviewDuplicateChildIds]);
+
+  // Tổng đã review (Effort): bug có PR thật, không phải bug trùng ăn theo -> đây là số lượt review code thực tế
+  const huyenReviewedBugs = useMemo(() => {
+    return huyenReviewedAllBugs.filter((b) => !isReviewDuplicateChild(b) && hasPR(b));
+  }, [huyenReviewedAllBugs, reviewDuplicateChildIds]);
 
   const isHuyenBugApprovedWithNote = (b: BugRecord) => {
     const huyenCommentsCount = b.prCommentsByHuyen ?? 0;
@@ -1070,6 +1100,12 @@ export function ReviewStats({
       ).length;
       const reviewRate =
         fixedCount > 0 ? (reviewedCount / fixedCount) * 100 : 0;
+      const duplicateCount = huyenReviewedDuplicateBugs.filter((b) =>
+        bugBelongsToPerson(b, dev),
+      ).length;
+      const noReproCount = huyenReviewedNoReproBugs.filter((b) =>
+        bugBelongsToPerson(b, dev),
+      ).length;
       return {
         dev,
         fixedCount,
@@ -1082,9 +1118,11 @@ export function ReviewStats({
         inReviewCount,
         pendingCount,
         reviewRate,
+        duplicateCount,
+        noReproCount,
       };
     });
-  }, [dev3People, periodFixedBugs, huyenReviewedBugs, teamResolvedPriorityBugs]);
+  }, [dev3People, periodFixedBugs, huyenReviewedBugs, huyenReviewedDuplicateBugs, huyenReviewedNoReproBugs, teamResolvedPriorityBugs]);
 
   const isDevRepliedBug = (b: BugRecord) => {
     if (!isHuyenBugWithComment(b)) return false;
@@ -1440,7 +1478,11 @@ export function ReviewStats({
 
   // Filter Huyen reviewed bugs by selected developer, location, and comment filter
   const displayedReviewed = useMemo(() => {
-    return huyenReviewedBugs.filter((b) => {
+    const baseList =
+      huyenCommentFilter === "duplicate" ? huyenReviewedDuplicateBugs :
+      huyenCommentFilter === "norepro" ? huyenReviewedNoReproBugs :
+      huyenReviewedBugs;
+    return baseList.filter((b) => {
       if (selectedDevFilter !== "all") {
         const dev = dev3People.find((p) => p.code === selectedDevFilter);
         if (!dev || !bugBelongsToPerson(b, dev)) return false;
@@ -1448,6 +1490,7 @@ export function ReviewStats({
       if (selectedLocFilter !== "all") {
         if (!(b.location ?? []).includes(selectedLocFilter)) return false;
       }
+      if (huyenCommentFilter === "duplicate" || huyenCommentFilter === "norepro") return true;
       if (huyenCommentFilter === "comments") return isHuyenBugWithComment(b);
       if (huyenCommentFilter === "changes_requested") return isHuyenBugChangesRequested(b);
       if (huyenCommentFilter === "approved_with_note") return isHuyenBugApprovedWithNote(b);
@@ -1481,6 +1524,8 @@ export function ReviewStats({
     });
   }, [
     huyenReviewedBugs,
+    huyenReviewedDuplicateBugs,
+    huyenReviewedNoReproBugs,
     selectedDevFilter,
     selectedLocFilter,
     huyenCommentFilter,
@@ -2210,14 +2255,55 @@ export function ReviewStats({
       {/* ──────────────────────────────────────────────────────── */}
       {subTab === "huyen" && (
         <>
-          {/* KPI Cards (Split into 5 key metrics) */}
+          {/* KPI Cards (8 metrics, chia 2 hàng x 4 cột cho cân đối) */}
           <div
             style={{
               display: "grid",
-              gridTemplateColumns: "repeat(5, 1fr)",
+              gridTemplateColumns: "repeat(4, minmax(160px, 1fr))",
               gap: "12px",
             }}
           >
+            <div
+              className="card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                borderTop: "4px solid #6366f1",
+                background: "rgba(99,102,241,0.02)",
+                cursor: "pointer",
+              }}
+              onClick={() => {
+                setSelectedDevFilter("all");
+                setDetailSubTab("reviewed");
+                setHuyenCommentFilter("all");
+                scrollToDetails();
+              }}
+              title={`[Công thức Tính toán]\n• TỔNG BUG: Tổng số bug có PR mà team dev (Hoàng, Hồ, Huy) đã sửa xong trong kỳ đang xem — không tính bug của chính Huyền.\n• Đây là mẫu số gốc để đối chiếu với TỔNG REVIEW (EFFORT) bên cạnh.`}
+            >
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#6366f1",
+                  fontWeight: "bold",
+                }}
+              >
+                TỔNG BUG (DEV ĐÃ SỬA)
+              </div>
+              <div
+                style={{
+                  fontSize: "28px",
+                  fontWeight: "bold",
+                  color: "#6366f1",
+                }}
+              >
+                {periodFixedBugs.filter((b) => getDevNameByBug(b) !== "HuyenTN").length}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
+                Tổng cả kỳ: {periodFixedBugs.length} bug (kể cả Huyền)
+              </div>
+            </div>
+
             <div
               className="card"
               style={{
@@ -2232,7 +2318,7 @@ export function ReviewStats({
                 setHuyenCommentFilter("all");
                 scrollToDetails();
               }}
-              title={`[Công thức Tính toán]\n• TỔNG ĐÃ REVIEW: Đếm tất cả Task có PR hợp lệ mà Huyền đã test & review trong kỳ.\n• Điều kiện: Có PR + (Gán Reviewer Huyền trên Notion OR Có comment GitHub OR Đã đổi status/label sang wait for dev).\n• Tỷ lệ hoàn thành = (Đã review ${huyenReviewedBugs.length} / Total Dev đã sửa ${periodFixedBugs.filter((b) => getDevNameByBug(b) !== "HuyenTN").length}) = ${periodFixedBugs.filter((b) => getDevNameByBug(b) !== "HuyenTN").length > 0 ? ((huyenReviewedBugs.length / periodFixedBugs.filter((b) => getDevNameByBug(b) !== "HuyenTN").length) * 100).toFixed(0) : 0}%`}
+              title={`[Công thức Tính toán]\n• TỔNG REVIEW (EFFORT): Số lượt review CODE thực tế — bug có PR, có Reviewers=Huyền + Ngày bắt đầu review trong kỳ, ĐÃ LOẠI Bug trùng (ăn theo bug gốc) khỏi số này.\n• Tỷ lệ hoàn thành = (Đã review ${huyenReviewedBugs.length} / Total Dev đã sửa ${periodFixedBugs.filter((b) => getDevNameByBug(b) !== "HuyenTN").length}) = ${periodFixedBugs.filter((b) => getDevNameByBug(b) !== "HuyenTN").length > 0 ? ((huyenReviewedBugs.length / periodFixedBugs.filter((b) => getDevNameByBug(b) !== "HuyenTN").length) * 100).toFixed(0) : 0}%`}
             >
               <div
                 style={{
@@ -2241,7 +2327,7 @@ export function ReviewStats({
                   fontWeight: "bold",
                 }}
               >
-                TỔNG ĐÃ REVIEW
+                TỔNG REVIEW (EFFORT)
               </div>
               <div
                 style={{
@@ -2259,7 +2345,87 @@ export function ReviewStats({
                     (b) => getDevNameByBug(b) !== "HuyenTN",
                   ).length
                 }{" "}
-                bug dev đã sửa
+                bug dev đã sửa • Chung: {huyenReviewedAllBugs.length}
+              </div>
+            </div>
+
+            <div
+              className="card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                borderTop: "4px solid #a855f7",
+                background: "rgba(168,85,247,0.02)",
+                cursor: "pointer",
+              }}
+              onClick={() => {
+                setDetailSubTab("reviewed");
+                setHuyenCommentFilter("duplicate");
+                scrollToDetails();
+              }}
+              title={`[Công thức Tính toán]\n• BUG TRÙNG: Bug bị Notion đánh dấu Duplicates của 1 bug gốc, được review qua bug gốc (1 PR = 1 lượt review) -> không tính thêm 1 lượt review riêng.\n• Tách riêng khỏi TỔNG REVIEW (EFFORT) để tránh phồng số lượt review ảo.`}
+            >
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#a855f7",
+                  fontWeight: "bold",
+                }}
+              >
+                BUG TRÙNG
+              </div>
+              <div
+                style={{
+                  fontSize: "28px",
+                  fontWeight: "bold",
+                  color: "#a855f7",
+                }}
+              >
+                {huyenReviewedDuplicateBugs.length}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
+                Ăn theo bug gốc, không tính thêm lượt review
+              </div>
+            </div>
+
+            <div
+              className="card"
+              style={{
+                display: "flex",
+                flexDirection: "column",
+                gap: "6px",
+                borderTop: "4px solid #64748b",
+                background: "rgba(100,116,139,0.02)",
+                cursor: "pointer",
+              }}
+              onClick={() => {
+                setDetailSubTab("reviewed");
+                setHuyenCommentFilter("norepro");
+                scrollToDetails();
+              }}
+              title={`[Công thức Tính toán]\n• KHÔNG TÁI HIỆN: Bug không có PR (không có code để review), nhưng Huyền vẫn tốn công điều tra/thử tái hiện lại.\n• Tách riêng khỏi TỔNG REVIEW (EFFORT) vì đây là công điều tra, không phải review code — nhưng vẫn tính là effort thật của QC, không bị coi là 0.`}
+            >
+              <div
+                style={{
+                  fontSize: "12px",
+                  color: "#64748b",
+                  fontWeight: "bold",
+                }}
+              >
+                KHÔNG TÁI HIỆN
+              </div>
+              <div
+                style={{
+                  fontSize: "28px",
+                  fontWeight: "bold",
+                  color: "#64748b",
+                }}
+              >
+                {huyenReviewedNoReproBugs.length}
+              </div>
+              <div style={{ fontSize: "11px", color: "var(--text-2)" }}>
+                Công điều tra QC, không phải review code
               </div>
             </div>
 
@@ -2741,7 +2907,8 @@ export function ReviewStats({
                         style={{ color: "var(--text-3)", fontSize: "11px" }}
                       >
                         (🟢 {row.noCommentCount} pass | 🟨 {row.approvedWithNoteCount ?? 0} note | 🔴{" "}
-                        {row.changesRequestedCount ?? row.withCommentCount} lỗi | ⏳ {row.pendingCount} chờ)
+                        {row.changesRequestedCount ?? row.withCommentCount} lỗi | ⏳ {row.pendingCount} chờ | 🟣{" "}
+                        {row.duplicateCount ?? 0} trùng | ⚪ {row.noReproCount ?? 0} không tái hiện)
                       </span>
                     </div>
                   </div>

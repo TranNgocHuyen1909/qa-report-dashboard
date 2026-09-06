@@ -607,9 +607,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         prUrl: t.pullRequestUrl,
         hasPR: true,
         status: (t.status ?? "").toUpperCase(),
-        location: t.taskType && t.taskType.length > 0
-          ? t.taskType[0] + (t.taskType.length > 1 ? ` +${t.taskType.length - 1}` : "")
-          : "Chưa phân loại",
+        location: (t.taskType ?? []).join(", ") || "Chưa phân loại",
+        taskTypes: t.taskType ?? [],
         date: dateKey(t.prCreatedAt) || "—",
       }));
 
@@ -1974,7 +1973,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                   <thead>
                     <tr style={{ background: "var(--surface-2)", borderBottom: "2px solid var(--border-2)", color: "var(--text-1)", fontWeight: "700", fontSize: "11px" }}>
                       <th style={{ padding: "10px 12px", textAlign: "left", width: "15%" }}>BUG ID</th>
-                      <th style={{ padding: "10px 12px", textAlign: "left", width: "12%" }}>VỊ TRÍ LỖI</th>
+                      <th style={{ padding: "10px 12px", textAlign: "left", width: "12%" }}>
+                        {selectedDevCode.includes(" - TASK") ? "TASK TYPE" : "VỊ TRÍ LỖI"}
+                      </th>
                       <th style={{ padding: "10px 12px", textAlign: "center", width: "12%" }}>TRẠNG THÁI</th>
                       <th style={{ padding: "10px 12px", textAlign: "center", width: "23%" }}>TRẠNG THÁI PR & REVIEWERS</th>
                       <th style={{ padding: "10px 12px", textAlign: "left", width: "28%" }}>TIÊU ĐỀ LỖI</th>
@@ -2046,23 +2047,48 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                               )}
                             </td>
                             <td style={{ padding: "10px 12px" }}>
-                              <span
-                                style={{
-                                  display: "inline-block",
-                                  padding: "2px 6px",
-                                  borderRadius: "4px",
-                                  fontSize: "11px",
-                                  fontWeight: 600,
-                                  whiteSpace: "normal",
-                                  wordBreak: "break-word",
-                                  lineHeight: 1.4,
-                                  background: isChild ? "rgba(168, 85, 247, 0.08)" : "var(--surface-2)",
-                                  color: isChild ? "var(--purple)" : "var(--text-1)",
-                                  border: isChild ? "1px solid rgba(168, 85, 247, 0.25)" : "1px solid var(--border-2)",
-                                }}
-                              >
-                                {b.location || "Chưa phân loại"}
-                              </span>
+                              {Array.isArray(b.taskTypes) && b.taskTypes.length > 0 ? (
+                                <div style={{ display: "flex", flexWrap: "wrap", gap: "4px" }}>
+                                  {b.taskTypes.map((tt: string, tIdx: number) => (
+                                    <span
+                                      key={tIdx}
+                                      style={{
+                                        display: "inline-block",
+                                        padding: "2px 6px",
+                                        borderRadius: "4px",
+                                        fontSize: "11px",
+                                        fontWeight: 600,
+                                        whiteSpace: "normal",
+                                        wordBreak: "break-word",
+                                        lineHeight: 1.4,
+                                        background: "rgba(249, 115, 22, 0.08)",
+                                        color: "var(--orange, #f97316)",
+                                        border: "1px solid rgba(249, 115, 22, 0.25)",
+                                      }}
+                                    >
+                                      {tt}
+                                    </span>
+                                  ))}
+                                </div>
+                              ) : (
+                                <span
+                                  style={{
+                                    display: "inline-block",
+                                    padding: "2px 6px",
+                                    borderRadius: "4px",
+                                    fontSize: "11px",
+                                    fontWeight: 600,
+                                    whiteSpace: "normal",
+                                    wordBreak: "break-word",
+                                    lineHeight: 1.4,
+                                    background: isChild ? "rgba(168, 85, 247, 0.08)" : "var(--surface-2)",
+                                    color: isChild ? "var(--purple)" : "var(--text-1)",
+                                    border: isChild ? "1px solid rgba(168, 85, 247, 0.25)" : "1px solid var(--border-2)",
+                                  }}
+                                >
+                                  {b.location || "Chưa phân loại"}
+                                </span>
+                              )}
                             </td>
                             <td style={{ padding: "10px 12px", textAlign: "center", whiteSpace: "nowrap" }}>
                               <span

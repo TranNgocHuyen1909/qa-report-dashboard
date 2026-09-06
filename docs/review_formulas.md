@@ -19,13 +19,23 @@ Tài liệu này tổng hợp toàn bộ công thức tính toán, quy tắc ph�
 
 ## 2. 👑 Phân Hệ VÒNG 1: HUYỀN REVIEW (QC Lead)
 
-### 🔹 Điều kiện nhận diện Bug do Huyền đã Review (`huyenReviewedBugs`)
-Một Task/Bug được ghi nhận vào **Tổng Đã Review** khi thỏa mãn **ĐỒNG THỜI**:
+### 🔹 Điều kiện nhận diện Bug do Huyền đã Review (`huyenReviewedAllBugs` → tách 3 nhóm)
+Một Task/Bug được ghi nhận vào **Tổng Review (Chung)** (`huyenReviewedAllBugs`) khi thỏa mãn **ĐỒNG THỜI**:
 1. Không ở trạng thái `Cancel`.
 2. Trường `Reviewers` trên Notion có đính kèm ID của Huyền (`38ad872b-594c-81b9-8150-000220c17a19`) — **chỉ xét đúng field này**, không suy luận qua comment GitHub hay label.
 3. Có `Ngày bắt đầu review` (`reviewStartDate`) và ngày đó thuộc khoảng `[startDate, endDate]` của kỳ đang lọc (khớp đúng cách Notion lọc "Ngày bắt đầu review: Past month").
 
-> Lưu ý: hàm `isReviewedByHuyen` (dùng cho badge chi tiết, không dùng để tính Tổng Đã Review) vẫn giữ điều kiện lỏng hơn (bắt buộc có PR + 1 trong 3 tín hiệu: Reviewers/comment GitHub/label `wait`).
+> Lưu ý: hàm `isReviewedByHuyen` (dùng cho badge chi tiết, không dùng để tính Tổng Review) vẫn giữ điều kiện lỏng hơn (bắt buộc có PR + 1 trong 3 tín hiệu: Reviewers/comment GitHub/label `wait`).
+
+Từ tập `huyenReviewedAllBugs`, tách thành **3 nhóm loại trừ lẫn nhau**, mirror đúng cách tab Tiến Độ tách Bug Trùng / Không tái hiện khỏi Effort:
+
+| Nhóm | Điều kiện | Ý nghĩa |
+| :--- | :--- | :--- |
+| **Bug Trùng** (`huyenReviewedDuplicateBugs`) | Bug nằm trong `duplicateIds` của 1 bug khác (bị đánh dấu trùng) | Được review qua bug gốc, 1 PR = 1 lượt review thật — không tính thêm để tránh phồng số ảo. |
+| **Không tái hiện** (`huyenReviewedNoReproBugs`) | Không thuộc Bug Trùng VÀ không có `pullRequestUrl` | Không có code để review, nhưng Huyền vẫn tốn công điều tra/thử tái hiện — tách riêng khỏi review code, KHÔNG coi là 0 effort. |
+| **Tổng Review (Effort)** (`huyenReviewedBugs`) | Không thuộc 2 nhóm trên VÀ có PR | Đây là số lượt review CODE thực tế, dùng làm mẫu số cho mọi tỷ lệ (comment rate, re-review rate...). |
+
+`huyenReviewedAllBugs.length` = tổng cả 3 nhóm = con số "Chung" hiển thị kèm trong tooltip thẻ Tổng Review (Effort).
 
 ### 🔹 Thứ Tự Ưu Tiên Xác Định Thời Gian Review (`huyenReviewDate`)
 Đo thời gian review của Huyền được xác định chính xác theo thứ tự ưu tiên giảm dần sau:
@@ -46,7 +56,7 @@ $$\text{Thời gian Comment lần 1 (huyenFirstCommentAt)} \longrightarrow \text
 | **Đang review** (`isHuyenBugInReview`) | Có `Ngày bắt đầu review` NHƯNG `Ngày kết thúc review` **còn rỗng** | Huyền **chưa review lại lần nữa** — vẫn tính vào Tổng Đã Review nhưng KHÔNG xếp vào Pass ngay hay Có comment. |
 | **Dev đã phản hồi** | Task đang mở có comment review từ QC Lead VÀ Dev đã comment trả lời dưới PR / đổi trạng thái | Hiển thị badge màu xanh dương **Dev đã phản hồi**. |
 | **Chờ Dev phản hồi** | Task đang mở có comment review từ QC Lead VÀ Dev CHƯA comment trả lời | Hiển thị badge màu đỏ **Chờ Dev phản hồi**. |
-| **Tổng Đã Review** | `huyenReviewedBugs` = Reviewers chứa Huyền + có `Ngày bắt đầu review` trong kỳ (xem mục điều kiện ở trên) | Bao gồm cả bug đang ở trạng thái "Đang review" (chưa có ngày kết thúc). |
+| **Tổng Review (Effort)** | `huyenReviewedBugs` = Reviewers chứa Huyền + có `Ngày bắt đầu review` trong kỳ, ĐÃ LOẠI Bug Trùng và Không tái hiện (xem mục điều kiện ở trên) | Bao gồm cả bug đang ở trạng thái "Đang review" (chưa có ngày kết thúc), nhưng KHÔNG gồm Bug Trùng/Không tái hiện. |
 | **Bug Chờ Review** | `pendingHuyenReviewBugs` = Tất cả Task có PR chưa được Huyền review từ trước đến nay (**Tất cả thời gian**) | Không lọc theo kỳ để đảm bảo **không bao giờ bị sót** task chờ review còn tồn đọng. Khác với "Đang review" — mục này là bug **chưa hề bắt đầu** review. |
 
 ---

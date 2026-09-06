@@ -12,6 +12,8 @@ export interface DevReviewStatRow {
   noCommentCount: number;
   pendingCount: number;
   reviewRate: number;
+  duplicateCount?: number;
+  noReproCount?: number;
 }
 
 export interface DevBreakdownTableProps {
@@ -29,6 +31,8 @@ export interface DevBreakdownTableProps {
       | "multiround"
       | "approved_with_note"
       | "changes_requested"
+      | "duplicate"
+      | "norepro"
   ) => void;
   scrollToDetails: () => void;
 }
@@ -69,9 +73,21 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
             </th>
             <th
               style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
-              title="Tổng số bug có PR của Dev này mà QC Lead đã hoàn thành review"
+              title="Số lượt review CODE thực tế của Dev này (đã loại Bug trùng & Không tái hiện)"
             >
-              TỔNG ĐÃ REVIEW
+              TỔNG REVIEW (EFFORT)
+            </th>
+            <th
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
+              title="Bug bị đánh dấu trùng với 1 bug gốc của Dev này -> được review qua bug gốc, không tính thêm lượt review riêng"
+            >
+              BUG TRÙNG
+            </th>
+            <th
+              style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
+              title="Bug của Dev này không có PR -> Huyền không review code được, nhưng vẫn tốn công điều tra/thử tái hiện"
+            >
+              KHÔNG TÁI HIỆN
             </th>
             <th
               style={{ padding: "10px 12px", textAlign: "center", color: "var(--text-1)" }}
@@ -200,6 +216,44 @@ export const DevBreakdownTable: React.FC<DevBreakdownTableProps> = ({
                   title={`Click để xem tất cả bug đã review của ${row.dev.code}`}
                 >
                   {row.reviewedCount} bug
+                </td>
+                {/* Bug trùng */}
+                <td
+                  style={{
+                    padding: "8px 12px",
+                    textAlign: "center",
+                    color: (row.duplicateCount ?? 0) > 0 ? "#a855f7" : "var(--text-2)",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => {
+                    onSelectDevFilter(row.dev.code);
+                    onSelectSubTab("reviewed");
+                    onSelectCommentFilter("duplicate");
+                    scrollToDetails();
+                  }}
+                  title={`Click để xem Bug trùng (ăn theo bug gốc) của ${row.dev.code}`}
+                >
+                  {row.duplicateCount ?? 0} bug
+                </td>
+                {/* Không tái hiện */}
+                <td
+                  style={{
+                    padding: "8px 12px",
+                    textAlign: "center",
+                    color: (row.noReproCount ?? 0) > 0 ? "#64748b" : "var(--text-2)",
+                    fontWeight: "600",
+                    cursor: "pointer",
+                  }}
+                  onClick={() => {
+                    onSelectDevFilter(row.dev.code);
+                    onSelectSubTab("reviewed");
+                    onSelectCommentFilter("norepro");
+                    scrollToDetails();
+                  }}
+                  title={`Click để xem bug Không tái hiện (không có PR, vẫn tốn công điều tra) của ${row.dev.code}`}
+                >
+                  {row.noReproCount ?? 0} bug
                 </td>
                 {/* Pass ngay */}
                 <td

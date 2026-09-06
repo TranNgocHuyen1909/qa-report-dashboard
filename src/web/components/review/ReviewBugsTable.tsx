@@ -24,7 +24,9 @@ export interface ReviewBugsTableProps {
     | "changes_requested"
     | "multiround"
     | "dev_replied"
-    | "pending_reply";
+    | "pending_reply"
+    | "duplicate"
+    | "norepro";
   setHuyenCommentFilter: (val: any) => void;
   selectedPrFilter: string;
   setSelectedPrFilter: (val: string) => void;

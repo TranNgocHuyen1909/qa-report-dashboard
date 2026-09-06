@@ -13,20 +13,25 @@ export function BenchmarkView({ view }: { view: DashboardView }) {
   // Find Month 5 data specifically as the baseline
   const mayMonth = bm.months.find(m => m.month.includes("-05") || m.label.includes("Tháng 5")) || bm.months[0];
   
-  // Baseline average weekly fixed bugs in Month 5
+  // Baseline average weekly fixed bugs in Month 5 (AnPD — người mốc chuẩn, ~1 năm kinh nghiệm)
   const mayWeeklyFixedBaseline = mayMonth.weeks.length > 0
     ? mayMonth.weeks.reduce((sum, w) => sum + w.fixedInWeek, 0) / mayMonth.weeks.length
     : Math.round(mayMonth.totalFixed / 4);
+  // AnPD có ~1 năm kinh nghiệm, cao hơn hẳn intern mới. Chiết giảm còn 70% baseline của AnPD
+  // làm mốc T3 (100%) cho intern, thay vì áp thẳng baseline gốc.
+  const INTERN_BENCHMARK_SCALE = 0.7;
+  // Mốc T3 (100%) = 70% baseline thật của AnPD. Các mốc T0-T2 là tỷ lệ % của mốc T3 này.
+  const maxDevTargetReal = Math.max(1, Math.round(mayWeeklyFixedBaseline * INTERN_BENCHMARK_SCALE));
 
   // Latest team metrics
   const latestTeam = view.teamMetrics[0];
 
-  // Realistic Milestone targets for Developers & Lead
+  // Realistic Milestone targets for Developers & Lead — weeklyTarget suy ra từ baseline thật (mayWeeklyFixedBaseline), không gõ cứng
   const targets = [
-    { label: "Mức 0 (Tuần 1-2 - Người Mới)", pct: 30, weeklyTarget: 4, desc: "Đọc docs, làm quen codebase, setup môi trường và sửa bug đơn giản (3-5 bug/tuần)" },
-    { label: "Mốc T1 (Tháng 1 - Đạt Chuẩn Cơ Bản)", pct: 50, weeklyTarget: 7, desc: "Tự chủ fix bug độc lập, áp dụng pre-handover checklist (5-8 bug/tuần)" },
-    { label: "Mốc T2 (Tháng 2 - Tăng Tốc Flow Khó)", pct: 75, weeklyTarget: 10, desc: "Xử lý task luồng nghiệp vụ phức tạp, giảm tỷ lệ lỗi reopen (8-12 bug/tuần)" },
-    { label: "Mốc T3 (Đạt Chuẩn Năng Suất Tối Đa)", pct: 100, weeklyTarget: 14, desc: "Đạt mốc năng suất thực tế tiêu chuẩn (~12-15 bug/tuần)" },
+    { label: "Mức 0 (Tuần 1-2 - Người Mới)", pct: 30, weeklyTarget: Math.round(maxDevTargetReal * 0.3), desc: "Đọc docs, làm quen codebase, setup môi trường và sửa bug đơn giản" },
+    { label: "Mốc T1 (Tháng 1 - Đạt Chuẩn Cơ Bản)", pct: 50, weeklyTarget: Math.round(maxDevTargetReal * 0.5), desc: "Tự chủ fix bug độc lập, áp dụng pre-handover checklist" },
+    { label: "Mốc T2 (Tháng 2 - Tăng Tốc Flow Khó)", pct: 75, weeklyTarget: Math.round(maxDevTargetReal * 0.75), desc: "Xử lý task luồng nghiệp vụ phức tạp, giảm tỷ lệ lỗi reopen" },
+    { label: "Mốc T3 (Đạt Chuẩn Năng Suất Tối Đa)", pct: 100, weeklyTarget: maxDevTargetReal, desc: `70% baseline ${mayMonth.label} của ${bm.person.displayName} (~1 năm kinh nghiệm): ${mayWeeklyFixedBaseline.toFixed(1)} bug/tuần → mốc intern ${maxDevTargetReal} bug/tuần` },
   ];
 
   return (
@@ -37,7 +42,9 @@ export function BenchmarkView({ view }: { view: DashboardView }) {
       <div className="card" style={{ marginBottom: 20, background: "linear-gradient(135deg, rgba(16,185,129,0.06), rgba(6,182,212,0.04))" }}>
         <div style={{ fontWeight: 700, fontSize: "15px", color: "var(--cyan)", marginBottom: "6px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
           <span>📈 Sơ Đồ Tăng Trưởng & Mục Tiêu Theo Vai Trò (Lead / Developer)</span>
-          <span className="tag tag-green" style={{ fontSize: "11px" }}>Mốc Baseline Thực Tế: ~14 bug/tuần</span>
+          <span className="tag tag-green" style={{ fontSize: "11px" }} title={`Gốc: ${mayMonth.label} của ${bm.person.displayName} (~1 năm kinh nghiệm) = ${mayWeeklyFixedBaseline.toFixed(1)} bug/tuần. Chiết giảm còn ${(INTERN_BENCHMARK_SCALE * 100).toFixed(0)}% làm mốc intern.`}>
+            Mốc gốc AnPD ({mayMonth.label}): {mayWeeklyFixedBaseline.toFixed(1)} bug/tuần → hạ 70% còn {maxDevTargetReal} bug/tuần (mốc Intern)
+          </span>
         </div>
         <p style={{ fontSize: "12px", color: "var(--text-3)", marginBottom: "16px" }}>
           Lộ trình đo lường phù hợp theo vai trò: <strong>Lead (HuyenTN)</strong> đo lường theo <strong>Năng suất Review PRs & Kiểm soát chất lượng</strong>; <strong>Developer</strong> đo lường theo lộ trình tăng trưởng năng suất thực tế.
@@ -64,11 +71,11 @@ export function BenchmarkView({ view }: { view: DashboardView }) {
               milestoneBadge = "👑 Lead Reviewer — Mục tiêu Review 100% PRs";
               badgeColor = "var(--cyan)";
             } else {
-              const maxDevTarget = 14;
-              const currentPct = (currentValThisWeek / maxDevTarget) * 100;
-              if (currentPct >= 85) { milestoneBadge = "🥇 Mốc T3 (Đạt Chuẩn Tối Đa)"; badgeColor = "var(--green)"; }
-              else if (currentPct >= 60) { milestoneBadge = "🥈 Mốc T2 (Khá - Tăng Tốc)"; badgeColor = "var(--blue)"; }
-              else if (currentPct >= 40) { milestoneBadge = "🥉 Mốc T1 (Cơ Bản)"; badgeColor = "var(--yellow)"; }
+              const currentPct = (currentValThisWeek / maxDevTargetReal) * 100;
+              if (currentPct >= 100) { milestoneBadge = "🏆 Đạt Benchmark (≥ AnPD)"; badgeColor = "var(--green)"; }
+              else if (currentPct >= 75) { milestoneBadge = "🥇 Mốc T3 (Gần Đạt Chuẩn)"; badgeColor = "var(--green)"; }
+              else if (currentPct >= 50) { milestoneBadge = "🥈 Mốc T2 (Khá - Tăng Tốc)"; badgeColor = "var(--blue)"; }
+              else if (currentPct >= 30) { milestoneBadge = "🥉 Mốc T1 (Cơ Bản)"; badgeColor = "var(--yellow)"; }
             }
 
             return (
@@ -94,7 +101,8 @@ export function BenchmarkView({ view }: { view: DashboardView }) {
                 <div style={{ display: "grid", gridTemplateColumns: "repeat(6, 1fr)", gap: "8px" }}>
                   {devWeeklyHistory.map((h, i) => {
                     const leadTargets = [17, 25, 28, 30, 35, 40];
-                    const targetForWeek = isLead ? (leadTargets[i] ?? 40) : Math.round(4 + (i * 2));
+                    // Dev: ramp tuyến tính từ 30% -> 100% của baseline thật (maxDevTargetReal) qua 6 tuần
+                    const targetForWeek = isLead ? (leadTargets[i] ?? 40) : Math.round(maxDevTargetReal * (0.3 + i * 0.14));
                     const maxScale = isLead ? Math.max(45, targetForWeek, h.val) : 15;
                     const barHeightPct = Math.min((h.val / maxScale) * 100, 100);
 
@@ -190,6 +198,57 @@ export function BenchmarkView({ view }: { view: DashboardView }) {
                   <td style={{ fontSize: "12px", color: "var(--text-2)" }}>{t.desc}</td>
                 </tr>
               ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {/* Ai đạt benchmark kỳ hiện tại — so trực tiếp với AnPD */}
+      <div className="card" style={{ marginTop: 20 }}>
+        <div className="card-header">
+          <div className="card-title">
+            🏁 Ai Đạt Benchmark — Kỳ {latestTeam ? latestTeam.period.label : "—"}
+          </div>
+        </div>
+        <p style={{ fontSize: "12px", color: "var(--text-3)", padding: "0 16px 8px" }}>
+          So năng suất (bug/ngày công) của từng người với mốc chuẩn intern — <strong>70%</strong> hiệu suất của <strong>{bm.person.displayName}</strong> (~1 năm kinh nghiệm) tháng {mayMonth.label.replace("Tháng ", "")}: gốc <strong>{Number(mayMonth.avgBugsPerDay).toFixed(1)}</strong> bug/ngày → mốc intern <strong>{(Number(mayMonth.avgBugsPerDay) * INTERN_BENCHMARK_SCALE).toFixed(1)}</strong> bug/ngày. Đây vẫn là mốc tham khảo xu hướng, không nên áp thẳng làm barem chấm điểm nội bộ team khác vai trò/thâm niên.
+        </p>
+        <div className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Nhân sự</th>
+                <th style={{ textAlign: "right" }}>Bug/ngày (kỳ này)</th>
+                <th style={{ textAlign: "right" }}>Mốc Intern (70% {bm.person.displayName})</th>
+                <th style={{ textAlign: "right" }}>% so mốc</th>
+                <th style={{ textAlign: "center" }}>Trạng thái</th>
+              </tr>
+            </thead>
+            <tbody>
+              {!latestTeam ? (
+                <tr><td colSpan={5} style={{ textAlign: "center", color: "var(--text-3)" }}>Chưa có dữ liệu kỳ hiện tại.</td></tr>
+              ) : (
+                view.personnel.filter(p => p.role !== "benchmark" && p.role !== "lead").map(dev => {
+                  const pMetric = latestTeam.byPerson.find(p => p.personCode === dev.code);
+                  const rate = pMetric ? pMetric.bugsPerDay : 0;
+                  const benchmarkRate = (Number(mayMonth.avgBugsPerDay) || 0) * INTERN_BENCHMARK_SCALE;
+                  const pct = benchmarkRate > 0 ? (rate / benchmarkRate) * 100 : 0;
+                  const reached = pct >= 100;
+                  return (
+                    <tr key={dev.code}>
+                      <td><strong>{dev.displayName}</strong> <span style={{ color: "var(--text-3)", fontSize: "11px" }}>({dev.code})</span></td>
+                      <td className="td-num">{rate.toFixed(2)}</td>
+                      <td className="td-num" style={{ color: "var(--text-3)" }}>{benchmarkRate.toFixed(2)}</td>
+                      <td className="td-num" style={{ fontWeight: "bold", color: reached ? "var(--green)" : "var(--text-2)" }}>{pct.toFixed(0)}%</td>
+                      <td style={{ textAlign: "center" }}>
+                        <span className={`tag ${reached ? "tag-green" : "tag-yellow"}`}>
+                          {reached ? "✅ Đạt benchmark" : "⏳ Chưa đạt"}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })
+              )}
             </tbody>
           </table>
         </div>

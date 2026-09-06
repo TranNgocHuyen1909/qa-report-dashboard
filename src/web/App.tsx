@@ -12,8 +12,9 @@ import { ReviewStats } from "./components/ReviewStats";
 import { RoleView } from "./components/RoleView";
 import { BugWorkflowView } from "./components/BugWorkflowView";
 import { ReviewProtocolView } from "./components/ReviewProtocolView";
+import { BenchmarkView } from "./components/BenchmarkView";
 
-type MainTab = "report" | "roles" | "workflow" | "checklist" | "review" | "comparison" | "lessons";
+type MainTab = "report" | "roles" | "workflow" | "checklist" | "review" | "comparison" | "lessons" | "benchmark";
 type ComparisonSubTab = "matrix" | "reviews" | "personal";
 type ChecklistSubTab = "master" | "process";
 
@@ -218,6 +219,7 @@ export function App() {
     { key: "checklist", label: "Checklist" },
     { key: "review", label: "Review" },
     { key: "comparison", label: "Tiến Độ" },
+    { key: "benchmark", label: "Benchmark" },
     { key: "lessons", label: "Bài Học" },
   ];
 
@@ -294,6 +296,9 @@ export function App() {
         {tab === "comparison" && (
           <DevComparison view={view} periodType={periodType} periodKey={periodKey} onUpdate={load} />
         )}
+
+        {/* TAB: BENCHMARK — MỐC NĂNG SUẤT TIÊU CHUẨN */}
+        {tab === "benchmark" && <BenchmarkView view={view} />}
 
         {/* TAB 3: CHECKLIST TỰ KIỂM TRA (CHECKBOXES) */}
         {tab === "checklist" && <ChecklistView initialRepoFilter={selectedRepoFilter} />}

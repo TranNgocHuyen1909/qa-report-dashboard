@@ -128,6 +128,15 @@ function mapPage(page: NotionPage): BugRecord {
       p["Ngày bắt đầu review"]?.date?.end ||
       p["Ngày review"]?.date?.end ||
       p["Review Date"]?.date?.end,
+    processingStartDate:
+      dateProp(p["Ngày bắt đầu xử lý"]) ||
+      dateProp(p["Ngày bắt đầu xử lý "]) ||
+      dateProp(p["Ngày bắt đầu Xử lý"]),
+    processingDueDate:
+      dateProp(p["Ngày dự định hoàn thành"]) ||
+      dateProp(p["Ngày dự định hoàn thành "]) ||
+      dateProp(p["Ngày dự định hoàn tất"]) ||
+      dateProp(p["Ngày dự định hoàn thiện"]),
     knowledge: parseKnowledge(p),
     isPausedFix:
       chk(p["Tạm dừng fix"]) ||

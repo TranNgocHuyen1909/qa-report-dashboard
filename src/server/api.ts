@@ -5,10 +5,12 @@ import type {
   ChecklistItem,
   DashboardFilters,
   PeriodType,
+  TaskRecord,
 } from "../shared/types";
 
 interface ApiDeps {
   getBugs: () => BugRecord[];
+  getTasks: () => TaskRecord[];
   getChecklist: () => ChecklistItem[];
   saveChecklist: (items: ChecklistItem[]) => void;
   refresh: () => Promise<void>;
@@ -40,7 +42,7 @@ export function createApi(deps: ApiDeps) {
         deps.getChecklist(),
         deps.getConclusions(),
       );
-      res.json({ ...view, conclusions: deps.getConclusions(), customTargets: deps.getCustomTargets() });
+      res.json({ ...view, tasks: deps.getTasks(), conclusions: deps.getConclusions(), customTargets: deps.getCustomTargets() });
     } catch (err) {
       res.status(500).json({ error: String(err) });
     }
@@ -55,7 +57,7 @@ export function createApi(deps: ApiDeps) {
       deps.getChecklist(),
       deps.getConclusions(),
     );
-    res.json({ ...view, conclusions: deps.getConclusions(), refreshing: true });
+    res.json({ ...view, tasks: deps.getTasks(), conclusions: deps.getConclusions(), refreshing: true });
   });
 
   app.post("/api/conclusions", (req, res) => {

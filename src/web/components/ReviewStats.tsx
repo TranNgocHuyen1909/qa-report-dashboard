@@ -823,30 +823,16 @@ export function ReviewStats({
   // 4. Re-review: Ngày kết thúc review rỗng (start && !end)
 
   const huyenReviewedBugs = useMemo(() => {
+    const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
     return view.bugs.filter((b) => {
       if ((b.status ?? "").toLowerCase() === "cancel") return false;
-      const huyenNotionId = "38ad872b-594c-81b9-8150-000220c17a19";
-      const hasHuyenReviewer =
-        (b.reviewerIds ?? []).includes(huyenNotionId) ||
-        (b.prCommentsByHuyen ?? 0) > 0 ||
-        Boolean(b.huyenFirstCommentAt) ||
-        b.reviewStartDate !== undefined ||
-        b.reviewEndDate !== undefined;
+      const hasHuyenReviewer = (b.reviewerIds ?? []).includes(huyenNotionId);
       if (!hasHuyenReviewer) return false;
 
       const rStart = dateKey(b.reviewStartDate);
-      const rEnd = dateKey(b.reviewEndDate);
-      const fCmt = dateKey(b.huyenFirstCommentAt);
-      const lCmt = dateKey(b.huyenLastCommentAt);
-      const conf = dateKey(b.confirmedDate);
+      if (!rStart) return false;
 
-      return (
-        dateInRange(rStart, activePeriod?.startDate, activePeriod?.endDate) ||
-        dateInRange(rEnd, activePeriod?.startDate, activePeriod?.endDate) ||
-        dateInRange(fCmt, activePeriod?.startDate, activePeriod?.endDate) ||
-        dateInRange(lCmt, activePeriod?.startDate, activePeriod?.endDate) ||
-        dateInRange(conf, activePeriod?.startDate, activePeriod?.endDate)
-      );
+      return dateInRange(rStart, activePeriod?.startDate, activePeriod?.endDate);
     });
   }, [view.bugs, activePeriod]);
 
@@ -908,13 +894,20 @@ export function ReviewStats({
     return true;
   };
 
+  // Bug đã có Ngày bắt đầu review nhưng Ngày kết thúc review còn rỗng
+  // -> Huyền chưa review lại lần nữa, vẫn đang "In Review", chưa thể xếp Pass/Comment.
+  const isHuyenBugInReview = (b: BugRecord) => {
+    const start = dateKey(b.reviewStartDate);
+    const end = dateKey(b.reviewEndDate);
+    return Boolean(start) && !end;
+  };
+
   const isHuyenBugPassNgay = (b: BugRecord) => {
+    if (isHuyenBugInReview(b)) return false;
     if (isHuyenBugApprovedWithNote(b) || isHuyenBugChangesRequested(b)) return false;
     const start = dateKey(b.reviewStartDate);
     const end = dateKey(b.reviewEndDate);
-    if (start && end && start === end) return true;
-    if (b.ghReviewStatus === "Approved") return true;
-    return true;
+    return Boolean(start) && Boolean(end) && start === end;
   };
 
   const isHuyenBugWithComment = (b: BugRecord) => {
@@ -922,9 +915,7 @@ export function ReviewStats({
   };
 
   const isHuyenBugReReview = (b: BugRecord) => {
-    const start = dateKey(b.reviewStartDate);
-    const end = dateKey(b.reviewEndDate);
-    if (start && !end) return true;
+    if (isHuyenBugInReview(b)) return true;
     return (b.prCommentsByHuyen ?? 0) > 1 || (b.huyenReviewRounds ?? 0) > 1;
   };
 
@@ -947,6 +938,11 @@ export function ReviewStats({
   // PRs requiring re-review trong kỳ (Filter từ huyenReviewedBugs)
   const huyenMultiRoundBugs = useMemo(() => {
     return huyenReviewedBugs.filter(isHuyenBugReReview);
+  }, [huyenReviewedBugs]);
+
+  // Bug đã bắt đầu review nhưng chưa có Ngày kết thúc review (đang chờ Huyền review lại)
+  const huyenReviewedInReview = useMemo(() => {
+    return huyenReviewedBugs.filter(isHuyenBugInReview);
   }, [huyenReviewedBugs]);
 
   // Filter bugs waiting for Huyen review (Must belong to team devs: HoangGV, HoNX, HuyDH in active period)
@@ -1068,6 +1064,7 @@ export function ReviewStats({
       );
       const withCommentCount = changesRequestedCount;
       const noCommentCount = devBugs.filter(isHuyenBugPassNgay).length;
+      const inReviewCount = devBugs.filter(isHuyenBugInReview).length;
       const pendingCount = teamResolvedPriorityBugs.filter((b) =>
         bugBelongsToPerson(b, dev),
       ).length;
@@ -1082,6 +1079,7 @@ export function ReviewStats({
         totalQcCommentsCount,
         withCommentCount,
         noCommentCount,
+        inReviewCount,
         pendingCount,
         reviewRate,
       };
@@ -2521,6 +2519,19 @@ export function ReviewStats({
                   ></span>
                   Chờ review
                 </span>
+                <span
+                  style={{ display: "flex", alignItems: "center", gap: "4px" }}
+                >
+                  <span
+                    style={{
+                      width: "10px",
+                      height: "10px",
+                      borderRadius: "2px",
+                      background: "#3b82f6",
+                    }}
+                  ></span>
+                  Đang review
+                </span>
               </div>
             </div>
 
@@ -2537,6 +2548,7 @@ export function ReviewStats({
                 const noCommentWidth = (row.noCommentCount / maxVal) * 100;
                 const approvedNoteWidth = ((row.approvedWithNoteCount ?? 0) / maxVal) * 100;
                 const withCommentWidth = ((row.changesRequestedCount ?? row.withCommentCount) / maxVal) * 100;
+                const inReviewWidth = ((row.inReviewCount ?? 0) / maxVal) * 100;
                 const pendingWidth = (row.pendingCount / maxVal) * 100;
 
                 return (
@@ -2653,6 +2665,33 @@ export function ReviewStats({
                         >
                           {withCommentWidth > 6 &&
                             `${row.changesRequestedCount ?? row.withCommentCount} Lỗi`}
+                        </div>
+                      )}
+
+                      {/* Segment 3b: Đang Review - chưa có Ngày kết thúc review (Blue) */}
+                      {(row.inReviewCount ?? 0) > 0 && (
+                        <div
+                          style={{
+                            width: `${inReviewWidth}%`,
+                            height: "100%",
+                            background: "#3b82f6",
+                            display: "flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                            color: "#fff",
+                            fontSize: "11px",
+                            fontWeight: "bold",
+                            transition: "width 0.4s ease-out",
+                            cursor: "pointer",
+                          }}
+                          onClick={() => {
+                            setSelectedDevFilter(row.dev.code);
+                            setDetailSubTab("reviewed");
+                            scrollToDetails();
+                          }}
+                          title={`[Bấm để lọc chi tiết]\n• Dev: ${row.dev.code}\n• Loại: Đang review (chưa có Ngày kết thúc review, Huyền chưa review lại)\n• Số lượng: ${row.inReviewCount} bug`}
+                        >
+                          {inReviewWidth > 6 && `${row.inReviewCount} Đang review`}
                         </div>
                       )}
 

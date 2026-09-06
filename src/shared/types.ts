@@ -46,6 +46,9 @@ export interface BugRecord {
   // Notion review fields
   reviewStartDate?: string;
   reviewEndDate?: string;
+  // Notion processing fields (dùng ưu tiên cho Tab Tiến Độ, fallback về prCreatedAt nếu trống)
+  processingStartDate?: string;
+  processingDueDate?: string;
   knowledge?: string;
   // GitHub enrichment
   ghReviewStatus?:
@@ -71,6 +74,29 @@ export interface BugRecord {
   huyenHasApproveWithNote?: boolean;
   huyenHasChangesRequested?: boolean;
   ghLabels?: string[];
+}
+
+/* ── Task Record (from Notion Task List) ──────────────── */
+
+export interface TaskRecord {
+  id: string;
+  url?: string;
+  taskId?: string; // LIAG-xxx
+  title: string;
+  taskType?: string[];
+  status?: string;
+  assigneeIds?: string[];
+  reviewerIds?: string[];
+  psDate?: string; // Ngày dự định bắt đầu
+  peDate?: string; // Ngày dự định kết thúc
+  asDate?: string; // Ngày thực tế bắt đầu
+  aeDate?: string; // Ngày thực tế kết thúc
+  pullRequestUrl?: string;
+  note?: string;
+  createdTime?: string;
+  lastEditedTime?: string;
+  // GitHub enrichment
+  prCreatedAt?: string; // Ngày mở PR (created_at của PR đầu tiên gắn với task)
 }
 
 /* ── Period types ──────────────────────────────────────── */
@@ -226,6 +252,7 @@ export interface DashboardView {
   benchmark: BenchmarkSnapshot;
   availablePeriods: PeriodInfo[];
   checklist: ChecklistItem[];
+  tasks?: TaskRecord[];
   totalDatabaseBugs?: number;
   conclusions?: Record<string, ManagerConclusion>;
   customTargets?: Record<string, number[]>;

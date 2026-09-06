@@ -19,13 +19,13 @@ Tài liệu này tổng hợp toàn bộ công thức tính toán, quy tắc ph�
 
 ## 2. 👑 Phân Hệ VÒNG 1: HUYỀN REVIEW (QC Lead)
 
-### 🔹 Điều kiện nhận diện Bug do Huyền đã Review (`isReviewedByHuyen`)
-Một Task/Bug được ghi nhận là Huyền đã test/review khi thỏa mãn **ĐỒNG THỜI** các tiêu chuẩn sau:
-1. **BẮT BUỘC phải có Pull Request (PR)**: Task không có PR (`Pull Request: Empty`) thì **không thể review** và **không tính** vào danh sách review. *(1 Task có thể bao gồm 1 hoặc nhiều PR)*.
-2. **Thỏa mãn ít nhất 1 trong 3 điều kiện**:
-   - Trường `Reviewers` trên Notion có đính kèm tên/ID của Huyền (`38ad872b-594c-81b9-8150-000220c17a19`).
-   - Đã có comment trực tiếp của Huyền trên GitHub PR (`prCommentsByHuyen > 0`).
-   - Đã được Huyền đổi Status hoặc PR Label sang `wait for development` / `wait for dev`.
+### 🔹 Điều kiện nhận diện Bug do Huyền đã Review (`huyenReviewedBugs`)
+Một Task/Bug được ghi nhận vào **Tổng Đã Review** khi thỏa mãn **ĐỒNG THỜI**:
+1. Không ở trạng thái `Cancel`.
+2. Trường `Reviewers` trên Notion có đính kèm ID của Huyền (`38ad872b-594c-81b9-8150-000220c17a19`) — **chỉ xét đúng field này**, không suy luận qua comment GitHub hay label.
+3. Có `Ngày bắt đầu review` (`reviewStartDate`) và ngày đó thuộc khoảng `[startDate, endDate]` của kỳ đang lọc (khớp đúng cách Notion lọc "Ngày bắt đầu review: Past month").
+
+> Lưu ý: hàm `isReviewedByHuyen` (dùng cho badge chi tiết, không dùng để tính Tổng Đã Review) vẫn giữ điều kiện lỏng hơn (bắt buộc có PR + 1 trong 3 tín hiệu: Reviewers/comment GitHub/label `wait`).
 
 ### 🔹 Thứ Tự Ưu Tiên Xác Định Thời Gian Review (`huyenReviewDate`)
 Đo thời gian review của Huyền được xác định chính xác theo thứ tự ưu tiên giảm dần sau:
@@ -41,12 +41,13 @@ $$\text{Thời gian Comment lần 1 (huyenFirstCommentAt)} \longrightarrow \text
 | Danh mục / Kết quả | Định nghĩa & Điều kiện phân loại | Ghi chú / Quy tắc hiển thị |
 | :--- | :--- | :--- |
 | **Không tái hiện** | Note hoặc Status chứa cụm từ *"tái hiện"* (như *"Không thể tái hiện"*, *"Ko tái hiện"*...), *"no repro"*, *"không phải lỗi"* | Hiển thị badge màu xám **Không tái hiện**. |
-| **Pass** | Task có PR, đã đạt 100% test (không comment HOẶC đã chuyển sang `wait for dev` / `Closed` / `Deployed`) | Hiển thị badge màu xanh **Pass**. |
+| **Pass ngay** (`isHuyenBugPassNgay`) | `Ngày bắt đầu review` VÀ `Ngày kết thúc review` đều có giá trị VÀ **bằng nhau** (không thuộc diện Pass có note / Request changes) | Review 1 lượt là xong, không phát sinh vòng nào khác. |
+| **Có comment / Request changes** (`isHuyenBugChangesRequested`) | `Ngày bắt đầu review` khác `Ngày kết thúc review`, hoặc có review GitHub `CHANGES_REQUESTED` / comment của Huyền chưa được approve | Phát sinh lỗi cần Dev sửa. |
+| **Đang review** (`isHuyenBugInReview`) | Có `Ngày bắt đầu review` NHƯNG `Ngày kết thúc review` **còn rỗng** | Huyền **chưa review lại lần nữa** — vẫn tính vào Tổng Đã Review nhưng KHÔNG xếp vào Pass ngay hay Có comment. |
 | **Dev đã phản hồi** | Task đang mở có comment review từ QC Lead VÀ Dev đã comment trả lời dưới PR / đổi trạng thái | Hiển thị badge màu xanh dương **Dev đã phản hồi**. |
 | **Chờ Dev phản hồi** | Task đang mở có comment review từ QC Lead VÀ Dev CHƯA comment trả lời | Hiển thị badge màu đỏ **Chờ Dev phản hồi**. |
-| **Tổng Đã Review** | `huyenReviewedBugs` = Tất cả Task có PR thỏa mãn `isReviewedByHuyen` trong kỳ | 1 Task chứa 1 hoặc nhiều PR đếm là 1 Task |
-| **Review Có Comment** | `huyenReviewedWithComments` = Task có PR VÀ có comment của Huyền trên GitHub PR (`prCommentsByHuyen > 0`) | Phát sinh lỗi cần Dev sửa |
-| **Bug Chờ Review** | `pendingHuyenReviewBugs` = Tất cả Task có PR chưa được Huyền review từ trước đến nay (**Tất cả thời gian**) | Không lọc theo kỳ để đảm bảo **không bao giờ bị sót** task chờ review còn tồn đọng |
+| **Tổng Đã Review** | `huyenReviewedBugs` = Reviewers chứa Huyền + có `Ngày bắt đầu review` trong kỳ (xem mục điều kiện ở trên) | Bao gồm cả bug đang ở trạng thái "Đang review" (chưa có ngày kết thúc). |
+| **Bug Chờ Review** | `pendingHuyenReviewBugs` = Tất cả Task có PR chưa được Huyền review từ trước đến nay (**Tất cả thời gian**) | Không lọc theo kỳ để đảm bảo **không bao giờ bị sót** task chờ review còn tồn đọng. Khác với "Đang review" — mục này là bug **chưa hề bắt đầu** review. |
 
 ---
 

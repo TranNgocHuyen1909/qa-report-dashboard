@@ -165,9 +165,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     return (bug.fixedByIds ?? []).some(id => notionIds.includes(id));
   };
 
-  // Helper to get bug fixed date (PR created date, last commit date, or confirmed date)
+  // Helper to get bug fixed date: ưu tiên Ngày bắt đầu xử lý (Notion), fallback về PR created date, last commit date, hoặc confirmed date
   const bugFixedDate = (b: BugRecord) => {
     return (
+      dateKey(b.processingStartDate) ??
       dateKey(b.prCreatedAt) ??
       dateKey(b.prLastCommitAt) ??
       dateKey(b.confirmedDate)
@@ -293,10 +294,18 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         const closed = completedBugs.filter(b => ["closed", "deployed"].includes((b.status ?? "").toLowerCase()));
         const resolved = completedBugs.filter(b => (b.status ?? "").toLowerCase() === "resolved");
 
-        const noRepro = locBugs.filter(b =>
+        const noReproBugs = locBugs.filter(b =>
           isNoRepro(b) &&
           dateInRange(bugFixedDate(b), activePeriod.startDate, activePeriod.endDate)
-        ).length;
+        );
+        const noRepro = noReproBugs.length;
+        const noReproBugsList = noReproBugs.map(b => ({
+          bugId: b.bugId || b.id,
+          title: b.title,
+          url: b.url,
+          location: getPrimaryLocation(b.location),
+          note: b.note || "",
+        }));
 
         const solvedWithPr = completedBugs.filter(b => !!b.pullRequestUrl);
 
@@ -348,6 +357,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
           closedCount: closed.length,
           resolvedCount: resolved.length,
           noRepro,
+          noReproBugsList,
           solvedWithPr: solvedWithPr.length,
           reopenedCount: reopenedBugsList.length,
           reopenedList: reopenedBugsList.map(b => ({ bugId: b.bugId || b.id, title: b.title, url: b.url })),
@@ -375,7 +385,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
     return developers.map(dev => {
       const devRows = devStats.filter(r => r.dev.code === dev.code);
 
-      const noRepro = devRows.reduce((sum, r) => sum + r.noRepro, 0);
+      const noReproBugsMap = new Map<string, any>();
+      devRows.forEach(r => r.noReproBugsList.forEach((b: any) => noReproBugsMap.set(b.bugId, b)));
+      const noReproBugsList = Array.from(noReproBugsMap.values());
+      const noRepro = noReproBugsList.length;
 
       // Reopen calculation: Strictly count ALL Notion tasks where "Ngày mở lại" (reopenedDate) field is filled in active period
       const reopenedBugsMap = new Map<string, any>();
@@ -455,6 +468,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         date: bugFixedDate(b) || dateKey(b.confirmedDate) || dateKey(b.prCreatedAt) || "—",
       }));
 
+      // Task trùng (ăn theo bug gốc): tách riêng, không cộng vào CLOSE/RESOLVED để tránh ảo số lượng
+      const duplicateBugsMap = new Map<string, any>();
+
       // 2. CLOSE: Fixed by + confirmedDate (Ngày xác nhận) in active period
       const closedBugsMap = new Map<string, any>();
       view.bugs.forEach(b => {
@@ -486,10 +502,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
           b.duplicateIds.forEach((childId: string) => {
             const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
             const childKey = childObj ? (childObj.bugId || childObj.id) : childId;
-            if (!closedBugsMap.has(childKey)) {
+            if (!duplicateBugsMap.has(childKey)) {
               const childSt = (childObj?.status ?? "").toLowerCase();
               if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
-                closedBugsMap.set(childKey, {
+                duplicateBugsMap.set(childKey, {
                   ...(childObj || {}),
                   bugId: childObj?.bugId || childId.slice(0, 8),
                   id: childId,
@@ -498,7 +514,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                   parentBugId: key,
                   pullRequestUrl: childObj?.pullRequestUrl || prUrl,
                   location: childObj?.location && childObj.location.length > 0 ? childObj.location : b.location,
-                  title: childObj ? `${childObj.title} (Task trùng lặp của [${key}])` : `Task trùng lặp của [${key}]`
+                  title: childObj ? `${childObj.title} (Bug trùng lặp của [${key}])` : `Bug trùng lặp của [${key}]`
                 });
               }
             }
@@ -512,6 +528,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       devBugs.forEach(b => {
         const st = (b.status ?? "").toLowerCase();
         if (st === "cancel" || st === "không lỗi" || st === "wontfix") return;
+        if (st === "closed" || st === "deployed") return; // Đã tính vào CLOSE, không đếm lặp lại ở RESOLVED
         if (isNoRepro(b)) return;
         
         const isFixedByDev = (b.fixedByIds ?? []).some(id => dev.notionIds.includes(id));
@@ -533,10 +550,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
             b.duplicateIds.forEach((childId: string) => {
               const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
               const childKey = childObj ? (childObj.bugId || childObj.id) : childId;
-              if (!resolvedBugsMap.has(childKey)) {
+              if (!duplicateBugsMap.has(childKey)) {
                 const childSt = (childObj?.status ?? "").toLowerCase();
                 if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
-                  resolvedBugsMap.set(childKey, {
+                  duplicateBugsMap.set(childKey, {
                     ...(childObj || {}),
                     bugId: childObj?.bugId || childId.slice(0, 8),
                     id: childId,
@@ -545,7 +562,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     parentBugId: taskId,
                     pullRequestUrl: childObj?.pullRequestUrl || prUrl,
                     location: childObj?.location && childObj.location.length > 0 ? childObj.location : b.location,
-                    title: childObj ? `${childObj.title} (Task trùng lặp của [${taskId}])` : `Task trùng lặp của [${taskId}]`
+                    title: childObj ? `${childObj.title} (Bug trùng lặp của [${taskId}])` : `Bug trùng lặp của [${taskId}]`
                   });
                 }
               }
@@ -554,10 +571,84 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         }
       });
       const resolvedBugs = Array.from(resolvedBugsMap.values());
-      const resolvedDuplicateChildCount = resolvedBugs.filter(b => b.isChild).length;
 
       const closedCount = closedBugs.length;
       const resolvedCount = resolvedBugs.length;
+      const totalDoneCount = closedCount + resolvedCount; // Closed đã bị loại khỏi Resolved ở trên nên không lặp lại
+
+      // Task trùng (ăn theo bug gốc, tự động nghiệm thu cùng lúc): tách hẳn ra khỏi CLOSE/RESOLVED để không ảo số lượng
+      const autoClosedDuplicateList = Array.from(duplicateBugsMap.values()).map(b => ({
+        bugId: b.bugId || b.id,
+        title: b.title,
+        url: b.url,
+        prUrl: b.pullRequestUrl,
+        hasPR: !!b.pullRequestUrl,
+        status: (b.status ?? "").toUpperCase(),
+        location: getPrimaryLocation(b.location),
+        isChild: true,
+        parentBugId: b.parentBugId,
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || "—",
+      }));
+      const autoClosedDuplicateCount = autoClosedDuplicateList.length;
+
+      // Cột TASK: lấy từ Notion Task List, đếm theo Ngày mở PR (prCreatedAt) thuộc kỳ đang xem, gán theo Assignee
+      const devTaskList = (view.tasks ?? []).filter(t => {
+        if ((t.status ?? "").toLowerCase() === "cancel") return false;
+        const isAssignee = (t.assigneeIds ?? []).some(id => dev.notionIds.includes(id));
+        if (!isAssignee) return false;
+        const prDate = dateKey(t.prCreatedAt);
+        return dateInRange(prDate, activePeriod?.startDate, activePeriod?.endDate);
+      });
+      const taskCount = devTaskList.length;
+      const taskBugsList = devTaskList.map(t => ({
+        bugId: t.taskId || t.id,
+        title: t.title,
+        url: t.url,
+        prUrl: t.pullRequestUrl,
+        hasPR: true,
+        status: (t.status ?? "").toUpperCase(),
+        location: t.taskType && t.taskType.length > 0
+          ? t.taskType[0] + (t.taskType.length > 1 ? ` +${t.taskType.length - 1}` : "")
+          : "Chưa phân loại",
+        date: dateKey(t.prCreatedAt) || "—",
+      }));
+
+      // TỔNG (EFFORT) = Bug effort (Closed + Resolved) + Task effort (đếm theo Ngày mở PR)
+      const effortCount = totalDoneCount + taskCount;
+
+      // Tổng chung (không tính effort): mọi bug/task đã đóng/xử lý xong trong kỳ, kể cả bug ăn theo bug gốc và bug không tái hiện được
+      const totalGeneralCount = effortCount + autoClosedDuplicateCount + noRepro;
+
+      // Trong số Resolved: tách rõ task đang Chờ review (chưa có hoạt động review nào của Huyền)
+      // và task đang Cần sửa lại (Huyền đã comment/request changes, dev chưa fix xong)
+      const resolvedWaitingReview = resolvedBugs.filter(b => !isReviewedByHuyen(b));
+      const resolvedNeedsRework = resolvedBugs.filter(b => {
+        if (!isReviewedByHuyen(b)) return false;
+        const isApproved = b.ghReviewStatus === "Approved" || b.ghReviewStatus === "Approved with Note";
+        if (isApproved) return false;
+        return b.ghReviewStatus === "Changes Requested" || (b.prCommentsByHuyen ?? 0) > 0;
+      });
+      const resolvedWaitingReviewList = resolvedWaitingReview.map(b => ({
+        bugId: b.bugId || b.id,
+        title: b.title,
+        url: b.url,
+        prUrl: b.pullRequestUrl,
+        hasPR: !!b.pullRequestUrl,
+        status: (b.status ?? "").toUpperCase(),
+        location: getPrimaryLocation(b.location),
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || "—",
+      }));
+      const resolvedNeedsReworkList = resolvedNeedsRework.map(b => ({
+        bugId: b.bugId || b.id,
+        title: b.title,
+        url: b.url,
+        prUrl: b.pullRequestUrl,
+        hasPR: !!b.pullRequestUrl,
+        status: (b.status ?? "").toUpperCase(),
+        location: getPrimaryLocation(b.location),
+        note: b.note || "",
+        date: bugFixedDate(b) || dateKey(b.confirmedDate) || "—",
+      }));
 
       const closedBugsList = closedBugs.map(b => ({
         bugId: b.bugId || b.id,
@@ -593,30 +684,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
       const targetBugs = view.bugs;
 
-      const closedBugsWithPr = closedBugsList.filter(b => !b.isChild && b.hasPR).length;
-      const closedBugsDocsNoPr = closedBugsList.filter(b => !b.isChild && !b.hasPR).length;
-
-      let duplicateChildCount = 0;
-      const seenChildKeys = new Set<string>();
-      closedBugs.forEach(b => {
-        if (b.isChild) return;
-        if (b.duplicateIds && b.duplicateIds.length > 0) {
-          b.duplicateIds.forEach((childId: string) => {
-            const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
-            const childKey = childObj ? (childObj.bugId || childObj.id) : childId;
-            const childSt = (childObj?.status ?? "").toLowerCase();
-            if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
-              if (!seenChildKeys.has(childKey)) {
-                seenChildKeys.add(childKey);
-                duplicateChildCount++;
-              }
-            }
-          });
-        }
-      });
+      const closedBugsWithPr = closedBugsList.filter(b => b.hasPR).length;
+      const closedBugsDocsNoPr = closedBugsList.filter(b => !b.hasPR).length;
       const closedBugsNoPr = closedBugsList.filter(b => !b.hasPR).length;
-      const resolvedBugsWithPr = resolvedBugsList.filter(b => !b.isChild && b.hasPR).length;
-      const resolvedBugsDocsNoPr = resolvedBugsList.filter(b => !b.isChild && !b.hasPR).length;
+      const resolvedBugsWithPr = resolvedBugsList.filter(b => b.hasPR).length;
+      const resolvedBugsDocsNoPr = resolvedBugsList.filter(b => !b.hasPR).length;
       const resolvedBugsNoPr = resolvedBugsList.filter(b => !b.hasPR).length;
 
       const closedUniquePrs = new Set(
@@ -797,7 +869,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                 if (childSt !== "cancel" && childSt !== "không lỗi" && childSt !== "wontfix") {
                   reCommitBugsMap.set(childKey, {
                     bugId: childKey,
-                    title: childObj ? `${childObj.title} (Task trùng lặp của [${key}])` : `Task trùng lặp của [${key}]`,
+                    title: childObj ? `${childObj.title} (Bug trùng lặp của [${key}])` : `Bug trùng lặp của [${key}]`,
                     url: childObj?.url,
                     prUrl: childObj?.pullRequestUrl || prUrl,
                     status: (childObj?.status || "RESOLVED").toUpperCase(),
@@ -867,7 +939,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
             const childObj = view.bugs.find(orig => orig.id === childId || orig.bugId === childId);
             return {
               bugId: childObj ? (childObj.bugId || childObj.id) : childId,
-              title: childObj ? childObj.title : `Task trùng (${childId.slice(0, 8)}...)`,
+              title: childObj ? childObj.title : `Bug trùng (${childId.slice(0, 8)}...)`,
               url: childObj?.url,
               prUrl: childObj?.pullRequestUrl,
               date: childObj ? (bugFixedDate(childObj) || dateKey(childObj.confirmedDate) || dateKey(childObj.createdTime) || "—") : "—",
@@ -971,7 +1043,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       }
 
       const totalVerifiedRootBugs = closedBugsWithPr + resolvedBugsWithPr + closedBugsDocsNoPr + resolvedBugsDocsNoPr;
-      const bugsPerDay = manDays > 0 ? totalVerifiedRootBugs / manDays : 0;
+      const bugsPerDay = manDays > 0 ? (totalVerifiedRootBugs + taskCount) / manDays : 0;
 
       // Count reviews performed by this person in this period based on Notion reviewerIds
       let reviewsCount = 0;
@@ -1007,7 +1079,17 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         locationText,
         closedCount,
         resolvedCount,
+        totalDoneCount,
+        effortCount,
+        totalGeneralCount,
+        taskCount,
+        taskBugsList,
+        resolvedWaitingReviewCount: resolvedWaitingReviewList.length,
+        resolvedWaitingReviewList,
+        resolvedNeedsReworkCount: resolvedNeedsReworkList.length,
+        resolvedNeedsReworkList,
         noRepro,
+        noReproBugsList,
         reopenedCount,
         reopenedList,
         reopenRate,
@@ -1024,13 +1106,13 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         closedBugsWithPr,
         closedBugsDocsNoPr,
         closedBugsNoPr,
-        duplicateChildCount,
         closedUniquePrs,
         resolvedBugsWithPr,
         resolvedBugsDocsNoPr,
         resolvedBugsNoPr,
         resolvedUniquePrs,
-        resolvedDuplicateChildCount,
+        autoClosedDuplicateCount,
+        autoClosedDuplicateList,
         reCommitDuplicateChildCount,
         closedLocText,
         resolvedLocText,
@@ -1122,7 +1204,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         hasPrevData: !!prevPMetric,
       };
     });
-  }, [developers, devStats, view.teamMetrics, view.weeklyMetrics, activePeriod, view.bugs, manDaysOverrides]);
+  }, [developers, devStats, view.teamMetrics, view.weeklyMetrics, activePeriod, view.bugs, view.tasks, manDaysOverrides]);
 
   const sortedDevs = useMemo(() => {
     return [...devPerformance].sort((a, b) => b.bugsPerDay - a.bugsPerDay);
@@ -1151,7 +1233,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
       }
       if (d.commentsPerTask > 2.0) {
         abnormalNotes.push(
-          <span key={`comment-${d.code}`}>⚠️ <strong>{d.code}</strong> có mật độ review comment cao (<strong>{d.commentsPerTask.toFixed(1)}/task</strong>), cho thấy code nhiều lỗi vặt hoặc chưa đúng thiết kế ban đầu.</span>
+          <span key={`comment-${d.code}`}>⚠️ <strong>{d.code}</strong> có mật độ review comment cao (<strong>{d.commentsPerTask.toFixed(1)}/bug</strong>), cho thấy code nhiều lỗi vặt hoặc chưa đúng thiết kế ban đầu.</span>
         );
       }
       if (d.repeatedCount > 0) {
@@ -1174,11 +1256,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
     if (huyenReviewed === 0 && totalTeamPrs > 0) {
       leaderNotes.push(
-        <span key="leader-warn">⚠️ Lead (HuyenTN) <strong>chưa ghi nhận review PR/task nào</strong> trong kỳ. Mục tiêu trọng tâm của Lead là review code & nghiệm thu PRs để đảm bảo chất lượng hệ thống.</span>
+        <span key="leader-warn">⚠️ Lead (HuyenTN) <strong>chưa ghi nhận review PR/bug nào</strong> trong kỳ. Mục tiêu trọng tâm của Lead là review code & nghiệm thu PRs để đảm bảo chất lượng hệ thống.</span>
       );
     } else {
       leaderNotes.push(
-        <span key="leader-ok">✔️ Lead (HuyenTN) đã hoàn thành review <strong>{huyenReviewed} / {totalTeamPrs} PR tasks</strong> của team trong kỳ. Tỷ lệ Review đạt <strong>{totalTeamPrs > 0 ? ((huyenReviewed / totalTeamPrs) * 100).toFixed(0) : 100}%</strong> mục tiêu kiểm soát chất lượng.</span>
+        <span key="leader-ok">✔️ Lead (HuyenTN) đã hoàn thành review <strong>{huyenReviewed} / {totalTeamPrs} PR bug</strong> của team trong kỳ. Tỷ lệ Review đạt <strong>{totalTeamPrs > 0 ? ((huyenReviewed / totalTeamPrs) * 100).toFixed(0) : 100}%</strong> mục tiêu kiểm soát chất lượng.</span>
       );
     }
 
@@ -1188,19 +1270,19 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
     if (lowPerfDevs.length > 0) {
       coordinationNotes.push(
-        <span key="coord-low">👉 <strong>Điều phối hỗ trợ:</strong> Cần trao đổi làm rõ rào cản kỹ thuật hoặc <strong>giảm tải bớt task / lùi deadline / thay đổi độ ưu tiên</strong> cho <strong>{lowPerfDevs.join(", ")}</strong> do năng suất sửa lỗi dưới mốc kỳ vọng (&lt; 0.8 bug/ngày).</span>
+        <span key="coord-low">👉 <strong>Điều phối hỗ trợ:</strong> Cần trao đổi làm rõ rào cản kỹ thuật hoặc <strong>giảm tải bớt bug / lùi deadline / thay đổi độ ưu tiên</strong> cho <strong>{lowPerfDevs.join(", ")}</strong> do năng suất sửa lỗi dưới mốc kỳ vọng (&lt; 0.8 bug/ngày).</span>
       );
     }
     if (highPerfDevs.length > 0) {
       coordinationNotes.push(
-        <span key="coord-high">👉 <strong>Phân bổ tài nguyên tối ưu:</strong> Tận dụng và giao thêm các task phức tạp/độ khó cao hơn cho <strong>{highPerfDevs.join(", ")}</strong> do năng suất sửa lỗi đạt mức vượt trội (&gt;= 2.0 bug/ngày).</span>
+        <span key="coord-high">👉 <strong>Phân bổ tài nguyên tối ưu:</strong> Tận dụng và giao thêm các bug phức tạp/độ khó cao hơn cho <strong>{highPerfDevs.join(", ")}</strong> do năng suất sửa lỗi đạt mức vượt trội (&gt;= 2.0 bug/ngày).</span>
       );
     }
 
     const highReopenDevs = devPerformance.filter(d => d.reopened > 0).map(d => d.code);
     if (highReopenDevs.length > 0) {
       coordinationNotes.push(
-        <span key="coord-reopen">👉 <strong>Chấn chỉnh quy trình:</strong> Yêu cầu <strong>{highReopenDevs.join(", ")}</strong> dành thời gian rà soát kỹ testcase cục bộ trước khi bàn giao các task tiếp theo nhằm khắc phục triệt để lỗi reopen.</span>
+        <span key="coord-reopen">👉 <strong>Chấn chỉnh quy trình:</strong> Yêu cầu <strong>{highReopenDevs.join(", ")}</strong> dành thời gian rà soát kỹ testcase cục bộ trước khi bàn giao các bug tiếp theo nhằm khắc phục triệt để lỗi reopen.</span>
       );
     }
 
@@ -1276,20 +1358,68 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         )}
       </div>
 
-
+      <details style={{ marginBottom: "12px", background: "var(--surface)", border: "1px solid var(--border-2)", borderRadius: "6px" }}>
+        <summary style={{ padding: "10px 14px", cursor: "pointer", fontSize: "12.5px", fontWeight: 700, color: "var(--text-1)" }}>
+          📖 Giải thích ý nghĩa từng cột
+        </summary>
+        <div
+          style={{
+            padding: "2px 14px 14px",
+            display: "grid",
+            gridTemplateColumns: "repeat(auto-fill, minmax(230px, 1fr))",
+            gap: "8px",
+          }}
+        >
+          {[
+            { name: "TỔNG (CHUNG)", desc: "= TỔNG (EFFORT) + BUG TRÙNG + KHÔNG TÁI HIỆN. Toàn bộ bug đã đóng/xử lý xong trong kỳ, dùng báo cáo backlog tổng thể." },
+            { name: "TỔNG (EFFORT)", desc: "= CLOSE + RESOLVED + TASK. Số bug/task THỰC SỰ tốn công dev làm, dùng để tính CÔNG VIỆC/NGÀY." },
+            { name: "BUG TRÙNG", desc: "Bug bị Notion đánh dấu trùng với 1 bug gốc, tự động nghiệm thu cùng lúc bug gốc được fix." },
+            { name: "CLOSE", desc: "Bug đã hoàn thành, review xong, có Ngày Xác Nhận rơi vào kỳ đang xem." },
+            { name: "RESOLVED", desc: "Bug đã tạo PR & sửa xong nhưng chưa Closed. Có thể đang chờ review hoặc cần sửa lại (xem 2 dòng nhỏ bên dưới số)." },
+            { name: "KHÔNG TÁI HIỆN", desc: "Bug gán Fixed by dev nhưng không có link PR → không tái hiện được lỗi." },
+            { name: "BUG CÓ CHỈNH SỬA THÊM", desc: "Bug/PR tạo từ kỳ trước, phát sinh thêm commit sửa hoặc review trong kỳ này." },
+            { name: "REOPEN", desc: "Tỷ lệ & số lượng bug bị mở lại sau khi dev đã báo sửa xong." },
+            { name: "MD", desc: "Man-Days — số ngày công thực tế trong kỳ, có thể chỉnh tay." },
+            { name: "CÔNG VIỆC/NGÀY", desc: "Năng suất trung bình = TỔNG (EFFORT) / MD (đã gồm cả Bug và Task)." },
+            { name: "TASK", desc: "Số Task (từ Notion Task List, không phải Bug) có PR mở trong kỳ, gán theo Assignee, đếm theo Ngày mở PR. Đã được cộng vào TỔNG (EFFORT) và CÔNG VIỆC/NGÀY." },
+          ].map((item) => (
+            <div
+              key={item.name}
+              style={{
+                background: "var(--surface-2)",
+                border: "1px solid var(--border-3)",
+                borderRadius: "6px",
+                padding: "8px 10px",
+              }}
+            >
+              <div style={{ fontSize: "11px", fontWeight: 700, color: "var(--accent-2)", marginBottom: "3px" }}>
+                {item.name}
+              </div>
+              <div style={{ fontSize: "11.5px", color: "var(--text-2)", lineHeight: 1.5 }}>
+                {item.desc}
+              </div>
+            </div>
+          ))}
+        </div>
+      </details>
 
       <div style={{ width: "100%", background: "var(--surface)", border: "1px solid var(--border-2)", borderRadius: "6px", overflow: "hidden" }}>
         <div style={{ width: "100%", overflowX: "auto" }}>
           <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", tableLayout: "fixed" }}>
             <thead>
               <tr style={{ fontSize: "11px", background: "var(--surface-2)", borderBottom: "2px solid var(--border-2)" }}>
-                <th style={{ textAlign: "left", padding: "12px 14px", color: "var(--text-1)", width: "24%" }}>Nhân sự</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số bug đã hoàn thành, review xong và có Ngày Xác Nhận trong kỳ">CLOSE</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Số PR tạo mới và sửa xong trong kỳ">RESOLVED</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "14%" }} title="Số task/PR được tạo từ các kỳ trước nhưng phát sinh commit sửa bổ sung hoặc review trong kỳ này">TASK CÓ CHỈNH SỬA THÊM</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "12%" }} title="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong: (Reopen / (Closed + Resolved)) * 100%">REOPEN</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "10%" }} title="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
-                <th style={{ textAlign: "center", padding: "12px 8px", whiteSpace: "nowrap", color: "var(--text-1)", width: "16%" }} title="Năng suất sửa lỗi trung bình mỗi ngày công: (Closed + Resolved) / MD">BUG/NGÀY</th>
+                <th style={{ textAlign: "left", padding: "12px 14px", color: "var(--text-1)", width: "12%" }}>Nhân sự</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "7%" }} title="Tổng chung = TỔNG (Effort) + BUG TRÙNG + KHÔNG TÁI HIỆN. Toàn bộ bug đã đóng/xử lý xong trong kỳ, kể cả bug ăn theo bug gốc và bug không tái hiện được -> dùng để báo cáo backlog tổng thể">TỔNG (CHUNG)</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "7%" }} title="Tổng số bug THỰC SỰ tốn effort của dev = CLOSE + RESOLVED (không tính Bug Trùng và Không tái hiện, vì 2 loại này không tốn công dev fix)">TỔNG (EFFORT)</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "7%" }} title="Bug trùng: bug bị Notion đánh dấu Duplicates của 1 bug gốc, được nghiệm thu tự động cùng lúc bug gốc được fix -> tách riêng, không cộng vào CLOSE/RESOLVED/TỔNG (EFFORT)">BUG TRÙNG</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "7%" }} title="Số bug đã hoàn thành, review xong và có Ngày Xác Nhận trong kỳ">CLOSE</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "8%" }} title="Số PR tạo mới và sửa xong trong kỳ, chưa có Ngày Xác Nhận (không tính lại bug đã Closed)">RESOLVED</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "8%" }} title="Bug không có link Pull Request -> không tái hiện được, không tính vào CLOSE/RESOLVED">KHÔNG TÁI HIỆN</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "10%" }} title="Số bug/PR được tạo từ các kỳ trước nhưng phát sinh commit sửa bổ sung hoặc review trong kỳ này">BUG CÓ CHỈNH SỬA THÊM</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "8%" }} title="Tỷ lệ bug bị mở lại sau khi dev báo sửa xong: (Reopen / (Closed + Resolved)) * 100%">REOPEN</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "6%" }} title="Man-Days: Số ngày công làm việc thực tế ghi nhận trong kỳ (Có thể tùy chỉnh)">MD</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "9%" }} title="Năng suất trung bình mỗi ngày công: (Closed + Resolved + Task) / MD">CÔNG VIỆC/NGÀY</th>
+                <th style={{ textAlign: "center", padding: "12px 6px", whiteSpace: "normal", wordBreak: "break-word", lineHeight: 1.3, color: "var(--text-1)", width: "11%" }} title="Số Task (từ Notion Task List) có PR mở trong kỳ, gán theo Assignee. Đếm theo Ngày mở PR (prCreatedAt), đã được cộng vào TỔNG (EFFORT) và CÔNG VIỆC/NGÀY.">TASK</th>
               </tr>
             </thead>
             <tbody>
@@ -1316,28 +1446,6 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <div style={{ color: "var(--text-3)", fontSize: "11px", fontWeight: "normal", marginTop: 2 }}>
                         ({row.dev.code})
                       </div>
-                      {row.repeatedCount > 0 && (
-                        <div
-                          style={{
-                            marginTop: "4px",
-                            fontSize: "10.5px",
-                            color: "var(--yellow)",
-                            fontWeight: "600",
-                            cursor: "pointer",
-                            display: "inline-flex",
-                            alignItems: "center",
-                            gap: "3px",
-                            padding: "2px 6px",
-                            borderRadius: "4px",
-                            background: "rgba(234, 179, 8, 0.1)",
-                            border: "1px solid rgba(234, 179, 8, 0.3)"
-                          }}
-                          title="Bấm để xem danh sách chi tiết các Bug Lặp bài học kinh nghiệm"
-                          onClick={() => setSelectedRepeatedBugs({ devName: row.dev.displayName, list: row.repeatedBugsList })}
-                        >
-                          ⚠️ {row.repeatedCount} lỗi lặp checklist 🔍
-                        </div>
-                      )}
                       {(() => {
                         const exp = activePeriod && view.conclusions?.[activePeriod.key]?.explanations?.[row.dev.code];
                         if (exp) {
@@ -1355,6 +1463,57 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       style={{
                         padding: "8px 10px",
                         textAlign: "center",
+                        fontSize: "14px",
+                        fontWeight: "bold",
+                        color: row.totalGeneralCount > 0 ? "var(--text-1)" : "var(--text-3)",
+                      }}
+                      title={`Tổng chung = ${row.effortCount} (Effort, gồm ${row.taskCount} Task) + ${row.autoClosedDuplicateCount} Bug trùng + ${row.noRepro} Không tái hiện = ${row.totalGeneralCount}`}
+                    >
+                      {row.totalGeneralCount}
+                    </td>
+                    <td
+                      className="td-num"
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "center",
+                        fontSize: "14px",
+                        fontWeight: "bold",
+                        color: row.effortCount > 0 ? "var(--text-1)" : "var(--text-3)",
+                      }}
+                      title={`Tổng số bug + task THỰC SỰ tốn effort của dev trong kỳ = ${row.closedCount} Closed + ${row.resolvedCount} Resolved + ${row.taskCount} Task = ${row.effortCount} (không tính Bug trùng và Không tái hiện, bug đã Closed không bị đếm lặp lại ở Resolved)`}
+                    >
+                      {row.effortCount}
+                    </td>
+                    <td
+                      className="td-num"
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "center",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        color: row.autoClosedDuplicateCount > 0 ? "var(--purple)" : "var(--text-3)",
+                        cursor: row.autoClosedDuplicateCount > 0 ? "pointer" : "default",
+                        textDecoration: row.autoClosedDuplicateCount > 0 ? "underline dashed" : "none"
+                      }}
+                      title={
+                        row.autoClosedDuplicateCount > 0
+                          ? `[BUG TRÙNG: ${row.autoClosedDuplicateCount} bug]\n• Bug được Notion đánh dấu trùng (Duplicates) với 1 bug gốc, tự động nghiệm thu cùng lúc bug gốc được fix\n• Không cộng vào CLOSE/RESOLVED/TỔNG để tránh ảo số lượng\n${row.autoClosedDuplicateList.map((b: any) => `[${b.bugId}] ${b.title} (ăn theo ${b.parentBugId})`).join('\n')}`
+                          : "0 bug trùng"
+                      }
+                      onClick={() => {
+                        if (row.autoClosedDuplicateCount > 0) {
+                          setSelectedPrBugs(row.autoClosedDuplicateList);
+                          setSelectedDevCode(`${row.dev.displayName} - BUG TRÙNG`);
+                        }
+                      }}
+                    >
+                      {row.autoClosedDuplicateCount}
+                    </td>
+                    <td
+                      className="td-num"
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "center",
                         fontSize: "12px",
                         color: row.closedCount > 0 ? "var(--green)" : "var(--text-3)",
                         cursor: row.closedCount > 0 ? "pointer" : "default",
@@ -1362,8 +1521,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.closedCount > 0
-                          ? `[CLOSED: Tổng ${row.closedCount} task (${row.closedBugsWithPr} task gốc${row.closedBugsDocsNoPr > 0 ? `, ${row.closedBugsDocsNoPr} Docs/Test` : ""}${row.duplicateChildCount > 0 ? `, ${row.duplicateChildCount} task trùng` : ""})]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}`
-                          : "0 task Closed"
+                          ? `[CLOSED: Tổng ${row.closedCount} bug (${row.closedBugsWithPr} bug gốc${row.closedBugsDocsNoPr > 0 ? `, ${row.closedBugsDocsNoPr} Docs/Test` : ""})]\n• Vị trí lỗi: ${row.closedLocText || "Chưa phân loại"}\n• Bug trùng ăn theo bug gốc được tách riêng ở cột BUG TRÙNG, không cộng vào đây`
+                          : "0 bug Closed"
                       }
                       onClick={() => {
                         if (row.closedCount > 0) {
@@ -1376,15 +1535,10 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         {row.closedCount}
                       </div>
                       {row.closedBugsDocsNoPr > 0 && (
-                        <div style={{ fontSize: "10px", color: "#0284c7", fontWeight: "600", marginTop: "2px" }} title="Task Docs / Test không PR (gán Fixed by)">
-                          (+{row.closedBugsDocsNoPr} task Docs/Test)
+                        <div style={{ fontSize: "10px", color: "#0284c7", fontWeight: "600", marginTop: "2px" }} title="Bug Docs / Test không PR (gán Fixed by)">
+                          (+{row.closedBugsDocsNoPr} bug Docs/Test)
                         </div>
                       )}
-                      {row.duplicateChildCount > 0 ? (
-                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Trong tổng ${row.closedCount} task có ${row.duplicateChildCount} task trùng lặp`}>
-                          ({row.duplicateChildCount} task trùng)
-                        </div>
-                      ) : null}
                     </td>
                     <td
                       className="td-num"
@@ -1398,8 +1552,8 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.resolvedCount > 0
-                          ? `[RESOLVED: Tổng ${row.resolvedCount} task (${row.resolvedBugsWithPr} task gốc${row.resolvedBugsDocsNoPr > 0 ? `, ${row.resolvedBugsDocsNoPr} Docs/Test` : ""}${row.resolvedDuplicateChildCount > 0 ? `, ${row.resolvedDuplicateChildCount} task trùng` : ""})]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}`
-                          : "0 task Resolved"
+                          ? `[RESOLVED: Tổng ${row.resolvedCount} bug (${row.resolvedBugsWithPr} bug gốc${row.resolvedBugsDocsNoPr > 0 ? `, ${row.resolvedBugsDocsNoPr} Docs/Test` : ""})]\n• Vị trí lỗi: ${row.resolvedLocText || "Chưa phân loại"}\n• Bug trùng ăn theo bug gốc được tách riêng ở cột BUG TRÙNG, không cộng vào đây`
+                          : "0 bug Resolved"
                       }
                       onClick={() => {
                         if (row.resolvedCount > 0) {
@@ -1412,15 +1566,61 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         {row.resolvedCount}
                       </div>
                       {row.resolvedBugsDocsNoPr > 0 && (
-                        <div style={{ fontSize: "10px", color: "#0284c7", fontWeight: "600", marginTop: "2px" }} title="Task Docs / Test không PR (gán Fixed by)">
-                          (+{row.resolvedBugsDocsNoPr} task Docs/Test)
+                        <div style={{ fontSize: "10px", color: "#0284c7", fontWeight: "600", marginTop: "2px" }} title="Bug Docs / Test không PR (gán Fixed by)">
+                          (+{row.resolvedBugsDocsNoPr} bug Docs/Test)
                         </div>
                       )}
-                      {row.resolvedDuplicateChildCount > 0 ? (
-                        <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }} title={`Trong tổng ${row.resolvedCount} task có ${row.resolvedDuplicateChildCount} task trùng lặp`}>
-                          ({row.resolvedDuplicateChildCount} task trùng)
+                      {row.resolvedWaitingReviewCount > 0 && (
+                        <div
+                          style={{ fontSize: "10px", color: "var(--text-3)", fontWeight: "600", marginTop: "2px", cursor: "pointer", textDecoration: "underline dashed" }}
+                          title="Trong Resolved: bug chưa có hoạt động review nào của Huyền, đang chờ review"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPrBugs(row.resolvedWaitingReviewList);
+                            setSelectedDevCode(`${row.dev.displayName} - CHỜ REVIEW`);
+                          }}
+                        >
+                          ⏳ {row.resolvedWaitingReviewCount} chờ review
                         </div>
-                      ) : null}
+                      )}
+                      {row.resolvedNeedsReworkCount > 0 && (
+                        <div
+                          style={{ fontSize: "10px", color: "var(--red)", fontWeight: "600", marginTop: "2px", cursor: "pointer", textDecoration: "underline dashed" }}
+                          title="Trong Resolved: bug đã bị Huyền comment/request changes, đang chờ Dev sửa lại"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedPrBugs(row.resolvedNeedsReworkList);
+                            setSelectedDevCode(`${row.dev.displayName} - CẦN SỬA LẠI`);
+                          }}
+                        >
+                          🔧 {row.resolvedNeedsReworkCount} cần sửa lại
+                        </div>
+                      )}
+                    </td>
+                    <td
+                      className="td-num"
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "center",
+                        fontSize: "12px",
+                        fontWeight: "bold",
+                        color: row.noRepro > 0 ? "var(--text-3)" : "var(--text-3)",
+                        cursor: row.noRepro > 0 ? "pointer" : "default",
+                        textDecoration: row.noRepro > 0 ? "underline dashed" : "none"
+                      }}
+                      title={
+                        row.noRepro > 0
+                          ? `[KHÔNG TÁI HIỆN: ${row.noRepro} bug]\n• Bug không có link Pull Request -> không tái hiện được, không tính vào CLOSE/RESOLVED\n${row.noReproBugsList.map((b: any) => `[${b.bugId}] ${b.title}`).join('\n')}`
+                          : "0 bug không tái hiện"
+                      }
+                      onClick={() => {
+                        if (row.noRepro > 0) {
+                          setSelectedPrBugs(row.noReproBugsList);
+                          setSelectedDevCode(`${row.dev.displayName} - KHÔNG TÁI HIỆN`);
+                        }
+                      }}
+                    >
+                      {row.noRepro}
                     </td>
                     <td
                       className="td-num"
@@ -1434,13 +1634,13 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       }}
                       title={
                         row.reCommitCount > 0
-                          ? `[TASK CÓ CHỈNH SỬA THÊM: ${row.reCommitCount} task]\n• Task mở từ các kỳ trước nhưng phát sinh commit/review bổ sung trong kỳ này`
-                          : "0 task có chỉnh sửa thêm"
+                          ? `[BUG CÓ CHỈNH SỬA THÊM: ${row.reCommitCount} bug]\n• Bug mở từ các kỳ trước nhưng phát sinh commit/review bổ sung trong kỳ này`
+                          : "0 bug có chỉnh sửa thêm"
                       }
                       onClick={() => {
                         if (row.reCommitCount > 0) {
                           setSelectedPrBugs(row.reCommitBugsList);
-                          setSelectedDevCode(`${row.dev.displayName} - TASK CÓ CHỈNH SỬA THÊM`);
+                          setSelectedDevCode(`${row.dev.displayName} - BUG CÓ CHỈNH SỬA THÊM`);
                         }
                       }}
                     >
@@ -1449,7 +1649,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       </div>
                       {row.reCommitDuplicateChildCount > 0 && (
                         <div style={{ fontSize: "10px", color: "var(--purple)", fontWeight: "600", marginTop: "2px" }}>
-                          ({row.reCommitDuplicateChildCount} task trùng)
+                          ({row.reCommitDuplicateChildCount} bug trùng)
                         </div>
                       )}
                     </td>
@@ -1509,9 +1709,67 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                     <td className="td-num" style={{ fontWeight: "bold", textAlign: "center", color: "var(--blue)", verticalAlign: "middle" }}>
                       {row.bugsPerDay.toFixed(1)}
                     </td>
+                    <td
+                      className="td-num"
+                      style={{
+                        padding: "8px 10px",
+                        textAlign: "center",
+                        fontSize: "14px",
+                        fontWeight: "bold",
+                        color: row.taskCount > 0 ? "var(--orange, #f97316)" : "var(--text-3)",
+                        cursor: row.taskCount > 0 ? "pointer" : "default",
+                        textDecoration: row.taskCount > 0 ? "underline dashed" : "none"
+                      }}
+                      title={
+                        row.taskCount > 0
+                          ? `[TASK: ${row.taskCount} task có PR mở trong kỳ]\n• Nguồn: Notion Task List, gán theo Assignee, đếm theo Ngày mở PR\n${row.taskBugsList.map((t: any) => `[${t.bugId}] ${t.title}`).join('\n')}`
+                          : "0 task có PR mở trong kỳ"
+                      }
+                      onClick={() => {
+                        if (row.taskCount > 0) {
+                          setSelectedPrBugs(row.taskBugsList);
+                          setSelectedDevCode(`${row.dev.displayName} - TASK`);
+                        }
+                      }}
+                    >
+                      {row.taskCount}
+                    </td>
                   </tr>
                 );
               })}
+              {(() => {
+                const sum = (fn: (r: any) => number) => aggregatedDevStats.reduce((s, r) => s + fn(r), 0);
+                const totalGeneral = sum(r => r.totalGeneralCount);
+                const totalEffort = sum(r => r.effortCount);
+                const totalDuplicate = sum(r => r.autoClosedDuplicateCount);
+                const totalClosed = sum(r => r.closedCount);
+                const totalResolved = sum(r => r.resolvedCount);
+                const totalNoRepro = sum(r => r.noRepro);
+                const totalReCommit = sum(r => r.reCommitCount);
+                const totalReopened = sum(r => r.reopenedCount);
+                const totalMd = sum(r => r.manDays);
+                const totalReopenRate = (totalClosed + totalResolved) > 0 ? (totalReopened / (totalClosed + totalResolved)) * 100 : 0;
+                const totalBugsPerDay = totalMd > 0 ? totalEffort / totalMd : 0;
+                const totalTask = sum(r => r.taskCount);
+                return (
+                  <tr style={{ background: "var(--surface-2)", borderTop: "2px solid var(--border-2)", fontWeight: "bold" }}>
+                    <td style={{ padding: "10px 14px", textAlign: "left", color: "var(--text-1)" }}>TỔNG CỘNG CẢ TEAM</td>
+                    <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "14px", color: "var(--text-1)" }}>{totalGeneral}</td>
+                    <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "14px", color: "var(--text-1)" }}>{totalEffort}</td>
+                    <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px", color: "var(--purple)" }}>{totalDuplicate}</td>
+                    <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px", color: "var(--green)" }}>{totalClosed}</td>
+                    <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px", color: "var(--blue)" }}>{totalResolved}</td>
+                    <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px", color: "var(--text-3)" }}>{totalNoRepro}</td>
+                    <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "12px", color: "var(--cyan)" }}>{totalReCommit}</td>
+                    <td className="td-num" style={{ padding: "8px 6px", textAlign: "center", fontSize: "12px", color: totalReopened > 0 ? "var(--red)" : "var(--text-2)" }}>
+                      {totalReopened > 0 ? `${totalReopenRate.toFixed(1)}% (${totalReopened})` : "0.0%"}
+                    </td>
+                    <td className="td-num" style={{ textAlign: "center", color: "var(--text-1)" }}>{totalMd}</td>
+                    <td className="td-num" style={{ fontWeight: "bold", textAlign: "center", color: "var(--blue)" }}>{totalBugsPerDay.toFixed(1)}</td>
+                    <td className="td-num" style={{ padding: "8px 10px", textAlign: "center", fontSize: "14px", color: "var(--orange, #f97316)" }}>{totalTask}</td>
+                  </tr>
+                );
+              })()}
             </tbody>
           </table>
         </div>
@@ -1522,6 +1780,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
         <h3 style={{ fontSize: "14px", fontWeight: 700, color: "var(--text-1)", marginBottom: "12px", display: "flex", alignItems: "center", gap: "8px" }}>
           <span>📂</span> Phân Rã Chi Tiết Vị Trí Lỗi Theo Nhân Sự ({activePeriod?.label})
         </h3>
+        <p style={{ fontSize: "11px", color: "var(--text-3)", margin: "-8px 0 12px" }}>
+          * Số liệu chỉ gồm Bug Closed/Resolved thực sự tốn công dev fix (không tính Bug Trùng hay Không tái hiện, không tính Task vì Task không phân loại theo Vị Trí Lỗi) — nên tổng ở đây sẽ nhỏ hơn cột TỔNG (EFFORT) đúng bằng số TASK.
+        </p>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(280px, 1fr))", gap: "14px" }}>
           {aggregatedDevStats.map(row => (
             <div key={row.dev.code} className="card" style={{ padding: "14px", borderRadius: "8px", borderTop: "3px solid var(--accent)" }}>
@@ -1638,7 +1899,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
           <div className="modal" style={{ width: "1050px", maxWidth: "95vw", padding: "24px", borderRadius: "8px", background: "var(--surface)", border: "1px solid var(--border-2)" }} onClick={e => e.stopPropagation()}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
               <h3 style={{ margin: 0, fontSize: "16px", fontWeight: "700", color: "var(--text-1)" }}>
-                Chi tiết Task có PR trong kỳ {activePeriod?.label} ({selectedDevCode})
+                Chi tiết {selectedDevCode.includes(" - TASK") ? "Task" : "Bug"} có PR trong kỳ {activePeriod?.label} ({selectedDevCode})
               </h3>
               <button
                 type="button"
@@ -1658,7 +1919,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                 onClick={() => setShowOnlyMultiReviewers(false)}
                 style={{ fontSize: "11px", padding: "4px 12px", borderRadius: "4px" }}
               >
-                Tất cả Task ({selectedPrBugs.length})
+                Tất cả Bug ({selectedPrBugs.length})
               </button>
               <button
                 type="button"
@@ -1694,7 +1955,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
 
             <div style={{ maxHeight: "460px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--surface)" }}>
               {selectedPrBugs.length === 0 ? (
-                <div style={{ padding: "20px", color: "var(--text-3)", textAlign: "center" }}>Không có task nào.</div>
+                <div style={{ padding: "20px", color: "var(--text-3)", textAlign: "center" }}>Không có bug nào.</div>
               ) : (
                 <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "12px", tableLayout: "fixed" }}>
                   <thead>
@@ -1705,6 +1966,9 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                       <th style={{ padding: "10px 12px", textAlign: "center", width: "23%" }}>TRẠNG THÁI PR & REVIEWERS</th>
                       <th style={{ padding: "10px 12px", textAlign: "left", width: "28%" }}>TIÊU ĐỀ LỖI</th>
                       <th style={{ padding: "10px 12px", textAlign: "right", width: "10%" }}>NGÀY TÍNH</th>
+                      {(selectedDevCode.includes("KHÔNG TÁI HIỆN") || selectedDevCode.includes("CẦN SỬA LẠI")) && (
+                        <th style={{ padding: "10px 12px", textAlign: "left", width: "20%" }}>NOTE</th>
+                      )}
                     </tr>
                   </thead>
                   <tbody>
@@ -1768,13 +2032,17 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                                 b.bugId
                               )}
                             </td>
-                            <td style={{ padding: "10px 12px", whiteSpace: "nowrap" }}>
+                            <td style={{ padding: "10px 12px" }}>
                               <span
                                 style={{
+                                  display: "inline-block",
                                   padding: "2px 6px",
                                   borderRadius: "4px",
                                   fontSize: "11px",
                                   fontWeight: 600,
+                                  whiteSpace: "normal",
+                                  wordBreak: "break-word",
+                                  lineHeight: 1.4,
                                   background: isChild ? "rgba(168, 85, 247, 0.08)" : "var(--surface-2)",
                                   color: isChild ? "var(--purple)" : "var(--text-1)",
                                   border: isChild ? "1px solid rgba(168, 85, 247, 0.25)" : "1px solid var(--border-2)",
@@ -1917,7 +2185,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                               {isChild ? (
                                 <span>
                                   <span style={{ color: "var(--purple)", fontWeight: "600", marginRight: "4px" }}>↳ Trùng case:</span>
-                                  {b.title.replace(/ \(Task trùng lặp của \[.*\]\)/, "")}
+                                  {b.title.replace(/ \(Bug trùng lặp của \[.*\]\)/, "")}
                                 </span>
                               ) : (
                                 b.title
@@ -1926,6 +2194,11 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                             <td style={{ padding: "10px 12px", textAlign: "right", whiteSpace: "nowrap", color: "var(--text-3)", fontSize: "12px" }}>
                               {b.date || "—"}
                             </td>
+                            {(selectedDevCode.includes("KHÔNG TÁI HIỆN") || selectedDevCode.includes("CẦN SỬA LẠI")) && (
+                              <td style={{ padding: "10px 12px", color: "var(--text-2)", fontSize: "11.5px", whiteSpace: "pre-wrap" }}>
+                                {b.note || "—"}
+                              </td>
+                            )}
                           </tr>
                         );
                       });
@@ -1935,7 +2208,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               )}
             </div>
             <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--text-2)", textAlign: "right" }}>
-              * Mật độ comment trung bình = Tổng comments / Tổng số task có PR trong kỳ.
+              * Mật độ comment trung bình = Tổng comments / Tổng số bug có PR trong kỳ.
             </div>
           </div>
         </div>
@@ -1960,7 +2233,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
             </div>
 
             <div style={{ background: "rgba(234, 179, 8, 0.08)", border: "1px solid rgba(234, 179, 8, 0.3)", borderRadius: "6px", padding: "10px 14px", marginBottom: "14px", fontSize: "12px", color: "var(--yellow)" }}>
-              <strong>Chú ý:</strong> Đây là các task có PR trùng khớp với quy tắc kiểm tra trong <strong>Checklist Bài Học Kinh Nghiệm</strong>. Dev cần nghiêm túc tự rà soát checklist trước khi tạo PR.
+              <strong>Chú ý:</strong> Đây là các bug có PR trùng khớp với quy tắc kiểm tra trong <strong>Checklist Bài Học Kinh Nghiệm</strong>. Dev cần nghiêm túc tự rà soát checklist trước khi tạo PR.
             </div>
 
             <div style={{ maxHeight: "420px", overflowY: "auto", border: "1px solid var(--border-2)", borderRadius: "6px", background: "var(--surface)" }}>
@@ -2134,7 +2407,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
                         {group.childTasks.map((child: any, cIdx: number) => (
                           <div key={cIdx} style={{ background: "var(--surface-3)", padding: "8px 10px", borderRadius: "6px", fontSize: "12px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                             <div>
-                              <span style={{ fontWeight: "bold", color: "var(--orange, #f97316)" }}>↳ 🔗 Task trùng: [{child.bugId}]</span>
+                              <span style={{ fontWeight: "bold", color: "var(--orange, #f97316)" }}>↳ 🔗 Bug trùng: [{child.bugId}]</span>
                               <span style={{ color: "var(--text-1)", marginLeft: "6px" }}>{child.title}</span>
                               {child.note && (
                                 <div style={{ fontSize: "11px", color: "var(--text-3)", fontStyle: "italic", marginTop: "2px" }}>
@@ -2159,7 +2432,7 @@ export function DevComparison({ view, periodType, periodKey, onUpdate }: { view:
               )}
             </div>
             <div style={{ marginTop: "12px", fontSize: "12px", color: "var(--text-2)", textAlign: "right" }}>
-              * Danh sách được tổng hợp dựa trên liên kết Bug Gốc &amp; các task trùng lặp do Lead Huyền lọc.
+              * Danh sách được tổng hợp dựa trên liên kết Bug Gốc &amp; các bug trùng lặp do Lead Huyền lọc.
             </div>
           </div>
         </div>

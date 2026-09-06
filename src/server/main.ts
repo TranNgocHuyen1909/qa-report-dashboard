@@ -5,14 +5,17 @@ import express from "express";
 import { loadConfig } from "./config";
 import { createApi } from "./api";
 import { NotionBugClient } from "./notion/bugClient";
-import { enrichAllBugs } from "./github/prClient";
+import { NotionTaskClient } from "./notion/taskClient";
+import { enrichAllBugs, enrichAllTasks } from "./github/prClient";
 // QA Report Dashboard API Server Entrypoint
 import { useMemo } from "react"; // Unused import but triggers watch
-import type { BugRecord, ChecklistItem } from "../shared/types";
+import type { BugRecord, ChecklistItem, TaskRecord } from "../shared/types";
 
 const config = loadConfig();
 let cachedBugs: BugRecord[] = [];
+let cachedTasks: TaskRecord[] = [];
 const CACHE_PATH = ".cache/bugs.json";
+const TASK_CACHE_PATH = ".cache/tasks.json";
 const CHECKLIST_PATH = config.checklistPath;
 
 function ensureDir(filePath: string) {
@@ -27,6 +30,15 @@ function loadCache(): BugRecord[] {
 function saveCache(bugs: BugRecord[]) {
   ensureDir(CACHE_PATH);
   fs.writeFileSync(CACHE_PATH, JSON.stringify(bugs));
+}
+
+function loadTaskCache(): TaskRecord[] {
+  try { return JSON.parse(fs.readFileSync(TASK_CACHE_PATH, "utf-8")); } catch { return []; }
+}
+
+function saveTaskCache(tasks: TaskRecord[]) {
+  ensureDir(TASK_CACHE_PATH);
+  fs.writeFileSync(TASK_CACHE_PATH, JSON.stringify(tasks));
 }
 
 function loadChecklist(): ChecklistItem[] {
@@ -127,17 +139,60 @@ async function refreshBugs() {
   }
 }
 
+let refreshingTasks = false;
+async function refreshTasks() {
+  if (refreshingTasks) { console.log("Task refresh already in progress, skipping."); return; }
+  if (!config.notionToken || !config.notionTaskDataSourceId) {
+    console.warn("Notion Task List not configured, using cached data");
+    return;
+  }
+  refreshingTasks = true;
+  try {
+    console.log("Fetching tasks from Notion Task List...");
+    const client = new NotionTaskClient(config.notionToken, config.notionVersion, config.notionTaskDataSourceId);
+    let tasks = await client.listTasks();
+    console.log(`Fetched ${tasks.length} tasks. Merging cached GitHub fields...`);
+
+    const existingMap = new Map<string, TaskRecord>();
+    cachedTasks.forEach(t => existingMap.set(t.id, t));
+    tasks = tasks.map(t => {
+      const prev = existingMap.get(t.id);
+      if (prev && prev.pullRequestUrl === t.pullRequestUrl) {
+        return { ...t, prCreatedAt: prev.prCreatedAt || t.prCreatedAt };
+      }
+      return t;
+    });
+
+    cachedTasks = tasks;
+    saveTaskCache(tasks);
+
+    console.log(`Enriching ${tasks.length} tasks with GitHub PR date...`);
+    tasks = await enrichAllTasks(tasks, config.githubToken);
+    console.log(`Enriched ${tasks.length} tasks with GitHub data.`);
+    cachedTasks = tasks;
+    saveTaskCache(tasks);
+  } finally {
+    refreshingTasks = false;
+  }
+}
+
+async function refreshAll() {
+  await Promise.all([refreshBugs(), refreshTasks()]);
+}
+
 // Boot
 cachedBugs = loadCache();
+cachedTasks = loadTaskCache();
 let checklistData = loadChecklist();
 let conclusionsData = loadConclusions();
 let customTargetsData = loadCustomTargets();
 
 const app = createApi({
   getBugs: () => loadCache(),
+  getTasks: () => loadTaskCache(),
   getChecklist: () => checklistData,
   saveChecklist: (items) => { checklistData = items; saveChecklist(items); },
-  refresh: refreshBugs,
+  refresh: refreshAll,
   getConclusions: () => conclusionsData,
   saveConclusions: (data) => { conclusionsData = data; saveConclusions(data); },
   getCustomTargets: () => customTargetsData,
@@ -177,6 +232,9 @@ app.listen(config.port, "0.0.0.0", () => {
   if (cachedBugs.length === 0) {
     refreshBugs().catch(e => console.error("Initial refresh failed:", e));
   }
+  if (cachedTasks.length === 0) {
+    refreshTasks().catch(e => console.error("Initial task refresh failed:", e));
+  }
 });
 
 // Timezone-aware Daily Scheduler (6:00 PM ICT - Asia/Ho_Chi_Minh)
@@ -214,5 +272,5 @@ scheduleDailyGrab();
 
 // Periodic refresh (default 30 min)
 setInterval(() => {
-  refreshBugs().catch(e => console.error("Periodic refresh failed:", e));
+  refreshAll().catch(e => console.error("Periodic refresh failed:", e));
 }, Math.max(config.refreshIntervalSeconds, 1800) * 1000);

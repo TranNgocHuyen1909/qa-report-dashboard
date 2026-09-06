@@ -1,4 +1,4 @@
-import type { BugRecord } from "../../shared/types";
+import type { BugRecord, TaskRecord } from "../../shared/types";
 
 interface GHReview { author: string; state: string; submittedAt: string; }
 
@@ -184,6 +184,38 @@ export async function enrichAllBugs(bugs: BugRecord[], token?: string): Promise<
   for (let i = 0; i < bugs.length; i += 5) {
     const batch = bugs.slice(i, i + 5);
     const enriched = await Promise.all(batch.map(b => enrichBugWithGitHub(b, token)));
+    result.push(...enriched);
+  }
+  return result;
+}
+
+/** Lightweight enrichment: chỉ lấy Ngày mở PR (created_at của PR đầu tiên) cho Task List, không cần review/comment.
+ * Trường Pull Request có thể chứa nhiều link ghép chung (VD: "Gộp chung LIAG-235... url1 + url2 + url3") -> lấy PR đầu tiên tìm thấy. */
+export async function enrichTaskWithPrDate(task: TaskRecord, token?: string): Promise<TaskRecord> {
+  const prUrl = task.pullRequestUrl;
+  if (!prUrl || !token) return task;
+  const matches = Array.from(prUrl.matchAll(/github\.com\/([^/\s]+)\/([^/\s]+)\/pull\/(\d+)/gi));
+  if (matches.length === 0) return task;
+  const [, owner, repo, pr] = matches[0];
+  const headers = { Authorization: `token ${token}`, Accept: "application/vnd.github+json" };
+  try {
+    const res = await fetch(`https://api.github.com/repos/${owner}/${repo}/pulls/${pr}`, {
+      headers,
+      signal: AbortSignal.timeout(4000),
+    });
+    if (res.ok) {
+      const d = await res.json() as any;
+      return { ...task, prCreatedAt: d.created_at ?? task.prCreatedAt };
+    }
+  } catch { }
+  return task;
+}
+
+export async function enrichAllTasks(tasks: TaskRecord[], token?: string): Promise<TaskRecord[]> {
+  const result: TaskRecord[] = [];
+  for (let i = 0; i < tasks.length; i += 5) {
+    const batch = tasks.slice(i, i + 5);
+    const enriched = await Promise.all(batch.map(t => enrichTaskWithPrDate(t, token)));
     result.push(...enriched);
   }
   return result;
